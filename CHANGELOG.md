@@ -105,6 +105,12 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Interface and accessibility
 
+- A button at the top right of the expression panel collapses it to the
+  left so that the canvas fills the window; a button at the left edge of the
+  canvas brings it back at its previous width. The choice is remembered in
+  this browser, like the viewport lock, but is not part of the document,
+  its export, or scene links. Opening a document without a canvas reopens a
+  collapsed panel and moves focus left in the canvas to the panel (#234).
 - A document that stored `view.positionEnabled: false` drew every object at
   the origin while its position fields and base drags still updated. Positions
   now switch off only without a visualizer (NoViz, #55): a document drawn on a

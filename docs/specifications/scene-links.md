@@ -61,8 +61,8 @@ session. JSON export remains the archival alternative.
 ## Temporary sessions and storage
 
 On initial navigation to a scene link, decode and validate before mounting the
-editor. A valid shared scene never reads the active document or viewport-lock
-preference, and never writes browser storage, even during editing, import,
+editor. A valid shared scene never reads the active document, the viewport-lock
+preference, or the collapsed-panel preference, and never writes browser storage, even during editing, import,
 theme changes, or viewport manipulation. It therefore works with blocked or
 partitioned storage. Edits do not rewrite the URL; copying another link
 captures the current edits. Reloading the original URL reopens its original
