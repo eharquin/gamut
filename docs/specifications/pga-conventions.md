@@ -306,7 +306,9 @@ ideal norms of section 7:
 A rendering position, where the interpretation accepts one, is a Euclidean
 point with a non-zero weight; the position's coordinates are `(x / w, y / w)`
 and the head of a positioned ideal point is the Euclidean point
-`position + value`.
+`position + value`. An empty position is the origin point `e12`: the ideal
+point is drawn from the origin, and its `position` and `head` evaluate to `e12`
+and `value + e12`.
 
 Two values that differ by a non-zero scalar factor denote the same geometric
 entity. This projective equivalence is reported by the interpretation, which

@@ -901,6 +901,199 @@ describe('VGA 2D vertical slice', () => {
     expect(container.querySelector('.anchor-preview')).not.toBeInTheDocument()
   })
 
+  it('separates coinciding bases instead of linking them back (#100)', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), {
+      target: { value: 'V = vector(2, 1)' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Add expression' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 2' }), {
+      target: { value: 'W = vector(1, 0)' },
+    })
+    const canvas = viewportCanvas()
+    sizeViewportCanvas(canvas)
+    const base = screen.getByRole('button', { name: 'Move base of W' })
+
+    // Both bases are at the origin; a short drag away keeps W separate.
+    fireEvent.pointerDown(base, { button: 0, pointerId: 41, clientX: 320, clientY: 240 })
+    fireEvent.pointerMove(canvas, { pointerId: 41, clientX: 330, clientY: 240 })
+    fireEvent.pointerUp(canvas, { pointerId: 41 })
+    expect(screen.getByRole('textbox', { name: 'Position 2' })).not.toHaveValue('V.position')
+    expect(screen.getByText('Object manipulation committed.')).toBeInTheDocument()
+
+    // Leaving the anchor and coming back to it is a deliberate link.
+    fireEvent.pointerDown(base, { button: 0, pointerId: 42, clientX: 330, clientY: 240 })
+    fireEvent.pointerMove(canvas, { pointerId: 42, clientX: 400, clientY: 240 })
+    fireEvent.pointerMove(canvas, { pointerId: 42, clientX: 322, clientY: 240 })
+    fireEvent.pointerUp(canvas, { pointerId: 42 })
+    expect(screen.getByRole('textbox', { name: 'Position 2' })).toHaveValue('V.position')
+  })
+
+  it('unlinks a linked base with a short drag instead of keeping the link (#100)', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), {
+      target: { value: 'V = vector(2, 1)' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Add expression' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 2' }), {
+      target: { value: 'W = vector(1, 0)' },
+    })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Position 2' }), {
+      target: { value: 'V.head' },
+    })
+    const canvas = viewportCanvas()
+    sizeViewportCanvas(canvas)
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Move base of W' }), {
+      button: 0, pointerId: 43, clientX: 464, clientY: 168,
+    })
+    fireEvent.pointerMove(canvas, { pointerId: 43, clientX: 464, clientY: 180 })
+    fireEvent.pointerUp(canvas, { pointerId: 43 })
+    expect(screen.getByRole('textbox', { name: 'Position 2' })).not.toHaveValue('V.head')
+  })
+
+  it('raises the handles of the focused, hovered or last manipulated object (#100)', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), {
+      target: { value: 'V1 = vector(1, 0)' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Add expression' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 2' }), {
+      target: { value: 'V2 = vector(0, 1)' },
+    })
+    act(() => (document.activeElement as HTMLElement | null)?.blur())
+    const base = (name: string) => screen.getByRole('button', { name: `Move base of ${name}` })
+    // A later element is drawn above an earlier one and takes the press.
+    const onTop = (upper: string, lower: string) =>
+      (base(lower).compareDocumentPosition(base(upper)) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+    expect(onTop('V2', 'V1')).toBe(true)
+
+    const source1 = screen.getByRole('textbox', { name: 'Expression 1' })
+    act(() => source1.focus())
+    expect(onTop('V1', 'V2')).toBe(true)
+    act(() => source1.blur())
+    expect(onTop('V2', 'V1')).toBe(true)
+
+    const row1 = source1.closest('article') as HTMLElement
+    fireEvent.pointerEnter(row1)
+    expect(onTop('V1', 'V2')).toBe(true)
+    fireEvent.pointerLeave(row1)
+    expect(onTop('V2', 'V1')).toBe(true)
+
+    // The order holds during a drag and follows the dragged object after it.
+    const canvas = viewportCanvas()
+    sizeViewportCanvas(canvas)
+    fireEvent.pointerDown(base('V1'), { button: 0, pointerId: 44, clientX: 320, clientY: 240 })
+    expect(onTop('V2', 'V1')).toBe(true)
+    fireEvent.pointerMove(canvas, { pointerId: 44, clientX: 330, clientY: 240 })
+    fireEvent.pointerUp(canvas, { pointerId: 44 })
+    expect(onTop('V1', 'V2')).toBe(true)
+  })
+
+  it('keeps a click on a linked base from unlinking it (#100)', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), {
+      target: { value: 'V = vector(2, 1)' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Add expression' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 2' }), {
+      target: { value: 'W = vector(1, 0)' },
+    })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Position 2' }), {
+      target: { value: 'V.head' },
+    })
+    const canvas = viewportCanvas()
+    sizeViewportCanvas(canvas)
+    const base = screen.getByRole('button', { name: 'Move base of W' })
+    const position = () => screen.getByRole('textbox', { name: 'Position 2' })
+
+    // Moving less than 3 px is a click: nothing is written, so the last
+    // history entry is still the link.
+    fireEvent.pointerDown(base, { button: 0, pointerId: 45, clientX: 464, clientY: 168 })
+    fireEvent.pointerMove(canvas, { pointerId: 45, clientX: 466, clientY: 170 })
+    fireEvent.pointerUp(canvas, { pointerId: 45 })
+    expect(position()).toHaveValue('V.head')
+    fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
+    expect(position()).toHaveValue('')
+    fireEvent.click(screen.getByRole('button', { name: 'Redo document change' }))
+    expect(position()).toHaveValue('V.head')
+
+    // From 3 px on, the drag starts and unlinks the base.
+    fireEvent.pointerDown(base, { button: 0, pointerId: 46, clientX: 464, clientY: 168 })
+    fireEvent.pointerMove(canvas, { pointerId: 46, clientX: 467, clientY: 168 })
+    fireEvent.pointerUp(canvas, { pointerId: 46 })
+    expect(position()).not.toHaveValue('V.head')
+  })
+
+  it('keeps the draw order while a handle has focus (#100)', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), {
+      target: { value: 'V1 = vector(1, 0)' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Add expression' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 2' }), {
+      target: { value: 'V2 = vector(0, 1)' },
+    })
+    act(() => (document.activeElement as HTMLElement | null)?.blur())
+    const base = (name: string) => screen.getByRole('button', { name: `Move base of ${name}` })
+    const onTop = (upper: string, lower: string) =>
+      (base(lower).compareDocumentPosition(base(upper)) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+    const row1 = screen.getByRole('textbox', { name: 'Expression 1' }).closest('article') as HTMLElement
+
+    // Hovering the row of the focused handle's object does not move it.
+    const handle = base('V1')
+    act(() => (handle as unknown as HTMLElement).focus())
+    expect(onTop('V2', 'V1')).toBe(true)
+    fireEvent.pointerEnter(row1)
+    expect(onTop('V2', 'V1')).toBe(true)
+    expect(document.activeElement).toBe(handle)
+
+    // Tab between handles keeps the order; leaving the canvas releases it.
+    act(() => (base('V2') as unknown as HTMLElement).focus())
+    expect(onTop('V2', 'V1')).toBe(true)
+    act(() => (base('V2') as unknown as HTMLElement).blur())
+    expect(onTop('V1', 'V2')).toBe(true)
+  })
+
+  it('forgets the hovered row of a deleted object (#100)', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), {
+      target: { value: 'V1 = vector(1, 0)' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Add expression' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 2' }), {
+      target: { value: 'V2 = vector(0, 1)' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Add expression' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 3' }), {
+      target: { value: 'V3 = vector(-1, 0)' },
+    })
+    act(() => (document.activeElement as HTMLElement | null)?.blur())
+    const base = (name: string) => screen.getByRole('button', { name: `Move base of ${name}` })
+    const onTop = (upper: string, lower: string) =>
+      (base(lower).compareDocumentPosition(base(upper)) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+    const canvas = viewportCanvas()
+    sizeViewportCanvas(canvas)
+    fireEvent.pointerDown(base('V1'), { button: 0, pointerId: 47, clientX: 320, clientY: 240 })
+    fireEvent.pointerUp(canvas, { pointerId: 47 })
+    expect(onTop('V1', 'V3')).toBe(true)
+
+    // The deleted row fires no pointer leave. Deleting focuses the previous
+    // row, so focus is moved away to observe the hovered row alone.
+    const row2 = screen.getByRole('textbox', { name: 'Expression 2' }).closest('article') as HTMLElement
+    fireEvent.pointerEnter(row2)
+    expect(onTop('V2', 'V1')).toBe(true)
+    fireEvent.click(within(row2).getByRole('button', { name: 'Delete expression 2' }))
+    act(() => (document.activeElement as HTMLElement | null)?.blur())
+    expect(screen.queryByRole('button', { name: 'Move base of V2' })).not.toBeInTheDocument()
+    expect(onTop('V1', 'V3')).toBe(true)
+
+    // Restoring the object does not select it again.
+    fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
+    act(() => (document.activeElement as HTMLElement | null)?.blur())
+    expect(onTop('V1', 'V2')).toBe(true)
+  })
+
   it('snaps a vector base to a named bivector position', () => {
     render(<App />)
     fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), {
@@ -3611,6 +3804,297 @@ describe('normalization chosen from the expression row (#185)', () => {
     expect(screen.getByText(/zero Euclidean norm/)).toBeInTheDocument()
     expect(screen.queryByText('Unit ideal norm')).not.toBeInTheDocument()
     expect(screen.getByText('4e01 - 3e02', { selector: 'output' })).toBeInTheDocument()
+  })
+})
+
+describe('collapsing the expression panel (#234)', () => {
+  const panel = () => document.getElementById('expression-panel') as HTMLElement
+
+  it('collapses to the left, moves focus, and expands back', () => {
+    render(<App />)
+    const collapse = screen.getByRole('button', { name: 'Collapse expression panel' })
+    expect(collapse).toHaveAttribute('aria-expanded', 'true')
+    expect(collapse).toHaveAttribute('aria-controls', 'expression-panel')
+
+    fireEvent.click(collapse)
+    expect(panel()).toHaveClass('is-collapsed')
+    expect(panel()).toHaveAttribute('inert')
+    expect(screen.queryByRole('separator', { name: 'Resize expression panel' })).not.toBeInTheDocument()
+    const expand = screen.getByRole('button', { name: 'Expand expression panel' })
+    expect(expand).toHaveAttribute('aria-expanded', 'false')
+    expect(expand).toHaveFocus()
+    // The canvas keeps running: it is still there and takes the freed room.
+    expect(viewportCanvas()).toBeInTheDocument()
+
+    fireEvent.click(expand)
+    expect(panel()).not.toHaveClass('is-collapsed')
+    expect(panel()).not.toHaveAttribute('inert')
+    expect(screen.getByRole('separator', { name: 'Resize expression panel' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Expand expression panel' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Collapse expression panel' })).toHaveFocus()
+  })
+
+  it('remembers the collapsed panel locally, outside the document and its history', () => {
+    const first = render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse expression panel' }))
+    expect(window.localStorage.getItem('gamut.expressionPanelCollapsed')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Undo document change' })).toBeDisabled()
+    first.unmount()
+
+    render(<App />)
+    expect(panel()).toHaveClass('is-collapsed')
+    fireEvent.click(screen.getByRole('button', { name: 'Expand expression panel' }))
+    expect(window.localStorage.getItem('gamut.expressionPanelCollapsed')).toBe('false')
+  })
+
+  it('reopens a collapsed panel and keeps the focus when a document without a canvas opens', async () => {
+    const documentFile = (contents: string) => {
+      const bytes = new TextEncoder().encode(contents)
+      return { name: 'opened.gamut.json', type: 'application/json', arrayBuffer: async () => bytes.slice().buffer } as unknown as File
+    }
+    const canonical = (id: string, source: string) => toCanonicalDocument(expressionDocument(
+      [{ id: 'v', source }], {}, { id },
+    ), 'light')
+    const withoutCanvas = canonical('no-canvas', 'Calc = vector(5, 6)')
+    const drop = (contents: object) => fireEvent.drop(document.body, {
+      dataTransfer: { types: ['Files'], files: [documentFile(JSON.stringify(contents))], dropEffect: 'none' },
+    })
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse expression panel' }))
+    expect(screen.getByRole('button', { name: 'Expand expression panel' })).toHaveFocus()
+
+    drop({ ...withoutCanvas, view: { ...withoutCanvas.view, visualizerId: null, positionEnabled: false, viewport: { kind: 'none' } } })
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('Calc = vector(5, 6)'))
+    expect(panel()).not.toHaveClass('is-collapsed')
+    expect(panel()).not.toHaveAttribute('inert')
+    // The focused expand button went away with the canvas; focus lands on
+    // the button that brings the canvas back (#55).
+    expect(screen.getByRole('button', { name: 'Show canvas' })).toHaveFocus()
+    expect(window.localStorage.getItem('gamut.expressionPanelCollapsed')).toBe('false')
+
+    // A document with a canvas afterwards does not collapse the panel again.
+    drop(canonical('with-canvas', 'Drawn = vector(1, 2)'))
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('Drawn = vector(1, 2)'))
+    expect(viewportCanvas()).toBeInTheDocument()
+    expect(panel()).not.toHaveClass('is-collapsed')
+    expect(screen.getByRole('button', { name: 'Collapse expression panel' })).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('keeps the panel collapsible when browser storage is unavailable', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('blocked') })
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('blocked') })
+    render(<App />)
+    expect(panel()).not.toHaveClass('is-collapsed')
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse expression panel' }))
+    expect(panel()).toHaveClass('is-collapsed')
+  })
+})
+
+describe('NoViz calculator mode (#55)', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    window.localStorage.clear()
+  })
+  const storedView = () => JSON.parse(window.localStorage.getItem(ACTIVE_DOCUMENT_KEY)!).view
+  const canvas = () => screen.queryByRole('img', { name: /Two-dimensional [VP]GA viewport/ })
+
+  it('collapses the canvas into a full-width calculator and brings it back', () => {
+    vi.stubEnv('MODE', 'development')
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+    const zoom = (screen.getByRole('textbox', { name: 'Zoom level' }) as HTMLInputElement).value
+    expect(screen.getByRole('textbox', { name: 'Position 1' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide canvas (NoViz calculator)' }))
+
+    // Nothing is rendered; the panel takes the whole width and says so.
+    expect(canvas()).not.toBeInTheDocument()
+    expect(document.querySelector('svg.canvas')).not.toBeInTheDocument()
+    expect(screen.getByText('NoViz calculator')).toBeInTheDocument()
+    expect(document.getElementById('expression-panel')).toHaveClass('is-full-width')
+    expect(screen.queryByRole('separator', { name: 'Resize expression panel' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Collapse expression panel' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Show canvas' })).toHaveFocus()
+    // Render-only fields and settings are gone; evaluation goes on.
+    expect(screen.queryByRole('textbox', { name: 'Position 1' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^(Hide|Show) V1$/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Open .* menu for V1/ })).not.toBeInTheDocument()
+    expect(screen.getAllByText('0.66e1 + 3.042e2').length).toBeGreaterThan(0)
+    openSettings()
+    const settings = screen.getByRole('dialog', { name: 'Settings' })
+    expect(within(settings).queryByRole('switch', { name: 'Grid' })).not.toBeInTheDocument()
+    expect(within(settings).queryByRole('slider', { name: 'Object scale' })).not.toBeInTheDocument()
+    expect(within(settings).getByRole('spinbutton', { name: 'Decimal places' })).toBeInTheDocument()
+    fireEvent.keyDown(settings, { key: 'Escape' })
+
+    // NoViz is document state: saved with no visualizer and positions off.
+    expect(storedView()).toMatchObject({ visualizerId: null, positionEnabled: false, viewport: { kind: 'none' } })
+    expect(screen.getByRole('button', { name: 'Undo document change' })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+    expect(canvas()).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Zoom level' })).toHaveValue(zoom)
+    expect(screen.getByRole('textbox', { name: 'Position 1' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Hide canvas (NoViz calculator)' })).toHaveFocus()
+    expect(storedView()).toMatchObject({
+      visualizerId: 'org.multivector.vga-2d', positionEnabled: true, viewport: { kind: 'two-dimensional' },
+    })
+  })
+
+  it('opens a stored NoViz document as a calculator and shows the canvas at the default view', () => {
+    const stored = toCanonicalDocument(expressionDocument([
+      { id: 'v', source: 'V = vector(2, 1)', positionSource: '(1, 1)' },
+    ], {}, { id: 'noviz' }), 'light')
+    window.localStorage.setItem(ACTIVE_DOCUMENT_KEY, serializeCanonicalDocument({
+      ...stored,
+      view: { ...stored.view, visualizerId: null, positionEnabled: false, viewport: { kind: 'none' } },
+    }))
+    vi.stubEnv('MODE', 'development')
+    render(<App />)
+    expect(canvas()).not.toBeInTheDocument()
+    expect(screen.queryByText(/DOCUMENT_VIEW_UNSUPPORTED/)).not.toBeInTheDocument()
+    expect(screen.getByText('NoViz calculator')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+    expect(canvas()).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Zoom level' })).toHaveValue('100%')
+    // Positions apply again: the vector starts at (1, 1), not at the origin.
+    expect(screen.getByRole('textbox', { name: 'Position 1' })).toHaveValue('(1, 1)')
+    expect(storedView()).toMatchObject({ positionEnabled: true })
+  })
+
+  it('opens with the whole panel when the expression panel was collapsed', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse expression panel' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Hide canvas (NoViz calculator)' }))
+    expect(document.getElementById('expression-panel')).not.toHaveClass('is-collapsed')
+    fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+    expect(document.getElementById('expression-panel')).not.toHaveClass('is-collapsed')
+  })
+
+  it.each([
+    ['no visualizer but a two-dimensional viewport', { visualizerId: null, viewport: { kind: 'two-dimensional', centerX: 1, centerY: 2, zoom: 144 } }, {}],
+    ['a visualizer but no viewport', { viewport: { kind: 'none' } }, {}],
+    ['an unknown visualizer', { visualizerId: 'org.example.unknown-2d' }, {}],
+    ['an unavailable interpretation', {}, { interpretation: { interpretationId: 'org.example.unknown', interpretationVersion: 1 } }],
+  ])('offers Show canvas for a stored document with %s', (_case, view, document) => {
+    const stored = toCanonicalDocument(expressionDocument([
+      { id: 'v', source: 'V = vector(2, 1)' },
+    ], {}, { id: 'undisplayable' }), 'light')
+    window.localStorage.setItem(ACTIVE_DOCUMENT_KEY, serializeCanonicalDocument({
+      ...stored, ...document, view: { ...stored.view, ...view } as typeof stored.view,
+    }))
+    vi.stubEnv('MODE', 'development')
+    render(<App />)
+    expect(canvas()).not.toBeInTheDocument()
+    expect(screen.getByText('NoViz calculator')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+    expect(canvas()).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Hide canvas (NoViz calculator)' })).toHaveFocus()
+    expect(screen.queryByText(/INT_UNKNOWN_INTERPRETATION/)).not.toBeInTheDocument()
+    expect(storedView()).toMatchObject({
+      visualizerId: 'org.multivector.vga-2d', positionEnabled: true, viewport: { kind: 'two-dimensional' },
+    })
+  })
+
+  it('keeps the stored centre and zoom of a document that only lacks its visualizer', () => {
+    const stored = toCanonicalDocument(expressionDocument([{ id: 'v', source: 'V = vector(2, 1)' }], {}, { id: 'zoomed' }), 'light')
+    window.localStorage.setItem(ACTIVE_DOCUMENT_KEY, serializeCanonicalDocument({
+      ...stored, view: { ...stored.view, visualizerId: null, viewport: { kind: 'two-dimensional', centerX: 1, centerY: 2, zoom: 144 } },
+    }))
+    vi.stubEnv('MODE', 'development')
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+    expect(screen.getByRole('textbox', { name: 'Zoom level' })).toHaveValue('200%')
+  })
+
+  it('takes the standard interpretation in an undoable step when the stored one is unavailable', () => {
+    const stored = toCanonicalDocument(expressionDocument([{ id: 'v', source: 'V = vector(2, 1)' }], {}, { id: 'unknown-interpretation' }), 'light')
+    window.localStorage.setItem(ACTIVE_DOCUMENT_KEY, serializeCanonicalDocument({
+      ...stored, interpretation: { interpretationId: 'org.example.unknown', interpretationVersion: 1 },
+    }))
+    vi.stubEnv('MODE', 'development')
+    render(<App />)
+    expect(screen.getByRole('alert')).toHaveTextContent(/INT_UNKNOWN_INTERPRETATION/)
+    fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+    expect(canvas()).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
+    expect(canvas()).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Show canvas' })).toBeInTheDocument()
+  })
+
+  it('forgets the view kept for the return when another document opens', async () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+    expect(screen.getByRole('textbox', { name: 'Zoom level' })).not.toHaveValue('100%')
+    fireEvent.click(screen.getByRole('button', { name: 'Hide canvas (NoViz calculator)' }))
+
+    const opened = toCanonicalDocument(expressionDocument([{ id: 'v', source: 'Opened = vector(3, 4)' }], {}, { id: 'opened' }), 'light')
+    const bytes = new TextEncoder().encode(JSON.stringify({
+      ...opened, view: { ...opened.view, visualizerId: null, positionEnabled: false, viewport: { kind: 'none' } },
+    }))
+    fireEvent.drop(document.body, { dataTransfer: {
+      types: ['Files'], dropEffect: 'none',
+      files: [{ name: 'opened.gamut.json', type: 'application/json', arrayBuffer: async () => bytes.slice().buffer }],
+    } })
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('Opened = vector(3, 4)'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+    expect(canvas()).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Zoom level' })).toHaveValue('100%')
+  })
+
+  describe('undo and redo across an algebra change', () => {
+    const switchTo = (current: string, index: number) => {
+      fireEvent.click(screen.getByRole('button', { name: `${current}. Change algebra` }))
+      fireEvent.click(within(screen.getByRole('menu')).getAllByRole('menuitemradio')[index])
+    }
+    const undo = () => fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
+    const redo = () => fireEvent.click(screen.getByRole('button', { name: 'Redo document change' }))
+    const expectCanvasOf = (algebra: 'VGA' | 'PGA') => {
+      expect(screen.getByRole('button', { name: `${algebra} · 2D. Change algebra` })).toBeInTheDocument()
+      expect(screen.getByRole('img', { name: `Two-dimensional ${algebra} viewport` })).toBeInTheDocument()
+    }
+
+    it('keeps the visualizer of each algebra after a view change on the canvas', () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+      render(<App />)
+      switchTo('VGA · 2D', 1)
+      fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+      expectCanvasOf('PGA')
+      undo()
+      expectCanvasOf('VGA')
+      redo()
+      expectCanvasOf('PGA')
+    })
+
+    it('shows the canvas of the algebra undo or redo lands on after NoViz', () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+      render(<App />)
+      switchTo('VGA · 2D', 1)
+      fireEvent.click(screen.getByRole('button', { name: 'Hide canvas (NoViz calculator)' }))
+      undo()
+      // NoViz is a view state: undo keeps it.
+      expect(canvas()).not.toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+      expectCanvasOf('VGA')
+      redo()
+      expectCanvasOf('PGA')
+    })
+
+    it('does not bring back the visualizer kept for another algebra', () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: 'Hide canvas (NoViz calculator)' }))
+      switchTo('VGA · 2D', 1)
+      fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+      expectCanvasOf('PGA')
+      undo()
+      expectCanvasOf('VGA')
+      redo()
+      expectCanvasOf('PGA')
+    })
   })
 })
 

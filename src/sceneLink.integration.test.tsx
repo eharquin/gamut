@@ -164,6 +164,13 @@ describe('scene sharing in the application', () => {
       [{ id: 'dropped-vector', source: 'Dropped = vector(1, 1)' }], {}, { id: 'dropped-document' },
     ), 'light')))
     const file = { name: 'dropped.gamut.json', type: 'application/json', arrayBuffer: async () => bytes.slice().buffer } as unknown as File
+    // The window's drop listener is installed by an effect that may run after
+    // the scene is displayed. A dragged file shows the drop overlay only once
+    // that listener exists, so wait for it before dropping.
+    await waitFor(() => {
+      fireEvent.dragEnter(document.body, { dataTransfer: { types: ['Files'], files: [] } })
+      expect(screen.getByText('Drop a JSON document to open it')).toBeInTheDocument()
+    })
     fireEvent.drop(document.body, { dataTransfer: { types: ['Files'], files: [file] } })
     await waitFor(
       () => expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('Dropped = vector(1, 1)'),
