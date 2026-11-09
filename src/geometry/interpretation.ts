@@ -58,6 +58,11 @@ export type Interpretation<E extends InterpretedEntity = InterpretedEntity> = Re
   supportsHead(entity: E): boolean
   /** Whether an owned value may serve as a position. */
   isPositionValue(value: OwnedMultivector): boolean
+  /**
+   * What a position must evaluate to, as a noun phrase completing
+   * “A position must evaluate to …”, for diagnostics.
+   */
+  positionDescription: string
   positionOf(value: OwnedMultivector): Point2d
   positionValue(point: Point2d, basis: AlgebraBasis): OwnedMultivector
   visualization(entity: E): VisualizationSupport
@@ -88,6 +93,7 @@ export const OPAQUE_INTERPRETATION: AnyInterpretation = Object.freeze<AnyInterpr
   supportsPosition: () => false,
   supportsHead: () => false,
   isPositionValue: () => false,
+  positionDescription: 'a value the document’s interpretation accepts',
   positionOf: () => ({ x: 0, y: 0 }),
   positionValue(_point, basis) {
     throw new RangeError(`No position values under the opaque interpretation (${basis.blades.length} blades).`)
