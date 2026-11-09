@@ -101,10 +101,19 @@ progression, subdivides major steps into four or five intervals, and generates
 no more than 256 lines per axis. Wheel zoom uses a continuous exponential scale
 and preserves the mathematical coordinate under the pointer.
 
-Viewport-created vector coordinates retain approximately one tenth of a
-reference screen pixel at the active zoom. Their decimal precision is
-`ceil(log10(10 × pixelsPerUnit))`, clamped from zero through eight decimal
-places. Trailing zeroes are removed and negative zero is serialized as `0`.
+Coordinates written by the viewport retain approximately one reference screen
+pixel at the active zoom. Their decimal precision is
+`round(log10(pixelsPerUnit))`, clamped from zero through eight decimal places:
+two decimals from about 32 through 316 pixels per unit, one more for each
+further tenfold zoom in, one fewer for each tenfold zoom out. The rule applies
+to objects created by double-click, to base, head, and literal-point drags,
+to arrow-key moves, and to the coordinates announced after an arrow-key move,
+so one object never mixes precisions. Line coefficients are written with a
+ten times finer step, refined further by the anchor's distance from the
+origin, so that rotating a line about an anchor stays smooth and the anchor
+stays on the line. Trailing zeroes are removed and negative zero is
+serialized as `0`. Literals already in a document are rewritten only when the
+viewport moves the object that holds them.
 
 Document history retains at most 100 complete pre-command document snapshots.
 When the limit is exceeded, the oldest snapshot is discarded first. Undo and

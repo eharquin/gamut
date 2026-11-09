@@ -44,7 +44,6 @@ import {
   adaptiveGrid,
   clampZoom,
   DEFAULT_PIXELS_PER_UNIT,
-  formatGridNumber,
   keyboardManipulationStep,
   panByScreen,
   toMathematical,
@@ -54,6 +53,7 @@ import {
 } from './visualization/viewport'
 import {
   creationSource,
+  formatViewportCoordinate,
   nextObjectName,
 } from './visualization/viewportCreation'
 import { describeViewport } from './visualization/viewportDescription'
@@ -555,10 +555,14 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     const item = expressionDoc.items.find((candidate) => candidate.id === itemId)
     const rendered = renderedPrimitives.find((candidate) => candidate.id === itemId)
     if (!item || !rendered) return
-    const roundingStep = 1 / viewport.pixelsPerUnit
+    // Every coordinate written here follows the creation rule (about one
+    // screen pixel); line coefficients use a ten times finer scale so that
+    // rotating a line about an anchor stays smooth.
+    const pixelsPerUnit = viewport.pixelsPerUnit
+    const coordinate = (value: number) => formatViewportCoordinate(value, pixelsPerUnit)
     const target = {
-      x: Number(formatGridNumber(point.x, roundingStep)),
-      y: Number(formatGridNumber(point.y, roundingStep)),
+      x: Number(coordinate(point.x)),
+      y: Number(coordinate(point.y)),
     }
     if (kind === 'line' || kind === 'normal') {
       if (rendered.primitive.kind !== 'unbounded-line') return
@@ -569,7 +573,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       // anchor's distance times its rounding error: (a, b) are rounded with a
       // step refined by that distance and c is derived from them, so the
       // anchor stays on the line.
-      const coefficientStep = (anchor: Point2d) => roundingStep / 10 / Math.max(1, Math.hypot(anchor.x, anchor.y))
+      const coefficientScale = (anchor: Point2d) => pixelsPerUnit * 10 * Math.max(1, Math.hypot(anchor.x, anchor.y))
+      const offsetScale = pixelsPerUnit * 10
       let rounded: readonly [number, number, number]
       if (kind === 'line') {
         // Translating changes only c; motion along the line has no effect.
@@ -577,12 +582,12 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
         // pivots about the translated line, not the pressed one.
         const origin = lineDragOrigin.current
         if (!origin) return
-        const step = coefficientStep(origin.anchor)
-        const a = Number(formatGridNumber(origin.coefficients[0], step))
-        const b = Number(formatGridNumber(origin.coefficients[1], step))
+        const scale = coefficientScale(origin.anchor)
+        const a = Number(formatViewportCoordinate(origin.coefficients[0], scale))
+        const b = Number(formatViewportCoordinate(origin.coefficients[1], scale))
         const shift = { x: target.x - origin.point.x, y: target.y - origin.point.y }
         const c = origin.coefficients[2] - a * shift.x - b * shift.y
-        rounded = [a, b, Number(formatGridNumber(c, roundingStep / 10))]
+        rounded = [a, b, Number(formatViewportCoordinate(c, offsetScale))]
         if (selectedLine?.itemId === itemId) {
           setSelectedLine({ itemId, anchor: { x: origin.anchor.x + shift.x, y: origin.anchor.y + shift.y } })
         }
@@ -598,10 +603,10 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
         const length = Math.hypot(dx, dy)
         if (length === 0) return
         const scale = Math.hypot(a0, b0)
-        const step = coefficientStep(anchor)
-        const a = Number(formatGridNumber(dx / length * scale, step))
-        const b = Number(formatGridNumber(dy / length * scale, step))
-        rounded = [a, b, Number(formatGridNumber(-(a * anchor.x + b * anchor.y), roundingStep / 10))]
+        const coefficients = coefficientScale(anchor)
+        const a = Number(formatViewportCoordinate(dx / length * scale, coefficients))
+        const b = Number(formatViewportCoordinate(dy / length * scale, coefficients))
+        rounded = [a, b, Number(formatViewportCoordinate(-(a * anchor.x + b * anchor.y), offsetScale))]
       }
       const rewritten = rewriteConstructorLiterals(item.source, components, rounded)
       if (rewritten !== item.source) executeCommand({ kind: 'update-source', itemId, source: rewritten })
@@ -621,8 +626,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       const base = primitiveBase(rendered.primitive)
       if (!components || !base) return
       const values = [
-        Number(formatGridNumber(target.x - base.x, roundingStep)),
-        Number(formatGridNumber(target.y - base.y, roundingStep)),
+        Number(coordinate(target.x - base.x)),
+        Number(coordinate(target.y - base.y)),
       ] as const
       const rewritten = rewriteConstructorLiterals(item.source, components, values)
       if (rewritten !== item.source) executeCommand({
@@ -663,7 +668,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       return
     }
     const literalPosition = interpretation.formatPosition(
-      formatGridNumber(target.x, roundingStep), formatGridNumber(target.y, roundingStep),
+      coordinate(target.x), coordinate(target.y),
     )
     if (!item.positionSource) {
       executeCommand({ kind: 'update-position', itemId, positionSource: literalPosition })
@@ -862,8 +867,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     setViewportAnnouncement(kind === 'normal'
       ? `${gestureLabel(kind)} rotated.`
       : `${gestureLabel(kind)} moved to ${
-          formatGridNumber(current.x + delta.x, 1 / viewport.pixelsPerUnit)}, ${
-          formatGridNumber(current.y + delta.y, 1 / viewport.pixelsPerUnit)}.`)
+          formatViewportCoordinate(current.x + delta.x, viewport.pixelsPerUnit)}, ${
+          formatViewportCoordinate(current.y + delta.y, viewport.pixelsPerUnit)}.`)
   }
   const moveViewportPan = (event: ReactPointerEvent<SVGSVGElement>) => {
     const manipulation = manipulationDrag.current

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  creationSource,
   formatViewportCoordinate,
   nextObjectName,
   vectorCreationSource,
+  viewportCoordinateDecimals,
 } from './viewportCreation'
 import { MAX_PIXELS_PER_UNIT, MIN_PIXELS_PER_UNIT } from './viewport'
 
@@ -29,13 +31,35 @@ describe('viewport vector creation', () => {
     ])).toBe('A2')
   })
 
-  it('formats coordinates at zoom-aware precision without negative zero', () => {
-    expect(formatViewportCoordinate(1 / 3, 72)).toBe('0.333')
-    expect(formatViewportCoordinate(-0.0001, 72)).toBe('0')
-    expect(formatViewportCoordinate(1 / 3, 512)).toBe('0.3333')
+  it('rounds coordinates to about one screen pixel: round(log10(pixelsPerUnit)) decimals, from 0 to 8', () => {
+    // pixels per unit -> decimals, across the zoom range.
+    expect([
+      MIN_PIXELS_PER_UNIT, 1, 3.16, 3.17, 16, 31.6, 32, 72, 160, 316, 317, 1000, 3162, 3163, MAX_PIXELS_PER_UNIT,
+    ].map(viewportCoordinateDecimals)).toEqual([0, 0, 0, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 4, 6])
+    expect(viewportCoordinateDecimals(1e12)).toBe(8)
+
+    // About five units across a 500 to 1500 px canvas: two decimals.
+    for (const pixelsPerUnit of [100, 160, 300])
+      expect(formatViewportCoordinate(-0.9553, pixelsPerUnit)).toBe('-0.96')
+    expect(formatViewportCoordinate(1 / 3, 16)).toBe('0.3')
+    expect(formatViewportCoordinate(1 / 3, 72)).toBe('0.33')
+    expect(formatViewportCoordinate(1 / 3, 1000)).toBe('0.333')
     expect(formatViewportCoordinate(1 / 3, MIN_PIXELS_PER_UNIT)).toBe('0')
-    expect(formatViewportCoordinate(1 / 3, MAX_PIXELS_PER_UNIT)).toBe('0.3333333')
-    expect(formatViewportCoordinate(1e-7, MAX_PIXELS_PER_UNIT)).toBe('1E-7')
+    expect(formatViewportCoordinate(1 / 3, MAX_PIXELS_PER_UNIT)).toBe('0.333333')
+    expect(formatViewportCoordinate(1e-6, MAX_PIXELS_PER_UNIT)).toBe('0.000001')
+  })
+
+  it('removes trailing zeroes and writes negative zero as 0', () => {
+    expect(formatViewportCoordinate(1.5, 160)).toBe('1.5')
+    expect(formatViewportCoordinate(2, 160)).toBe('2')
+    expect(formatViewportCoordinate(-0.004, 160)).toBe('0')
+    expect(formatViewportCoordinate(-0, 72)).toBe('0')
+  })
+
+  it('creates a point at the visible precision', () => {
+    expect(creationSource('point', 'K', { x: -0.95531, y: -0.86449 }, 160)).toBe('K = point(-0.96, -0.86)')
+    expect(creationSource('point', 'K', { x: -0.95531, y: -0.86449 }, 1000)).toBe('K = point(-0.955, -0.864)')
+    expect(creationSource('point', 'K', { x: -0.95531, y: -0.86449 }, 16)).toBe('K = point(-1, -0.9)')
   })
 
   it('builds documented VGA vector source', () => {
