@@ -105,12 +105,24 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Interface and accessibility
 
+- A NoViz calculator mode: a button at the top left of the canvas collapses
+  the canvas to the right and leaves the expression panel full width, and a
+  button at the right edge of the panel brings the canvas back at the view it
+  had in this session, as long as the same document stays open. Nothing is drawn, and position fields, visibility buttons, labels, the
+  appearance menu, and the rendering settings are hidden while evaluation,
+  scalar controls, history, and import and export keep working. NoViz is saved
+  in the document (`visualizerId: null`, viewport `none`, positions off) and
+  carried by exports and scene links. Undo and redo across an algebra change
+  show each algebra with its own visualizer, in and out of NoViz. A document
+  that cannot be drawn (one NoViz marker only, an unknown visualizer, or an
+  unavailable interpretation) opens as the calculator, and **Show canvas**
+  repairs it (#55).
 - A button at the top right of the expression panel collapses it to the
   left so that the canvas fills the window; a button at the left edge of the
   canvas brings it back at its previous width. The choice is remembered in
   this browser, like the viewport lock, but is not part of the document,
   its export, or scene links. Opening a document without a canvas reopens a
-  collapsed panel and moves focus left in the canvas to the panel (#234).
+  collapsed panel and moves focus left in the canvas to **Show canvas** (#234).
 - A document that stored `view.positionEnabled: false` drew every object at
   the origin while its position fields and base drags still updated. Positions
   now switch off only without a visualizer (NoViz, #55): a document drawn on a

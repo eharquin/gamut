@@ -32,6 +32,11 @@ type SettingsMenuProps = Readonly<{
   documentCommands: DocumentMenuCommands
   onDisplayChange(change: Partial<DisplaySettings>): void
   onThemeChange(theme: ThemeMode): void
+  /**
+   * Whether the settings that only affect rendering (grid, axes,
+   * graduations, object size) are shown; false in NoViz, where nothing is drawn.
+   */
+  renderingSettings?: boolean
 }>
 
 type SwitchRowProps = Readonly<{
@@ -73,6 +78,7 @@ export function SettingsMenu({
   documentCommands,
   onDisplayChange,
   onThemeChange,
+  renderingSettings = true,
 }: SettingsMenuProps) {
   const [open, setOpen] = useState(false)
   const wrapperRef = useRef<HTMLDivElement>(null)
@@ -143,29 +149,32 @@ export function SettingsMenu({
         >
           <section className="settings-section">
             <h3>Display</h3>
-            <SwitchRow
-              label="Grid"
-              checked={display.gridVisible}
-              inputRef={firstControlRef}
-              onChange={(gridVisible) => onDisplayChange({ gridVisible })}
-            />
-            <SwitchRow
-              label="Axes and labels"
-              checked={display.axisLabelsVisible}
-              onChange={(axisLabelsVisible) =>
-                onDisplayChange({ axisLabelsVisible })
-              }
-            />
-            <SwitchRow
-              label="Graduations"
-              checked={display.graduationsVisible}
-              onChange={(graduationsVisible) =>
-                onDisplayChange({ graduationsVisible })
-              }
-            />
+            {renderingSettings && <>
+              <SwitchRow
+                label="Grid"
+                checked={display.gridVisible}
+                inputRef={firstControlRef}
+                onChange={(gridVisible) => onDisplayChange({ gridVisible })}
+              />
+              <SwitchRow
+                label="Axes and labels"
+                checked={display.axisLabelsVisible}
+                onChange={(axisLabelsVisible) =>
+                  onDisplayChange({ axisLabelsVisible })
+                }
+              />
+              <SwitchRow
+                label="Graduations"
+                checked={display.graduationsVisible}
+                onChange={(graduationsVisible) =>
+                  onDisplayChange({ graduationsVisible })
+                }
+              />
+            </>}
             <label className="settings-row">
               <span className="settings-row-label">Decimal places</span>
               <input
+                ref={renderingSettings ? undefined : firstControlRef}
                 className="settings-number"
                 type="number"
                 aria-label="Decimal places"
@@ -192,7 +201,7 @@ export function SettingsMenu({
                 onDisplayChange({ showApproximatedResidue })
               }
             />
-            <label className="settings-row settings-row-slider">
+            {renderingSettings && <label className="settings-row settings-row-slider">
               <span className="settings-row-label">Object size</span>
               <input
                 type="range"
@@ -216,7 +225,7 @@ export function SettingsMenu({
               <output className="settings-slider-value">
                 {display.objectScale.toFixed(2)}×
               </output>
-            </label>
+            </label>}
           </section>
           <section className="settings-section">
             <h3>Theme</h3>

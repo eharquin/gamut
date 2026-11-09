@@ -3866,8 +3866,9 @@ describe('collapsing the expression panel (#234)', () => {
     await waitFor(() => expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('Calc = vector(5, 6)'))
     expect(panel()).not.toHaveClass('is-collapsed')
     expect(panel()).not.toHaveAttribute('inert')
-    // The focused expand button went away with the canvas; focus lands on the panel.
-    expect(panel()).toHaveFocus()
+    // The focused expand button went away with the canvas; focus lands on
+    // the button that brings the canvas back (#55).
+    expect(screen.getByRole('button', { name: 'Show canvas' })).toHaveFocus()
     expect(window.localStorage.getItem('gamut.expressionPanelCollapsed')).toBe('false')
 
     // A document with a canvas afterwards does not collapse the panel again.
@@ -3885,5 +3886,213 @@ describe('collapsing the expression panel (#234)', () => {
     expect(panel()).not.toHaveClass('is-collapsed')
     fireEvent.click(screen.getByRole('button', { name: 'Collapse expression panel' }))
     expect(panel()).toHaveClass('is-collapsed')
+  })
+})
+
+describe('NoViz calculator mode (#55)', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    window.localStorage.clear()
+  })
+  const storedView = () => JSON.parse(window.localStorage.getItem(ACTIVE_DOCUMENT_KEY)!).view
+  const canvas = () => screen.queryByRole('img', { name: /Two-dimensional [VP]GA viewport/ })
+
+  it('collapses the canvas into a full-width calculator and brings it back', () => {
+    vi.stubEnv('MODE', 'development')
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+    const zoom = (screen.getByRole('textbox', { name: 'Zoom level' }) as HTMLInputElement).value
+    expect(screen.getByRole('textbox', { name: 'Position 1' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide canvas (NoViz calculator)' }))
+
+    // Nothing is rendered; the panel takes the whole width and says so.
+    expect(canvas()).not.toBeInTheDocument()
+    expect(document.querySelector('svg.canvas')).not.toBeInTheDocument()
+    expect(screen.getByText('NoViz calculator')).toBeInTheDocument()
+    expect(document.getElementById('expression-panel')).toHaveClass('is-full-width')
+    expect(screen.queryByRole('separator', { name: 'Resize expression panel' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Collapse expression panel' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Show canvas' })).toHaveFocus()
+    // Render-only fields and settings are gone; evaluation goes on.
+    expect(screen.queryByRole('textbox', { name: 'Position 1' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^(Hide|Show) V1$/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Open .* menu for V1/ })).not.toBeInTheDocument()
+    expect(screen.getAllByText('0.66e1 + 3.042e2').length).toBeGreaterThan(0)
+    openSettings()
+    const settings = screen.getByRole('dialog', { name: 'Settings' })
+    expect(within(settings).queryByRole('switch', { name: 'Grid' })).not.toBeInTheDocument()
+    expect(within(settings).queryByRole('slider', { name: 'Object scale' })).not.toBeInTheDocument()
+    expect(within(settings).getByRole('spinbutton', { name: 'Decimal places' })).toBeInTheDocument()
+    fireEvent.keyDown(settings, { key: 'Escape' })
+
+    // NoViz is document state: saved with no visualizer and positions off.
+    expect(storedView()).toMatchObject({ visualizerId: null, positionEnabled: false, viewport: { kind: 'none' } })
+    expect(screen.getByRole('button', { name: 'Undo document change' })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+    expect(canvas()).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Zoom level' })).toHaveValue(zoom)
+    expect(screen.getByRole('textbox', { name: 'Position 1' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Hide canvas (NoViz calculator)' })).toHaveFocus()
+    expect(storedView()).toMatchObject({
+      visualizerId: 'org.multivector.vga-2d', positionEnabled: true, viewport: { kind: 'two-dimensional' },
+    })
+  })
+
+  it('opens a stored NoViz document as a calculator and shows the canvas at the default view', () => {
+    const stored = toCanonicalDocument(expressionDocument([
+      { id: 'v', source: 'V = vector(2, 1)', positionSource: '(1, 1)' },
+    ], {}, { id: 'noviz' }), 'light')
+    window.localStorage.setItem(ACTIVE_DOCUMENT_KEY, serializeCanonicalDocument({
+      ...stored,
+      view: { ...stored.view, visualizerId: null, positionEnabled: false, viewport: { kind: 'none' } },
+    }))
+    vi.stubEnv('MODE', 'development')
+    render(<App />)
+    expect(canvas()).not.toBeInTheDocument()
+    expect(screen.queryByText(/DOCUMENT_VIEW_UNSUPPORTED/)).not.toBeInTheDocument()
+    expect(screen.getByText('NoViz calculator')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+    expect(canvas()).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Zoom level' })).toHaveValue('100%')
+    // Positions apply again: the vector starts at (1, 1), not at the origin.
+    expect(screen.getByRole('textbox', { name: 'Position 1' })).toHaveValue('(1, 1)')
+    expect(storedView()).toMatchObject({ positionEnabled: true })
+  })
+
+  it('opens with the whole panel when the expression panel was collapsed', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse expression panel' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Hide canvas (NoViz calculator)' }))
+    expect(document.getElementById('expression-panel')).not.toHaveClass('is-collapsed')
+    fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+    expect(document.getElementById('expression-panel')).not.toHaveClass('is-collapsed')
+  })
+
+  it.each([
+    ['no visualizer but a two-dimensional viewport', { visualizerId: null, viewport: { kind: 'two-dimensional', centerX: 1, centerY: 2, zoom: 144 } }, {}],
+    ['a visualizer but no viewport', { viewport: { kind: 'none' } }, {}],
+    ['an unknown visualizer', { visualizerId: 'org.example.unknown-2d' }, {}],
+    ['an unavailable interpretation', {}, { interpretation: { interpretationId: 'org.example.unknown', interpretationVersion: 1 } }],
+  ])('offers Show canvas for a stored document with %s', (_case, view, document) => {
+    const stored = toCanonicalDocument(expressionDocument([
+      { id: 'v', source: 'V = vector(2, 1)' },
+    ], {}, { id: 'undisplayable' }), 'light')
+    window.localStorage.setItem(ACTIVE_DOCUMENT_KEY, serializeCanonicalDocument({
+      ...stored, ...document, view: { ...stored.view, ...view } as typeof stored.view,
+    }))
+    vi.stubEnv('MODE', 'development')
+    render(<App />)
+    expect(canvas()).not.toBeInTheDocument()
+    expect(screen.getByText('NoViz calculator')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+    expect(canvas()).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Hide canvas (NoViz calculator)' })).toHaveFocus()
+    expect(screen.queryByText(/INT_UNKNOWN_INTERPRETATION/)).not.toBeInTheDocument()
+    expect(storedView()).toMatchObject({
+      visualizerId: 'org.multivector.vga-2d', positionEnabled: true, viewport: { kind: 'two-dimensional' },
+    })
+  })
+
+  it('keeps the stored centre and zoom of a document that only lacks its visualizer', () => {
+    const stored = toCanonicalDocument(expressionDocument([{ id: 'v', source: 'V = vector(2, 1)' }], {}, { id: 'zoomed' }), 'light')
+    window.localStorage.setItem(ACTIVE_DOCUMENT_KEY, serializeCanonicalDocument({
+      ...stored, view: { ...stored.view, visualizerId: null, viewport: { kind: 'two-dimensional', centerX: 1, centerY: 2, zoom: 144 } },
+    }))
+    vi.stubEnv('MODE', 'development')
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+    expect(screen.getByRole('textbox', { name: 'Zoom level' })).toHaveValue('200%')
+  })
+
+  it('takes the standard interpretation in an undoable step when the stored one is unavailable', () => {
+    const stored = toCanonicalDocument(expressionDocument([{ id: 'v', source: 'V = vector(2, 1)' }], {}, { id: 'unknown-interpretation' }), 'light')
+    window.localStorage.setItem(ACTIVE_DOCUMENT_KEY, serializeCanonicalDocument({
+      ...stored, interpretation: { interpretationId: 'org.example.unknown', interpretationVersion: 1 },
+    }))
+    vi.stubEnv('MODE', 'development')
+    render(<App />)
+    expect(screen.getByRole('alert')).toHaveTextContent(/INT_UNKNOWN_INTERPRETATION/)
+    fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+    expect(canvas()).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
+    expect(canvas()).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Show canvas' })).toBeInTheDocument()
+  })
+
+  it('forgets the view kept for the return when another document opens', async () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+    expect(screen.getByRole('textbox', { name: 'Zoom level' })).not.toHaveValue('100%')
+    fireEvent.click(screen.getByRole('button', { name: 'Hide canvas (NoViz calculator)' }))
+
+    const opened = toCanonicalDocument(expressionDocument([{ id: 'v', source: 'Opened = vector(3, 4)' }], {}, { id: 'opened' }), 'light')
+    const bytes = new TextEncoder().encode(JSON.stringify({
+      ...opened, view: { ...opened.view, visualizerId: null, positionEnabled: false, viewport: { kind: 'none' } },
+    }))
+    fireEvent.drop(document.body, { dataTransfer: {
+      types: ['Files'], dropEffect: 'none',
+      files: [{ name: 'opened.gamut.json', type: 'application/json', arrayBuffer: async () => bytes.slice().buffer }],
+    } })
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('Opened = vector(3, 4)'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+    expect(canvas()).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Zoom level' })).toHaveValue('100%')
+  })
+
+  describe('undo and redo across an algebra change', () => {
+    const switchTo = (current: string, index: number) => {
+      fireEvent.click(screen.getByRole('button', { name: `${current}. Change algebra` }))
+      fireEvent.click(within(screen.getByRole('menu')).getAllByRole('menuitemradio')[index])
+    }
+    const undo = () => fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
+    const redo = () => fireEvent.click(screen.getByRole('button', { name: 'Redo document change' }))
+    const expectCanvasOf = (algebra: 'VGA' | 'PGA') => {
+      expect(screen.getByRole('button', { name: `${algebra} · 2D. Change algebra` })).toBeInTheDocument()
+      expect(screen.getByRole('img', { name: `Two-dimensional ${algebra} viewport` })).toBeInTheDocument()
+    }
+
+    it('keeps the visualizer of each algebra after a view change on the canvas', () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+      render(<App />)
+      switchTo('VGA · 2D', 1)
+      fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+      expectCanvasOf('PGA')
+      undo()
+      expectCanvasOf('VGA')
+      redo()
+      expectCanvasOf('PGA')
+    })
+
+    it('shows the canvas of the algebra undo or redo lands on after NoViz', () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+      render(<App />)
+      switchTo('VGA · 2D', 1)
+      fireEvent.click(screen.getByRole('button', { name: 'Hide canvas (NoViz calculator)' }))
+      undo()
+      // NoViz is a view state: undo keeps it.
+      expect(canvas()).not.toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+      expectCanvasOf('VGA')
+      redo()
+      expectCanvasOf('PGA')
+    })
+
+    it('does not bring back the visualizer kept for another algebra', () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: 'Hide canvas (NoViz calculator)' }))
+      switchTo('VGA · 2D', 1)
+      fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+      expectCanvasOf('PGA')
+      undo()
+      expectCanvasOf('VGA')
+      redo()
+      expectCanvasOf('PGA')
+    })
   })
 })

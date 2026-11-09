@@ -37,7 +37,12 @@ export type HistoryAction =
   | Readonly<{ type: 'commit-transaction'; origin?: HistoryOrigin }>
   | Readonly<{ type: 'cancel-transaction' }>
   | Readonly<{ type: 'replace'; document: ExpressionDocument }>
-  | Readonly<{ type: 'update-view'; view: ExpressionDocument['view'] }>
+  | Readonly<{
+      type: 'update-view'
+      view: ExpressionDocument['view']
+      /** The standard visualizer of an algebra, for snapshots of another algebra than the present one. */
+      standardVisualizerId?: (algebra: ExpressionDocument['algebra']) => string | null
+    }>
   | Readonly<{ type: 'update-identity'; id: string }>
 
 export function createDocumentHistory(document: ExpressionDocument): DocumentHistory {
@@ -51,12 +56,34 @@ function bounded(entries: readonly HistoryEntry[]): readonly HistoryEntry[] {
   return entries.length <= MAX_HISTORY_ENTRIES ? entries : entries.slice(-MAX_HISTORY_ENTRIES)
 }
 
+/**
+ * The view is shared by every snapshot, except its visualizer, which belongs
+ * to the algebra: a snapshot of another algebra than the present one keeps its
+ * own visualizer, or takes its algebra's standard one, so that undo and redo
+ * never pair an algebra with another algebra's visualizer. NoViz (no
+ * visualizer) still applies to every snapshot.
+ */
+function viewForSnapshot(
+  document: ExpressionDocument,
+  present: ExpressionDocument,
+  action: Extract<HistoryAction, { type: 'update-view' }>,
+): ExpressionDocument['view'] {
+  const { view } = action
+  if (view.visualizerId === null || document.algebra.algebraId === present.algebra.algebraId) return view
+  const visualizerId = document.view.visualizerId ??
+    action.standardVisualizerId?.(document.algebra) ??
+    view.visualizerId
+  return visualizerId === view.visualizerId ? view : { ...view, visualizerId }
+}
+
 export function documentHistoryReducer(state: DocumentHistory, action: HistoryAction): DocumentHistory {
   if (action.type === 'update-view' || action.type === 'update-identity') {
     // Applied to every snapshot so that undo and redo never restore a
     // previous view or document identity.
     const update = (document: ExpressionDocument): ExpressionDocument =>
-      action.type === 'update-view' ? { ...document, view: action.view } : { ...document, id: action.id }
+      action.type === 'update-view'
+        ? { ...document, view: viewForSnapshot(document, state.present, action) }
+        : { ...document, id: action.id }
     return {
       ...state,
       past: state.past.map((entry) => ({ ...entry, document: update(entry.document) })),

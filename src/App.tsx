@@ -37,11 +37,13 @@ import {
   vga2FoundationExampleDocument,
   type ExpressionControl,
   type ExpressionItem,
+  type ExpressionDocument,
 } from './document/expressionDocument'
 import { hasContent, type DocumentCommand } from './document/documentCommands'
 import {
   createDocumentHistory,
   documentHistoryReducer,
+  type HistoryAction,
 } from './document/documentHistory'
 import {
   adaptiveGrid,
@@ -121,6 +123,12 @@ const restoreOptions = {
 }
 /** How far, in CSS pixels, a pressed handle must move before its drag starts. */
 const DRAG_DEAD_ZONE = 3
+
+/** The standard visualizer of an algebra, so that undo and redo keep each algebra's own visualizer. */
+function standardVisualizerId(algebra: ExpressionDocument['algebra']): string | null {
+  const resolution = algebraRegistry.resolve(algebra)
+  return resolution.status === 'resolved' ? resolution.definition.standardVisualizerId : null
+}
 const MIN_PANEL_WIDTH = 240
 /** Keeps the `.panel-resize` separator reachable at any panel width. */
 const PANEL_RESIZE_WIDTH = 6
@@ -302,11 +310,26 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       }
     }
   })
-  const [history, dispatchHistory] = useReducer(
+  const [history, dispatchDocumentHistory] = useReducer(
     documentHistoryReducer,
     initial.document,
     createDocumentHistory,
   )
+  /**
+   * The visualizer and viewport left for NoViz, restored on the way back
+   * (#55). It belongs to the open document only.
+   */
+  const retainedVisualView = useRef<Readonly<{
+    algebraId: string
+    visualizerId: string
+    viewport: Extract<ExpressionDocument['view']['viewport'], { kind: 'two-dimensional' }>
+  }> | null>(null)
+  // Every document replacement (import, drop, and any later open or new)
+  // goes through `replace`, which forgets the view kept for the previous one.
+  const dispatchHistory = useCallback((action: HistoryAction) => {
+    if (action.type === 'replace') retainedVisualView.current = null
+    dispatchDocumentHistory(action)
+  }, [])
   const expressionDoc = history.present
   // Documents entering the history are checked at restore and import, so a
   // failed resolution here is a programming error, not a user-facing state.
@@ -331,7 +354,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const executeCommand = useCallback((
     command: DocumentCommand,
     coalesceKey?: string,
-  ) => dispatchHistory({ type: 'execute', command, coalesceKey }), [])
+  ) => dispatchHistory({ type: 'execute', command, coalesceKey }), [dispatchHistory])
   const nextId = useRef(2)
   const labelPlacementCache = useRef<{ key: string; placed: ReturnType<typeof placeLabels> } | null>(null)
   const inputRefs = useRef(new Map<string, HTMLInputElement>())
@@ -519,7 +542,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const closeAppearance = useCallback(() => {
     setAppearanceItemId(null)
     dispatchHistory({ type: 'boundary' })
-  }, [])
+  }, [dispatchHistory])
   const rememberEditorFocus = (element: HTMLInputElement) => {
     lastEditorFocus.current = {
       id: element.id,
@@ -533,7 +556,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     pendingTraversal.current = !history.transaction &&
       (type === 'undo' ? history.past.length > 0 : history.future.length > 0)
     dispatchHistory({ type })
-  }, [history.past.length, history.future.length, history.transaction])
+  }, [history.past.length, history.future.length, history.transaction, dispatchHistory])
 
   const viewport: Viewport2d = expressionDoc.view.viewport.kind === 'two-dimensional'
     ? {
@@ -549,10 +572,29 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     expressionDoc.view.viewport.kind === 'two-dimensional'
   // Without a canvas there is nothing to give the room to, so the panel stays open.
   const panelHidden = panelCollapsed && visualizerActive
+  /**
+   * The NoViz calculator (#55): the document has no visualizer, so nothing is
+   * drawn, positions are off, and the panel takes the whole width. Any
+   * document without a canvas is shown this way, so that **Show canvas** is
+   * always offered: besides the NoViz state itself (`visualizerId: null` and
+   * viewport `none`), a document with only one of the two markers, an unknown
+   * visualizer, or an unavailable interpretation.
+   */
+  const noViz = !visualizerActive
+  /** The button that receives focus after the user enters or leaves NoViz. */
+  const workspaceModeFocus = useRef<'show-canvas' | 'hide-canvas' | null>(null)
+  const showCanvasButtonRef = useRef<HTMLButtonElement | null>(null)
+  const hideCanvasButtonRef = useRef<HTMLButtonElement | null>(null)
+  useEffect(() => {
+    const target = workspaceModeFocus.current
+    workspaceModeFocus.current = null
+    if (target === 'show-canvas') showCanvasButtonRef.current?.focus()
+    else if (target === 'hide-canvas') hideCanvasButtonRef.current?.focus()
+  }, [noViz])
   const grid = adaptiveGrid(viewport)
   const updateView = useCallback((view: typeof expressionDoc.view) => {
-    dispatchHistory({ type: 'update-view', view })
-  }, [])
+    dispatchHistory({ type: 'update-view', view, standardVisualizerId })
+  }, [dispatchHistory])
   const updateDisplay = useCallback((change: Partial<DisplaySettings>) => {
     updateView({
       ...expressionDoc.view,
@@ -1182,7 +1224,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   // A document without a canvas (imported, dropped, restored or linked)
   // reopens a collapsed panel: nothing would be left on screen to expand it
   // from, and it must not collapse again when a canvas comes back. Focus left
-  // in the removed canvas moves to the panel instead of the page.
+  // in the removed canvas moves to Show canvas (or the panel) instead of the page.
   const hadCanvas = useRef(visualizerActive)
   useEffect(() => {
     const lostCanvas = hadCanvas.current && !visualizerActive
@@ -1194,9 +1236,57 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     }
     const focused = document.activeElement
     if (lostCanvas && (focused === null || focused === document.body || !focused.isConnected)) {
-      expressionPanelRef.current?.focus()
+      const target = showCanvasButtonRef.current ?? expressionPanelRef.current
+      target?.focus()
     }
   }, [visualizerActive, panelCollapsed, ephemeral])
+
+  /** Collapses the canvas to the right into the NoViz calculator (#55). */
+  const enterNoViz = () => {
+    const { visualizerId, viewport: currentViewport } = expressionDoc.view
+    if (visualizerId === null || currentViewport.kind !== 'two-dimensional') return
+    retainedVisualView.current = {
+      algebraId: expressionDoc.algebra.algebraId, visualizerId, viewport: currentViewport,
+    }
+    viewportPan.current = null
+    setSelectedLine(null)
+    setAnchorPreview(null)
+    setAppearanceItemId(null)
+    // A collapsed panel reopens with every loss of the canvas (#234).
+    workspaceModeFocus.current = 'show-canvas'
+    // NoViz is the only state in which positions are off (#248).
+    updateView({ ...expressionDoc.view, visualizerId: null, positionEnabled: false, viewport: { kind: 'none' } })
+  }
+  /**
+   * Brings the canvas back with the visualizer and viewport NoViz left, or
+   * the algebra's standard visualizer at the stored or default view. It also
+   * repairs a document that cannot be displayed (one NoViz marker only, an
+   * unknown visualizer, or an unavailable interpretation, which takes the
+   * algebra's standard interpretation in an undoable step).
+   */
+  const leaveNoViz = () => {
+    const retained = retainedVisualView.current?.algebraId === expressionDoc.algebra.algebraId
+      ? retainedVisualView.current
+      : null
+    const storedViewport = expressionDoc.view.viewport.kind === 'two-dimensional' ? expressionDoc.view.viewport : null
+    workspaceModeFocus.current = 'hide-canvas'
+    updateView({
+      ...expressionDoc.view,
+      visualizerId: retained?.visualizerId ?? algebraDefinition.standardVisualizerId,
+      positionEnabled: true,
+      viewport: retained?.viewport ?? storedViewport ?? {
+        kind: 'two-dimensional', centerX: 0, centerY: 0, zoom: DEFAULT_PIXELS_PER_UNIT,
+      },
+    })
+    if (interpretationResolution.status !== 'resolved') {
+      dispatchHistory({ type: 'boundary' })
+      executeCommand({
+        kind: 'update-algebra',
+        algebra: expressionDoc.algebra,
+        interpretation: { interpretationId: algebraDefinition.standardInterpretationId, interpretationVersion: 1 },
+      })
+    }
+  }
 
   const toggleViewportLock = () => {
     const locked = !viewportLocked
@@ -1301,7 +1391,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     }
     setPlaybackAnnouncement(`${playback.name} animation paused.`)
     setActivePlaybacks(next)
-  }, [activePlaybacks])
+  }, [activePlaybacks, dispatchHistory])
 
   const stopAllPlaybacks = useCallback(() => {
     if (activePlaybacks.size === 0) return
@@ -1311,7 +1401,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     playbackSessionNames.current.clear()
     setPlaybackAnnouncement(`${animationSubject(names)} stopped.`)
     setActivePlaybacks(new Map())
-  }, [activePlaybacks])
+  }, [activePlaybacks, dispatchHistory])
 
   const cancelPlaybackSession = useCallback(() => {
     if (activePlaybacks.size === 0) return
@@ -1323,7 +1413,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     dispatchHistory({ type: 'cancel-transaction' })
     setPlaybackAnnouncement(`${animationSubject(names)} cancelled.`)
     setActivePlaybacks(new Map())
-  }, [activePlaybacks])
+  }, [activePlaybacks, dispatchHistory])
 
   const startPlayback = (
     item: ExpressionItem,
@@ -1407,7 +1497,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       }
     }
     setActivePlaybacks(next)
-  }, [activePlaybacks, expressionDoc.items, scalarControlEvaluations])
+  }, [activePlaybacks, expressionDoc.items, scalarControlEvaluations, dispatchHistory])
 
   useEffect(() => {
     if (activePlaybacks.size === 0) return
@@ -1444,7 +1534,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     }
     frame = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frame)
-  }, [activePlaybacks, executeCommand])
+  }, [activePlaybacks, executeCommand, dispatchHistory])
 
   useEffect(() => {
     if (activePlaybacks.size === 0) return
@@ -1474,7 +1564,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     }
     window.addEventListener('keydown', cancel)
     return () => window.removeEventListener('keydown', cancel)
-  }, [])
+  }, [dispatchHistory])
   const resolvedAppearances = useMemo(
     () => evaluatedItems.map(({ item, evaluation }) => {
       const kind = evaluation?.status === 'valid'
@@ -1537,9 +1627,12 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   // historical renderer used 1.5 as that baseline, so keep the visual size
   // while restoring a meaningful multiplicative setting.
   const objectRenderScale = expressionDoc.view.display.objectScale * 1.5
-  const { rendered: renderedPrimitives, connections: renderedConnections, omitted: omittedRenderElements } = collectRenderedPrimitives(
-    evaluatedItems, expressionDoc.appearance, interpretation, declaredName, appearanceSources,
-  )
+  // NoViz builds no render primitives (#55).
+  const { rendered: renderedPrimitives, connections: renderedConnections, omitted: omittedRenderElements } = noViz
+    ? { rendered: [], connections: [], omitted: 0 }
+    : collectRenderedPrimitives(
+        evaluatedItems, expressionDoc.appearance, interpretation, declaredName, appearanceSources,
+      )
   const renderedVectors = renderedPrimitives.flatMap((entry) =>
     entry.primitive.kind === 'oriented-segment'
       ? [{ ...entry, primitive: entry.primitive, layout: layoutOrientedSegment(entry.primitive, viewport, objectRenderScale) }]
@@ -1805,7 +1898,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       window.removeEventListener('pointercancel', handlePointerCancel)
       document.body.classList.remove('reordering-items')
     }
-  }, [resolveDropTargetIndex, moveItemToIndex])
+  }, [resolveDropTargetIndex, moveItemToIndex, dispatchHistory])
 
   const beginRowReorder = (
     event: ReactPointerEvent<HTMLButtonElement>,
@@ -2078,7 +2171,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
         parameters: validation.parameters,
       },
       interpretation: { interpretationId: definition.standardInterpretationId, interpretationVersion: 1 },
-      visualizerId: definition.standardVisualizerId,
+      // A NoViz document stays a calculator in the new algebra.
+      visualizerId: noViz ? null : definition.standardVisualizerId,
       ...showcaseMetadata(definition),
     })
     // The algebra's showcase makes the switch land on a working example.
@@ -2196,6 +2290,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           }}
           onDisplayChange={updateDisplay}
           onThemeChange={setTheme}
+          renderingSettings={!noViz}
         />
       </header>
 
@@ -2230,9 +2325,9 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           ref={expressionPanelRef}
           id="expression-panel"
           tabIndex={-1}
-          className={`expression-panel${panelHidden ? ' is-collapsed' : ''}`}
+          className={`expression-panel${panelHidden ? ' is-collapsed' : ''}${noViz ? ' is-full-width' : ''}`}
           aria-label="Expressions"
-          style={{ width: panelWidth, '--panel-width': `${panelWidth}px` } as CSSProperties}
+          style={noViz ? undefined : { width: panelWidth, '--panel-width': `${panelWidth}px` } as CSSProperties}
           inert={panelHidden}
         >
           <div className="expression-toolbar">
@@ -2271,6 +2366,23 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                 <span aria-hidden="true">↷</span>
               </button>
             </div>
+            {noViz && <>
+              <span className="workspace-mode" role="status">NoViz calculator</span>
+              <button
+                ref={showCanvasButtonRef}
+                type="button"
+                className="panel-toggle show-canvas"
+                aria-label="Show canvas"
+                title="Show canvas"
+                onClick={leaveNoViz}
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                  <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5" fill="none" />
+                  <line x1="10" y1="2.75" x2="10" y2="13.25" />
+                  <path d="M7 6l-2 2 2 2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </>}
             {visualizerActive && <button
               ref={collapsePanelButtonRef}
               type="button"
@@ -2437,7 +2549,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                           : <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
                               <path d="M2.5 1.2 8.5 5 2.5 8.8z" />
                             </svg>}</button>
-                      ) : drawable && valid && (
+                      ) : drawable && valid && !noViz && (
                           <button
                             type="button"
                             className="visibility-toggle"
@@ -2455,11 +2567,17 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                             </svg>
                           </button>
                       )}
-                      {valid && !drawable &&
+                      {valid && (!drawable || noViz) &&
                         !(scalar && effectiveControl?.mode === 'slider') && (
                         <span className="expression-action-spacer" aria-hidden="true" />
                       )}
-                      {valid ? (
+                      {valid && noViz ? (
+                          // Appearance is kept in the document but dormant
+                          // without a canvas: the swatch only shows the color.
+                          <span className="appearance-swatch is-dormant" aria-hidden="true">
+                            <span className="appearance-swatch-fill" style={{ backgroundColor: color }} />
+                          </span>
+                      ) : valid ? (
                           <button
                             type="button"
                             className="appearance-swatch"
@@ -2575,7 +2693,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                         />
                       )}
                       {/* The label text is edited under the expression while the label is shown (#226). */}
-                      {labelFieldShown && (
+                      {labelFieldShown && !noViz && (
                         <label className="expression-label-row">
                           <span aria-hidden="true">Label</span>
                           <input
@@ -2849,7 +2967,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                           </ol>
                       )}
 
-                      {supportsPosition && (
+                      {supportsPosition && !noViz && (
                         <div className="position-input-row">
                           <span className="position-prefix" aria-hidden="true">position</span>
                           <input
@@ -2986,7 +3104,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           </div>
         </aside>
 
-        {!panelHidden && <div
+        {!panelHidden && !noViz && <div
           className="panel-resize"
           role="separator"
           aria-label="Resize expression panel"
@@ -3017,6 +3135,20 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                 <path d="M9 6l2 2-2 2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>}
+            <button
+              ref={hideCanvasButtonRef}
+              type="button"
+              className="panel-toggle hide-canvas"
+              aria-label="Hide canvas (NoViz calculator)"
+              title="Hide canvas (NoViz calculator)"
+              onClick={enterNoViz}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5" fill="none" />
+                <line x1="10" y1="2.75" x2="10" y2="13.25" />
+                <path d="M5 6l2 2-2 2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
             <div
               className="viewport-toolbar"
               role="toolbar"
