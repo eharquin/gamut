@@ -1,0 +1,313 @@
+<desc id="canvas-description">5 points, 4 lines, 1 ideal point, and 0 lines at infinity are visible. A is a point at -2, 1. C is a point at 1, -2. P[0] is a point at -2, 1. P[1] is a point at 1, -2. P[2] is a point at 2, 2. L is a line through 0, 0 with direction -0.7071, 0.7071. M is a line through -0.5, -0.5 with direction -0.7071, 0.7071. Q[0] is a line through 0, 0 with direction -0.7071, 0.7071. Q[1] is a line through -0.5, -0.5 with direction -0.7071, 0.7071. I is an ideal point in direction 0.7071, 0.7071 with magnitude 1.4142. Double-click empty viewport space to create a point.</desc>
+<g aria-hidden="true">
+<line class="grid-line" x1="3.1999999999999886" y1="0" x2="3.1999999999999886" y2="480">
+</line>
+<line class="grid-line" x1="17.599999999999966" y1="0" x2="17.599999999999966" y2="480">
+</line>
+<line class="grid-line is-major" x1="32" y1="0" x2="32" y2="480">
+</line>
+<line class="grid-line" x1="46.39999999999998" y1="0" x2="46.39999999999998" y2="480">
+</line>
+<line class="grid-line" x1="60.799999999999955" y1="0" x2="60.799999999999955" y2="480">
+</line>
+<line class="grid-line" x1="75.19999999999999" y1="0" x2="75.19999999999999" y2="480">
+</line>
+<line class="grid-line" x1="89.6" y1="0" x2="89.6" y2="480">
+</line>
+<line class="grid-line is-major" x1="104" y1="0" x2="104" y2="480">
+</line>
+<line class="grid-line" x1="118.39999999999998" y1="0" x2="118.39999999999998" y2="480">
+</line>
+<line class="grid-line" x1="132.79999999999995" y1="0" x2="132.79999999999995" y2="480">
+</line>
+<line class="grid-line" x1="147.2" y1="0" x2="147.2" y2="480">
+</line>
+<line class="grid-line" x1="161.6" y1="0" x2="161.6" y2="480">
+</line>
+<line class="grid-line is-major" x1="176" y1="0" x2="176" y2="480">
+</line>
+<line class="grid-line" x1="190.39999999999998" y1="0" x2="190.39999999999998" y2="480">
+</line>
+<line class="grid-line" x1="204.8" y1="0" x2="204.8" y2="480">
+</line>
+<line class="grid-line" x1="219.2" y1="0" x2="219.2" y2="480">
+</line>
+<line class="grid-line" x1="233.6" y1="0" x2="233.6" y2="480">
+</line>
+<line class="grid-line is-major" x1="248" y1="0" x2="248" y2="480">
+</line>
+<line class="grid-line" x1="262.4" y1="0" x2="262.4" y2="480">
+</line>
+<line class="grid-line" x1="276.8" y1="0" x2="276.8" y2="480">
+</line>
+<line class="grid-line" x1="291.2" y1="0" x2="291.2" y2="480">
+</line>
+<line class="grid-line" x1="305.59999999999997" y1="0" x2="305.59999999999997" y2="480">
+</line>
+<line class="grid-line is-major" x1="320" y1="0" x2="320" y2="480">
+</line>
+<line class="grid-line" x1="334.40000000000003" y1="0" x2="334.40000000000003" y2="480">
+</line>
+<line class="grid-line" x1="348.8" y1="0" x2="348.8" y2="480">
+</line>
+<line class="grid-line" x1="363.2" y1="0" x2="363.2" y2="480">
+</line>
+<line class="grid-line" x1="377.59999999999997" y1="0" x2="377.59999999999997" y2="480">
+</line>
+<line class="grid-line is-major" x1="392" y1="0" x2="392" y2="480">
+</line>
+<line class="grid-line" x1="406.4" y1="0" x2="406.4" y2="480">
+</line>
+<line class="grid-line" x1="420.8" y1="0" x2="420.8" y2="480">
+</line>
+<line class="grid-line" x1="435.2" y1="0" x2="435.2" y2="480">
+</line>
+<line class="grid-line" x1="449.6" y1="0" x2="449.6" y2="480">
+</line>
+<line class="grid-line is-major" x1="464" y1="0" x2="464" y2="480">
+</line>
+<line class="grid-line" x1="478.4" y1="0" x2="478.4" y2="480">
+</line>
+<line class="grid-line" x1="492.8" y1="0" x2="492.8" y2="480">
+</line>
+<line class="grid-line" x1="507.2" y1="0" x2="507.2" y2="480">
+</line>
+<line class="grid-line" x1="521.6" y1="0" x2="521.6" y2="480">
+</line>
+<line class="grid-line is-major" x1="536" y1="0" x2="536" y2="480">
+</line>
+<line class="grid-line" x1="550.4" y1="0" x2="550.4" y2="480">
+</line>
+<line class="grid-line" x1="564.8" y1="0" x2="564.8" y2="480">
+</line>
+<line class="grid-line" x1="579.2" y1="0" x2="579.2" y2="480">
+</line>
+<line class="grid-line" x1="593.6" y1="0" x2="593.6" y2="480">
+</line>
+<line class="grid-line is-major" x1="608" y1="0" x2="608" y2="480">
+</line>
+<line class="grid-line" x1="622.4" y1="0" x2="622.4" y2="480">
+</line>
+<line class="grid-line" x1="636.8" y1="0" x2="636.8" y2="480">
+</line>
+<line class="grid-line" x1="0" y1="470.4" x2="640" y2="470.4">
+</line>
+<line class="grid-line is-major" x1="0" y1="456" x2="640" y2="456">
+</line>
+<line class="grid-line" x1="0" y1="441.6" x2="640" y2="441.6">
+</line>
+<line class="grid-line" x1="0" y1="427.20000000000005" x2="640" y2="427.20000000000005">
+</line>
+<line class="grid-line" x1="0" y1="412.8" x2="640" y2="412.8">
+</line>
+<line class="grid-line" x1="0" y1="398.4" x2="640" y2="398.4">
+</line>
+<line class="grid-line is-major" x1="0" y1="384" x2="640" y2="384">
+</line>
+<line class="grid-line" x1="0" y1="369.6" x2="640" y2="369.6">
+</line>
+<line class="grid-line" x1="0" y1="355.2" x2="640" y2="355.2">
+</line>
+<line class="grid-line" x1="0" y1="340.8" x2="640" y2="340.8">
+</line>
+<line class="grid-line" x1="0" y1="326.4" x2="640" y2="326.4">
+</line>
+<line class="grid-line is-major" x1="0" y1="312" x2="640" y2="312">
+</line>
+<line class="grid-line" x1="0" y1="297.59999999999997" x2="640" y2="297.59999999999997">
+</line>
+<line class="grid-line" x1="0" y1="283.2" x2="640" y2="283.2">
+</line>
+<line class="grid-line" x1="0" y1="268.8" x2="640" y2="268.8">
+</line>
+<line class="grid-line" x1="0" y1="254.4" x2="640" y2="254.4">
+</line>
+<line class="grid-line is-major" x1="0" y1="240" x2="640" y2="240">
+</line>
+<line class="grid-line" x1="0" y1="225.6" x2="640" y2="225.6">
+</line>
+<line class="grid-line" x1="0" y1="211.20000000000002" x2="640" y2="211.20000000000002">
+</line>
+<line class="grid-line" x1="0" y1="196.8" x2="640" y2="196.8">
+</line>
+<line class="grid-line" x1="0" y1="182.4" x2="640" y2="182.4">
+</line>
+<line class="grid-line is-major" x1="0" y1="168" x2="640" y2="168">
+</line>
+<line class="grid-line" x1="0" y1="153.6" x2="640" y2="153.6">
+</line>
+<line class="grid-line" x1="0" y1="139.2" x2="640" y2="139.2">
+</line>
+<line class="grid-line" x1="0" y1="124.79999999999995" x2="640" y2="124.79999999999995">
+</line>
+<line class="grid-line" x1="0" y1="110.4" x2="640" y2="110.4">
+</line>
+<line class="grid-line is-major" x1="0" y1="96" x2="640" y2="96">
+</line>
+<line class="grid-line" x1="0" y1="81.6" x2="640" y2="81.6">
+</line>
+<line class="grid-line" x1="0" y1="67.19999999999999" x2="640" y2="67.19999999999999">
+</line>
+<line class="grid-line" x1="0" y1="52.799999999999955" x2="640" y2="52.799999999999955">
+</line>
+<line class="grid-line" x1="0" y1="38.400000000000006" x2="640" y2="38.400000000000006">
+</line>
+<line class="grid-line is-major" x1="0" y1="24" x2="640" y2="24">
+</line>
+<line class="grid-line" x1="0" y1="9.599999999999994" x2="640" y2="9.599999999999994">
+</line>
+</g>
+<g aria-hidden="true">
+<line class="axis" x1="0" y1="240" x2="640" y2="240">
+</line>
+<line class="axis" x1="320" y1="0" x2="320" y2="480">
+</line>
+<circle class="origin" cx="320" cy="240" r="5.625">
+</circle>
+<text class="axis-name" x="626" y="232">x</text>
+<text class="axis-name" x="328" y="16">y</text>
+</g>
+<g aria-hidden="true">
+<g>
+<line class="graduation" x1="32" y1="236" x2="32" y2="244">
+</line>
+<text class="graduation-label" x="32" y="256">-4</text>
+</g>
+<g>
+<line class="graduation" x1="104" y1="236" x2="104" y2="244">
+</line>
+<text class="graduation-label" x="104" y="256">-3</text>
+</g>
+<g>
+<line class="graduation" x1="176" y1="236" x2="176" y2="244">
+</line>
+<text class="graduation-label" x="176" y="256">-2</text>
+</g>
+<g>
+<line class="graduation" x1="248" y1="236" x2="248" y2="244">
+</line>
+<text class="graduation-label" x="248" y="256">-1</text>
+</g>
+<g>
+<line class="graduation" x1="392" y1="236" x2="392" y2="244">
+</line>
+<text class="graduation-label" x="392" y="256">1</text>
+</g>
+<g>
+<line class="graduation" x1="464" y1="236" x2="464" y2="244">
+</line>
+<text class="graduation-label" x="464" y="256">2</text>
+</g>
+<g>
+<line class="graduation" x1="536" y1="236" x2="536" y2="244">
+</line>
+<text class="graduation-label" x="536" y="256">3</text>
+</g>
+<g>
+<line class="graduation" x1="608" y1="236" x2="608" y2="244">
+</line>
+<text class="graduation-label" x="608" y="256">4</text>
+</g>
+<g>
+<line class="graduation" x1="316" y1="456" x2="324" y2="456">
+</line>
+<text class="graduation-label is-y" x="312" y="460">-3</text>
+</g>
+<g>
+<line class="graduation" x1="316" y1="384" x2="324" y2="384">
+</line>
+<text class="graduation-label is-y" x="312" y="388">-2</text>
+</g>
+<g>
+<line class="graduation" x1="316" y1="312" x2="324" y2="312">
+</line>
+<text class="graduation-label is-y" x="312" y="316">-1</text>
+</g>
+<g>
+<line class="graduation" x1="316" y1="168" x2="324" y2="168">
+</line>
+<text class="graduation-label is-y" x="312" y="172">1</text>
+</g>
+<g>
+<line class="graduation" x1="316" y1="96" x2="324" y2="96">
+</line>
+<text class="graduation-label is-y" x="312" y="100">2</text>
+</g>
+<g>
+<line class="graduation" x1="316" y1="24" x2="324" y2="24">
+</line>
+<text class="graduation-label is-y" x="312" y="28">3</text>
+</g>
+</g>
+<g style="color: rgb(195, 10, 58);">
+<path class="line-orientation" d="M 557.58787847868 477.58787847867995 L 565.5428297670286 469.6329271903313 M 523.6467529817257 443.6467529817257 L 531.6017042700744 435.69180169337704 M 489.7056274847714 409.7056274847714 L 497.66057877312005 401.7506761964228 M 455.7645019878171 375.7645019878171 L 463.7194532761657 367.80955069946845 M 421.82337649086287 341.82337649086287 L 429.7783277792115 333.86842520251423 M 387.88225099390854 307.88225099390854 L 395.8372022822572 299.9272997055599 M 353.94112549695427 273.94112549695427 L 361.8960767853029 265.98617420860563 M 320 240 L 327.95495128834864 232.04504871165133 M 286.05887450304573 206.05887450304573 L 294.01382579139437 198.10392321469706 M 252.11774900609146 172.11774900609146 L 260.0727002944401 164.1627977177428 M 218.17662350913716 138.17662350913716 L 226.13157479748583 130.2216722207885 M 184.2354980121829 104.23549801218289 L 192.19044930053155 96.28054672383423 M 150.29437251522862 70.29437251522862 L 158.24932380357728 62.339421226879956 M 116.35324701827432 36.35324701827432 L 124.30819830662297 28.398295729925657 M 82.41212152132005 2.4121215213200458 L 90.3670728096687 -5.542829767028613" stroke-width="2.25" aria-hidden="true">
+</path>
+<line class="unbounded-line" x1="560" y1="480" x2="80.00000000000003" y2="2.842170943040401e-14" stroke-width="4.6875" aria-label="L">
+</line>
+<line class="manipulation-hit-target unbounded-line-hit" x1="560" y1="480" x2="80.00000000000003" y2="2.842170943040401e-14" stroke-width="16" tabindex="0" data-handle-key="l:line" role="button" aria-keyshortcuts="Enter" aria-label="Move L">
+</line>
+</g>
+<g style="color: rgb(20, 130, 200);">
+<line class="unbounded-line" x1="488" y1="480" x2="8" y2="0" stroke-width="4.6875" aria-label="M">
+</line>
+<text class="object-label" x="256" y="232">M</text>
+</g>
+<g style="color: rgb(20, 130, 200);">
+<path class="line-orientation" d="M 557.58787847868 477.58787847867995 L 565.5428297670286 469.6329271903313 M 523.6467529817257 443.6467529817257 L 531.6017042700744 435.69180169337704 M 489.7056274847714 409.7056274847714 L 497.66057877312005 401.7506761964228 M 455.7645019878171 375.7645019878171 L 463.7194532761657 367.80955069946845 M 421.82337649086287 341.82337649086287 L 429.7783277792115 333.86842520251423 M 387.88225099390854 307.88225099390854 L 395.8372022822572 299.9272997055599 M 353.94112549695427 273.94112549695427 L 361.8960767853029 265.98617420860563 M 320 240 L 327.95495128834864 232.04504871165133 M 286.05887450304573 206.05887450304573 L 294.01382579139437 198.10392321469706 M 252.11774900609146 172.11774900609146 L 260.0727002944401 164.1627977177428 M 218.17662350913716 138.17662350913716 L 226.13157479748583 130.2216722207885 M 184.2354980121829 104.23549801218289 L 192.19044930053155 96.28054672383423 M 150.29437251522862 70.29437251522862 L 158.24932380357728 62.339421226879956 M 116.35324701827432 36.35324701827432 L 124.30819830662297 28.398295729925657 M 82.41212152132005 2.4121215213200458 L 90.3670728096687 -5.542829767028613" stroke-width="2.25" aria-hidden="true">
+</path>
+<line class="unbounded-line" x1="560" y1="480" x2="80.00000000000003" y2="2.842170943040401e-14" stroke-width="4.6875" aria-label="Q[0]">
+</line>
+</g>
+<g style="color: rgb(20, 130, 200);">
+<path class="line-orientation" d="M 487.6467529817257 479.6467529817257 L 495.6017042700743 471.69180169337704 M 453.7056274847714 445.7056274847714 L 461.66057877312005 437.7506761964228 M 419.7645019878171 411.7645019878171 L 427.7194532761657 403.80955069946845 M 385.82337649086287 377.82337649086287 L 393.7783277792115 369.86842520251423 M 351.88225099390854 343.88225099390854 L 359.8372022822572 335.9272997055599 M 317.94112549695427 309.94112549695427 L 325.8960767853029 301.98617420860563 M 284 276 L 291.95495128834864 268.04504871165136 M 250.05887450304573 242.05887450304573 L 258.01382579139437 234.10392321469706 M 216.11774900609146 208.11774900609146 L 224.07270029444012 200.1627977177428 M 182.17662350913716 174.17662350913716 L 190.13157479748583 166.2216722207885 M 148.2354980121829 140.2354980121829 L 156.19044930053155 132.28054672383422 M 114.29437251522862 106.29437251522862 L 122.24932380357728 98.33942122687995 M 80.35324701827432 72.35324701827432 L 88.30819830662298 64.39829572992565 M 46.412121521320046 38.412121521320046 L 54.367072809668706 30.457170232971386 M 12.470996024365775 4.470996024365775 L 20.425947312714435 -3.4839552639828852" stroke-width="2.25" aria-hidden="true">
+</path>
+<line class="unbounded-line" x1="488" y1="480" x2="8" y2="0" stroke-width="4.6875" aria-label="Q[1]">
+</line>
+</g>
+<g>
+<g style="color: rgb(232, 160, 0);">
+<line class="direction-marker" x1="458.1692131886146" y1="101.83078681138544" x2="487.33736791255967" y2="72.66263208744036" stroke-width="4.6875" stroke-dasharray="7.5 5.625" aria-label="I at infinity">
+</line>
+<polygon class="direction-marker-head" points="487.33736791255967,72.66263208744036 482.4845108168874,90.7737413303604 469.22625866963966,77.51548918311262" aria-hidden="true">
+</polygon>
+</g>
+<g style="color: rgb(232, 160, 0);">
+<line class="vector" x1="320" y1="240" x2="375.9252235629854" y2="184.0747764370146" stroke-width="7.5" aria-label="I">
+</line>
+<polygon class="vector-arrowhead" points="392,168 385.20600006605883,193.35555294008805 366.64444705991195,174.79399993394117" aria-hidden="true">
+</polygon>
+<circle class="vector-head-point" cx="392" cy="168" r="2.34375" aria-hidden="true">
+</circle>
+<circle class="manipulation-hit-target vector-head-target" cx="392" cy="168" r="12" tabindex="0" data-handle-key="i:head" role="button" aria-label="Move head of I">
+</circle>
+<circle class="manipulation-base-contour is-movable" cx="320" cy="240" r="18.75" style="stroke-width: 0;" tabindex="0" data-handle-key="i:base" role="button" aria-keyshortcuts="Enter Delete" aria-label="Move base of I">
+</circle>
+<circle class="manipulation-base-point" cx="320" cy="240" r="8.4375" aria-hidden="true">
+</circle>
+</g>
+</g>
+<path class="point-list-connection" d="M 176 168 L 392 384 M 392 384 L 464 96 M 464 96 L 176 168" style="color: rgb(20, 130, 200);" stroke-width="3.75" aria-hidden="true">
+</path>
+<g style="color: rgb(20, 130, 200);">
+<circle class="point-marker" cx="176" cy="168" r="8.4375" aria-label="A">
+</circle>
+<circle class="manipulation-base-contour is-movable" cx="176" cy="168" r="18.75" style="stroke-width: 0;" tabindex="0" data-handle-key="a:base" role="button" aria-keyshortcuts="Enter Delete" aria-label="Move A">
+</circle>
+<circle class="manipulation-base-point" cx="176" cy="168" r="8.4375" aria-hidden="true">
+</circle>
+<text class="object-label" x="184" y="160">A</text>
+</g>
+<g style="color: rgb(20, 130, 200);">
+<circle class="point-marker" cx="392" cy="384" r="8.4375" aria-label="C">
+</circle>
+<circle class="manipulation-base-contour is-movable" cx="392" cy="384" r="18.75" style="stroke-width: 0;" tabindex="0" data-handle-key="c:base" role="button" aria-keyshortcuts="Enter Delete" aria-label="Move C">
+</circle>
+<circle class="manipulation-base-point" cx="392" cy="384" r="8.4375" aria-hidden="true">
+</circle>
+</g>
+<g style="color: rgb(20, 130, 200);">
+</g>
+<g style="color: rgb(20, 130, 200);">
+</g>
+<g style="color: rgb(20, 130, 200);">
+</g>

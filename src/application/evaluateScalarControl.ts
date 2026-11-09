@@ -49,11 +49,26 @@ function declarationName(source: string): string | null {
   return /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/.exec(source)?.[1] ?? null
 }
 
-export function evaluateScalarControl(
-  control: ExpressionControl,
+/** Diagnostic codes and messages for a source that is not a finite real scalar. */
+export type ScalarSourceMessages = Readonly<{
+  nonScalar: Readonly<{ code: string; message: string }>
+  nonFinite: Readonly<{ code: string; message: string }>
+}>
+
+const CONTROL_MESSAGES: ScalarSourceMessages = {
+  nonScalar: { code: 'CTRL_NON_SCALAR', message: 'A control bound must evaluate to a pure scalar.' },
+  nonFinite: { code: 'CTRL_NON_FINITE', message: 'A control bound must be finite.' },
+}
+
+/**
+ * Evaluates scalar sources that depend on the document's value nodes but that
+ * no source can reference: slider bounds and appearance sources. Names
+ * resolve to the evaluated value of the uniquely declared item.
+ */
+export function scalarSourceEvaluator(
   items: readonly EvaluatedDocumentItem[],
   engine: AlgebraEngine,
-): ScalarControlEvaluation {
+): (source: string, messages?: ScalarSourceMessages) => ScalarControlFieldState {
   const declarations = new Map<string, EvaluatedDocumentItem[]>()
   items.forEach((item) => {
     const name = declarationName(item.item.source)
@@ -61,7 +76,7 @@ export function evaluateScalarControl(
     declarations.set(name, [...(declarations.get(name) ?? []), item])
   })
 
-  const evaluateField = (source: string): ScalarControlFieldState => {
+  return (source, messages = CONTROL_MESSAGES) => {
     const parsed = parseExpression(source)
     if (!parsed.ok) return { status: 'invalid', diagnostic: parsed.diagnostic }
     const resolved = new Map<string, LanguageValue>()
@@ -92,12 +107,20 @@ export function evaluateScalarControl(
       return invalid(error.code, error.message, error.origin)
     }
     if (value.kind !== 'multivector' || value.coefficients.slice(1).some((coefficient) => coefficient !== 0)) {
-      return invalid('CTRL_NON_SCALAR', 'A control bound must evaluate to a pure scalar.', parsed.expression.span)
+      return invalid(messages.nonScalar.code, messages.nonScalar.message, parsed.expression.span)
     }
     const scalar = value.coefficients[0]
-    if (!Number.isFinite(scalar)) return invalid('CTRL_NON_FINITE', 'A control bound must be finite.', parsed.expression.span)
+    if (!Number.isFinite(scalar)) return invalid(messages.nonFinite.code, messages.nonFinite.message, parsed.expression.span)
     return { status: 'valid', value: scalar }
   }
+}
+
+export function evaluateScalarControl(
+  control: ExpressionControl,
+  items: readonly EvaluatedDocumentItem[],
+  engine: AlgebraEngine,
+): ScalarControlEvaluation {
+  const evaluateField = scalarSourceEvaluator(items, engine)
 
   const fields = {
     minimum: evaluateField(control.minimumSource),

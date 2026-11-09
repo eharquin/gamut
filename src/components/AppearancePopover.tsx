@@ -2,7 +2,14 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type 
 import { createPortal } from 'react-dom'
 import { paletteEntry, RAMP_ORDER, STUDIO_COLORS } from './appearancePalette'
 import { popoverPosition } from './popoverPosition'
-import type { ExpressionControl, PointListDisplay } from '../document/expressionDocument'
+import type { ExpressionAppearance, ExpressionControl, PointListDisplay, StrokeStyle } from '../document/expressionDocument'
+import {
+  APPEARANCE_SETTING_RANGES,
+  DEFAULT_APPEARANCE_SOURCES,
+  type AppearanceSetting,
+  type ItemAppearanceSources,
+} from '../application/evaluateAppearanceSources'
+import { DEFAULT_STROKE_WIDTHS } from '../visualization/stroke'
 
 const POPOVER_WIDTH = 272
 /** Height assumed before the menu is measured, and where layout is unavailable. */
@@ -26,6 +33,12 @@ type AppearancePopoverProps = Readonly<{
   /** Primitive types the evaluated list holds; each gets its own section. */
   listPrimitives?: Readonly<{ points: boolean; lines: boolean }>
   linesVisible?: boolean
+  /** Stored appearance, for the version 7 settings edited as source text. */
+  appearance?: ExpressionAppearance
+  /** Resolved orientation of the lines a list holds. */
+  linesOrientationVisible?: boolean
+  /** The evaluated appearance sources, whose errors show under their fields. */
+  sources?: ItemAppearanceSources
   colorOnly?: boolean
   control?: ExpressionControl
   reducedMotion?: boolean
@@ -41,6 +54,8 @@ type AppearancePopoverProps = Readonly<{
   onPointListDisplayChange?(display: PointListDisplay): void
   onPointMarkersVisibleChange?(visible: boolean): void
   onLinesVisibleChange?(visible: boolean): void
+  /** Writes version 7 settings; typing in one field coalesces under `coalesceKey`. */
+  onAppearanceChange?(appearance: ExpressionAppearance, coalesceKey?: string): void
   onControlChange?(control: ExpressionControl): void
   onClose(): void
 }>
@@ -61,6 +76,9 @@ export function AppearancePopover({
   pointMarkersVisible = true,
   listPrimitives,
   linesVisible = true,
+  appearance = {},
+  linesOrientationVisible = false,
+  sources = DEFAULT_APPEARANCE_SOURCES,
   colorOnly = false,
   control,
   reducedMotion = false,
@@ -76,6 +94,7 @@ export function AppearancePopover({
   onPointListDisplayChange,
   onPointMarkersVisibleChange,
   onLinesVisibleChange,
+  onAppearanceChange,
   onControlChange,
   onClose,
 }: AppearancePopoverProps) {
@@ -154,6 +173,21 @@ export function AppearancePopover({
   const shade = Number(selected.id.slice(selected.ramp.length + 1))
   const animated = control?.mode === 'slider' && control.animation !== null
   const connected = pointListDisplayAvailable && pointListDisplay !== 'none'
+  const change = (update: ExpressionAppearance, coalesceKey?: string) => onAppearanceChange?.(update, coalesceKey)
+  // The item's own stroke: lines, vectors, bivector outlines, ideal-point arrows.
+  const strokeRow = (defaultWidth: number) => onAppearanceChange && (
+    <SourceFields leading={
+      <Segmented label="Stroke style" value={appearance.strokeStyle ?? 'solid'} options={STROKE_OPTIONS}
+        onChange={(strokeStyle) => change({ strokeStyle })} />
+    } fields={[{
+      setting: 'strokeWidth',
+      label: 'Width',
+      source: appearance.strokeWidthSource ?? '',
+      placeholder: defaultWidth,
+      error: sources.strokeWidth.error,
+      onChange: (strokeWidthSource) => change({ strokeWidthSource }, 'strokeWidth'),
+    }]} />
+  )
   const styleContent = kind === 'Bivector' ? (
     <>
       {onBivectorShapeChange && <>
@@ -171,16 +205,31 @@ export function AppearancePopover({
             onChange={(event) => onBorderVisibleChange(event.target.checked)} />
         </label>
       )}
-      {onOrientationVisibleChange && <OrientationField checked={orientationVisible} onChange={onOrientationVisibleChange} />}
+      {/* The stroke row sets the outline, so it shows only with one. */}
+      {borderVisible && strokeRow(DEFAULT_STROKE_WIDTHS.outline)}
+      {onOrientationVisibleChange && <div className="appearance-pair">
+        <OrientationField checked={orientationVisible} onChange={onOrientationVisibleChange} />
+      </div>}
     </>
-  ) : kind === 'Line' && onOrientationVisibleChange ? (
-    <OrientationField checked={orientationVisible} onChange={onOrientationVisibleChange} />
+  ) : kind === 'Line' ? (
+    <>
+      {strokeRow(DEFAULT_STROKE_WIDTHS.line)}
+      {onOrientationVisibleChange && <div className="appearance-pair">
+        <OrientationField checked={orientationVisible} onChange={onOrientationVisibleChange} />
+      </div>}
+    </>
+  ) : kind === 'Vector' ? (
+    strokeRow(DEFAULT_STROKE_WIDTHS.segment) ?? null
   ) : kind === 'Ideal point' && onIdealPointDisplayChange ? (
-    <Segmented label="Ideal point display" value={idealPointDisplay} onChange={onIdealPointDisplayChange} options={[
-      ['vector', 'As a vector', IDEAL_ICONS.vector],
-      ['ideal', 'At infinity', IDEAL_ICONS.ideal],
-      ['both', 'Both', IDEAL_ICONS.both],
-    ]} />
+    <>
+      <Segmented label="Ideal point display" value={idealPointDisplay} onChange={onIdealPointDisplayChange} options={[
+        ['vector', 'As a vector', IDEAL_ICONS.vector],
+        ['ideal', 'At infinity', IDEAL_ICONS.ideal],
+        ['both', 'Both', IDEAL_ICONS.both],
+      ]} />
+      {/* The stroke row sets the arrow, drawn while the direction shows. */}
+      {idealPointDisplay !== 'ideal' && strokeRow(DEFAULT_STROKE_WIDTHS.segment)}
+    </>
   ) : null
 
   return createPortal(
@@ -244,6 +293,14 @@ export function AppearancePopover({
             />
           ))}
         </div>
+        {!colorOnly && onAppearanceChange && <SourceFields className="appearance-opacity" fields={[{
+          setting: 'opacity',
+          label: 'Opacity',
+          source: appearance.opacitySource ?? '',
+          placeholder: 100,
+          error: sources.opacity.error,
+          onChange: (opacitySource) => change({ opacitySource }, 'opacity'),
+        }]} />}
       </>)}
       {styleContent && section('Style', styleContent)}
       {list && listPrimitives?.points && onPointMarkersVisibleChange && section('Points',
@@ -262,7 +319,29 @@ export function AppearancePopover({
           onChange: onPointMarkersVisibleChange,
         },
       )}
-      {list && listPrimitives?.lines && onLinesVisibleChange && section('Lines', null,
+      {list && listPrimitives?.lines && onLinesVisibleChange && section('Lines',
+        linesVisible && onAppearanceChange ? (
+          <div className="appearance-sub">
+            <h4>Style</h4>
+            <SourceFields leading={
+              <Segmented label="Line style" value={appearance.primitiveStyles?.lines?.strokeStyle ?? 'solid'}
+                options={STROKE_OPTIONS}
+                onChange={(strokeStyle) => change({ primitiveStyles: { lines: { strokeStyle } } })} />
+            } fields={[{
+              setting: 'strokeWidth',
+              label: 'Width',
+              source: appearance.primitiveStyles?.lines?.strokeWidthSource ?? '',
+              placeholder: DEFAULT_STROKE_WIDTHS.line,
+              error: sources.lines.strokeWidth.error,
+              onChange: (strokeWidthSource) => change(
+                { primitiveStyles: { lines: { strokeWidthSource } } }, 'lines.strokeWidth'),
+            }]} />
+            <div className="appearance-pair">
+              <OrientationField checked={linesOrientationVisible}
+                onChange={(orientationVisible) => change({ primitiveStyles: { lines: { orientationVisible } } })} />
+            </div>
+          </div>
+        ) : null,
         { label: 'Show lines', checked: linesVisible, onChange: onLinesVisibleChange },
       )}
       {control && onControlChange && section('Animate', animated ? <>
@@ -360,6 +439,62 @@ function Segmented<T extends string>({ label, value, options, onChange }: Readon
   )
 }
 
+type SourceFieldSpec = Readonly<{
+  setting: AppearanceSetting
+  label: string
+  source: string
+  /** The kind default, shown while the field is empty. */
+  placeholder: number
+  error: string | null
+  onChange(source: string): void
+}>
+
+/**
+ * Numeric settings typed as a number or a scalar expression: small boxes with
+ * their caption above and their unit inside, after an optional choice on the
+ * same row (`leading`), or in two equal columns. A refused value shows one
+ * red line under the row; a valid one shows nothing.
+ */
+function SourceFields({ fields, leading, className }: Readonly<{
+  fields: readonly SourceFieldSpec[]
+  leading?: ReactNode
+  className?: string
+}>) {
+  const id = useId()
+  const errors = fields.flatMap((field, index) => field.error
+    ? [{ id: `${id}-error-${index}`, text: `${field.label}: ${field.error}` }]
+    : [])
+  return <>
+    <div className={[leading ? 'appearance-row' : 'appearance-pair', className].filter(Boolean).join(' ')}>
+      {leading}
+      {fields.map((field, index) => {
+        const { minimum, maximum, unit } = APPEARANCE_SETTING_RANGES[field.setting]
+        return (
+          <label key={field.setting} className={`appearance-field${leading ? ' is-narrow' : ''}`}>
+            <span>{field.label}</span>
+            <span className={`appearance-source${field.error ? ' is-invalid' : ''}`}>
+              <input
+                type="text"
+                inputMode="decimal"
+                spellCheck={false}
+                autoComplete="off"
+                value={field.source}
+                placeholder={String(Number(field.placeholder.toFixed(2)))}
+                title={`${minimum} to ${maximum} ${unit}, or a scalar expression`}
+                aria-invalid={field.error ? true : undefined}
+                aria-describedby={field.error ? `${id}-error-${index}` : undefined}
+                onChange={(event) => field.onChange(event.target.value)}
+              />
+              <span className="appearance-unit" aria-hidden="true">{unit}</span>
+            </span>
+          </label>
+        )
+      })}
+    </div>
+    {errors.map((error) => <p key={error.id} id={error.id} className="appearance-error">{error.text}</p>)}
+  </>
+}
+
 /** A switch laid out like a field: small caption above, switch below. */
 function OrientationField({ checked, onChange }: Readonly<{ checked: boolean; onChange(checked: boolean): void }>) {
   return (
@@ -371,6 +506,12 @@ function OrientationField({ checked, onChange }: Readonly<{ checked: boolean; on
 }
 
 // Icons drawn in a 28 × 20 box, copied from the validated mock-up (#216).
+const STROKE_OPTIONS: readonly (readonly [StrokeStyle, string, ReactNode])[] = [
+  ['solid', 'Solid', <path key="solid" d="M3 10 H25" fill="none" strokeWidth="2.2" />],
+  ['dashed', 'Dashed', <path key="dashed" d="M3 10 H25" fill="none" strokeWidth="2.2" strokeDasharray="4 3" />],
+  ['dotted', 'Dotted', <path key="dotted" d="M4 10 H25" fill="none" strokeWidth="2.4" strokeLinecap="round" strokeDasharray="0 4.2" />],
+]
+
 const SHAPE_ICONS = {
   'from-vectors': <polygon points="3,17 9,3 25,3 19,17" />,
   disk: <circle cx="14" cy="10" r="7.5" />,

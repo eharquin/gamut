@@ -1,5 +1,6 @@
 import type { EvaluatedDocumentItem } from '../application/evaluateDocument'
-import type { ExpressionAppearance, PointListDisplay } from '../document/expressionDocument'
+import type { ExpressionAppearance, PointListDisplay, StrokeStyle } from '../document/expressionDocument'
+import { DEFAULT_APPEARANCE_SOURCES, type ItemAppearanceSources } from '../application/evaluateAppearanceSources'
 import { resolveItemAppearance } from '../components/appearancePalette'
 import type { AnyInterpretation, InterpretedEntity } from '../geometry/interpretation'
 import type { Point2d } from '../geometry/interpretation'
@@ -26,6 +27,11 @@ export type RenderedPrimitive = Readonly<{
   idealPointDisplay: 'vector' | 'ideal' | 'both'
   /** False only for the finite and ideal points of a connected list drawn as links alone. */
   markerVisible: boolean
+  strokeStyle: StrokeStyle
+  /** Stroke width in reference pixels, or `null` for the kind default. */
+  strokeWidth: number | null
+  /** Opacity from 0 to 1 applied to fill and stroke together, or `null` when unset. */
+  opacity: number | null
 }>
 
 /**
@@ -49,6 +55,7 @@ export type PointListLink =
 export type RenderedPointListConnection = Readonly<{
   id: string
   color: string
+  opacity: number | null
   segments: readonly PointListLink[]
 }>
 
@@ -188,6 +195,7 @@ export function collectRenderedPrimitives(
   appearance: Readonly<Record<string, ExpressionAppearance | undefined>>,
   interpretation: AnyInterpretation,
   declaredName: (source: string) => string | null,
+  appearanceSources: ReadonlyMap<string, ItemAppearanceSources> = new Map(),
 ): Readonly<{
   rendered: readonly RenderedPrimitive[]
   connections: readonly RenderedPointListConnection[]
@@ -199,12 +207,18 @@ export function collectRenderedPrimitives(
     const kind = evaluated.evaluation.valueType === 'list'
       ? `List (${evaluated.evaluation.value.elements.length})`
       : interpretation.describe(evaluated.evaluation.entity)
-    const { visible, color, labelVisible, displayLabel, borderVisible, orientationVisible, bivectorShape, idealPointDisplay, pointListDisplay, pointMarkersVisible, linesVisible } = resolveItemAppearance(
+    const {
+      visible, color, labelVisible, displayLabel, borderVisible, orientationVisible, bivectorShape,
+      idealPointDisplay, pointListDisplay, pointMarkersVisible, linesVisible, strokeStyle,
+      lineStrokeStyle, linesOrientationVisible,
+    } = resolveItemAppearance(
       appearance[evaluated.item.id],
       kind,
       declaredName(evaluated.item.source),
     )
     if (!visible) return []
+    const sources = appearanceSources.get(evaluated.item.id) ?? DEFAULT_APPEARANCE_SOURCES
+    const opacity = sources.opacity.value === null ? null : sources.opacity.value / 100
     const baseLabel = displayLabel
     if (evaluated.evaluation.valueType === 'list') {
       const elements = limitRenderedListElements(
@@ -218,24 +232,31 @@ export function collectRenderedPrimitives(
       const segments = vertices
         ? pointListSegments(vertices.slice(0, elements.length), pointListDisplay)
         : []
-      if (segments.length > 0) connections.push({ id: evaluated.item.id, color, segments })
+      if (segments.length > 0) connections.push({ id: evaluated.item.id, color, opacity, segments })
       const markerVisible = vertices === null || pointMarkersVisible
       // Hidden lines are skipped in place, so the other elements keep their index.
-      return elements.flatMap((element, elementIndex) => element.primitive &&
-        (linesVisible || !LINE_PRIMITIVES.has(element.primitive.kind))
-        ? [{
+      // Each primitive type has its own style: lines take the list's line
+      // style, and no other element inherits the item's stroke.
+      return elements.flatMap((element, elementIndex) => {
+        if (!element.primitive) return []
+        const line = LINE_PRIMITIVES.has(element.primitive.kind)
+        if (line && !linesVisible) return []
+        return [{
             id: `${evaluated.item.id}:${element.id}`,
             entity: element.entity,
             primitive: element.primitive,
             color,
             borderVisible,
-            orientationVisible,
+            orientationVisible: line ? linesOrientationVisible : orientationVisible,
             bivectorShape,
             idealPointDisplay,
             markerVisible,
+            strokeStyle: line ? lineStrokeStyle : 'solid' as const,
+            strokeWidth: line ? sources.lines.strokeWidth.value : null,
+            opacity,
             label: labelVisible ? (baseLabel ? `${baseLabel}[${elementIndex}]` : element.primitive.accessibleName) : null,
           }]
-        : [])
+      })
     }
     return evaluated.evaluation.primitive
       ? [{
@@ -248,6 +269,9 @@ export function collectRenderedPrimitives(
           bivectorShape,
           idealPointDisplay,
           markerVisible: true,
+          strokeStyle,
+          strokeWidth: sources.strokeWidth.value,
+          opacity,
           label: labelVisible ? (baseLabel ?? evaluated.evaluation.primitive.accessibleName) : null,
         }]
       : []

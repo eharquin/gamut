@@ -1,4 +1,4 @@
-import type { ExpressionAppearance, PointListDisplay } from '../document/expressionDocument'
+import type { ExpressionAppearance, PointListDisplay, StrokeStyle } from '../document/expressionDocument'
 
 // Hue order of the palette: the registry, the swatches, and the reference
 // tables all follow it.
@@ -94,7 +94,20 @@ export type ResolvedAppearance = Readonly<{
   pointMarkersVisible: boolean
   /** Whether a list draws the lines it holds. */
   linesVisible: boolean
+  strokeStyle: StrokeStyle
+  /** Stroke and orientation of the lines a list holds, independent of the item's own. */
+  lineStrokeStyle: StrokeStyle
+  linesOrientationVisible: boolean
 }>
+
+/**
+ * Whether an object of this kind shows its orientation when nothing is
+ * stored: a new line starts without it (#221), a bivector with it. Stored
+ * documents keep the value they hold.
+ */
+export function defaultOrientationVisible(kind: string): boolean {
+  return kind !== 'Line'
+}
 
 /**
  * Applies the renderer-side defaults required by APP-003 to one stored
@@ -116,11 +129,16 @@ export function resolveItemAppearance(
     label,
     displayLabel: label || declaredName,
     borderVisible: appearance?.borderVisible ?? false,
-    orientationVisible: appearance?.orientationVisible ?? true,
+    orientationVisible: appearance?.orientationVisible ?? defaultOrientationVisible(kind),
     bivectorShape: appearance?.bivectorShape ?? 'from-vectors',
     idealPointDisplay: appearance?.idealPointDisplay ?? 'vector',
     pointListDisplay: appearance?.primitiveStyles?.points?.connection ?? 'none',
     pointMarkersVisible: appearance?.primitiveStyles?.points?.visible ?? true,
     linesVisible: appearance?.primitiveStyles?.lines?.visible ?? true,
+    strokeStyle: appearance?.strokeStyle ?? 'solid',
+    lineStrokeStyle: appearance?.primitiveStyles?.lines?.strokeStyle ?? 'solid',
+    // A list's lines default to the item's orientation (document format §2.2.2).
+    linesOrientationVisible: appearance?.primitiveStyles?.lines?.orientationVisible ??
+      appearance?.orientationVisible ?? defaultOrientationVisible(kind),
   }
 }
