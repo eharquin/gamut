@@ -17,6 +17,7 @@ import { createBuiltinAlgebraRegistry } from './algebra/builtinAlgebras'
 import { evaluateDocument } from './application/evaluateDocument'
 import { AlgebraInfoDialog } from './components/AlgebraInfoDialog'
 import { AlgebraMenu } from './components/AlgebraMenu'
+import { DocumentCommands } from './components/DocumentCommands'
 import { ExpressionReferenceDialog } from './components/ExpressionReferenceDialog'
 import { AppearancePopover } from './components/AppearancePopover'
 import { ClearExpressionsButton } from './components/ClearExpressionsButton'
@@ -2278,20 +2279,22 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           aria-label="Import document file"
           onChange={importDocument}
         />
-        <ThemeToggle theme={theme} onThemeChange={setTheme} />
-        <SettingsMenu
-          display={expressionDoc.view.display}
-          theme={theme}
-          documentCommands={{
-            onImport: () => importInputRef.current?.click(),
-            onExport: exportDocument,
-            onCopyLink: () => void copyScene(),
-            sharing,
-          }}
-          onDisplayChange={updateDisplay}
-          onThemeChange={setTheme}
-          renderingSettings={!noViz}
-        />
+        <div className="header-actions">
+          <DocumentCommands
+            onImport={() => importInputRef.current?.click()}
+            onExport={exportDocument}
+            onCopyLink={() => void copyScene()}
+            sharing={sharing}
+          />
+          <ThemeToggle theme={theme} onThemeChange={setTheme} />
+          <SettingsMenu
+            display={expressionDoc.view.display}
+            theme={theme}
+            onDisplayChange={updateDisplay}
+            onThemeChange={setTheme}
+            renderingSettings={!noViz}
+          />
+        </div>
       </header>
 
       {ephemeral && (

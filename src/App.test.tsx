@@ -34,10 +34,9 @@ function openSettings(): HTMLElement {
   return trigger
 }
 
-/** Runs a document command from the settings menu, as a user would. */
+/** Runs a document command from its header button, as a user would. */
 function runDocumentCommand(name: 'Import' | 'Export' | 'Copy link'): void {
-  openSettings()
-  fireEvent.click(within(screen.getByRole('dialog', { name: 'Settings' })).getByRole('button', { name }))
+  fireEvent.click(screen.getByRole('button', { name: name === 'Copy link' ? name : `${name} document` }))
 }
 
 function viewportCanvas(): SVGSVGElement {
@@ -84,29 +83,31 @@ describe('VGA 2D vertical slice', () => {
     expect(clickedLinks[0].download).toBe('Untitled-document.gamut.json')
   })
 
-  it('offers Import, Export, and Copy link in the settings menu instead of the header', () => {
+  it('offers Import, Export, and Copy link as header buttons left of the theme button (#249)', () => {
     const fileDialogs = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => undefined)
     render(<App />)
     const header = document.querySelector('header.app-header') as HTMLElement
-    for (const name of ['Import', 'Export', 'Copy link', 'Copy iframe code'])
-      expect(within(header).queryByRole('button', { name })).not.toBeInTheDocument()
+    const group = header.querySelector('.header-actions') as HTMLElement
+    expect(within(group).getAllByRole('button').map((button) => button.getAttribute('aria-label')))
+      .toEqual(['Import document', 'Export document', 'Copy link', 'Switch to dark theme', 'Settings'])
+    for (const name of ['Import document', 'Export document', 'Copy link'])
+      expect(within(group).getByRole('button', { name })).toHaveAttribute('title', name)
 
-    const trigger = openSettings()
+    // The settings menu no longer lists the document commands.
+    openSettings()
     const menu = screen.getByRole('dialog', { name: 'Settings' })
-    const section = within(menu).getByRole('region', { name: 'Document' })
-    expect(within(section).getAllByRole('button').map((button) => button.textContent?.trim()))
-      .toEqual(['Import', 'Export', 'Copy link'])
-    expect(within(menu).queryByRole('button', { name: 'Copy iframe code' })).not.toBeInTheDocument()
+    expect(within(menu).queryByRole('region', { name: 'Document' })).not.toBeInTheDocument()
+    for (const name of ['Import', 'Export', 'Copy link', 'Copy iframe code'])
+      expect(within(menu).queryByRole('button', { name })).not.toBeInTheDocument()
+    fireEvent.keyDown(menu, { key: 'Escape' })
 
-    // Import opens the existing file input, closes the menu, and returns focus.
-    const importButton = within(section).getByRole('button', { name: 'Import' })
+    // Import opens the existing file input and keeps focus on its button.
+    const importButton = within(group).getByRole('button', { name: 'Import document' })
     importButton.focus()
-    expect(importButton).toHaveFocus()
     fireEvent.click(importButton)
     expect(fileDialogs).toHaveBeenCalledOnce()
     expect(fileDialogs.mock.contexts[0]).toBe(screen.getByLabelText('Import document file'))
-    expect(screen.queryByRole('dialog', { name: 'Settings' })).not.toBeInTheDocument()
-    expect(trigger).toHaveFocus()
+    expect(importButton).toHaveFocus()
   })
 
   it('imports a version 0.1 document with the historical filename suffix', async () => {
