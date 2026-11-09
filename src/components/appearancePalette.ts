@@ -1,4 +1,4 @@
-import type { ExpressionAppearance, PointListDisplay, StrokeStyle } from '../document/expressionDocument'
+import type { ExpressionAppearance, PointListDisplay, PointStyle, StrokeStyle } from '../document/expressionDocument'
 
 // Hue order of the palette: the registry, the swatches, and the reference
 // tables all follow it.
@@ -98,6 +98,10 @@ export type ResolvedAppearance = Readonly<{
   /** Stroke and orientation of the lines a list holds, independent of the item's own. */
   lineStrokeStyle: StrokeStyle
   linesOrientationVisible: boolean
+  pointStyle: PointStyle
+  /** Marker style of the points a list holds, and the stroke of their connection. */
+  listPointStyle: PointStyle
+  connectionStrokeStyle: StrokeStyle
 }>
 
 /**
@@ -140,5 +144,8 @@ export function resolveItemAppearance(
     // A list's lines default to the item's orientation (document format §2.2.2).
     linesOrientationVisible: appearance?.primitiveStyles?.lines?.orientationVisible ??
       appearance?.orientationVisible ?? defaultOrientationVisible(kind),
+    pointStyle: appearance?.pointStyle ?? 'dot',
+    listPointStyle: appearance?.primitiveStyles?.points?.pointStyle ?? 'dot',
+    connectionStrokeStyle: appearance?.primitiveStyles?.points?.strokeStyle ?? 'solid',
   }
 }

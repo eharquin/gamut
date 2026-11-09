@@ -69,8 +69,17 @@ async function canvasMarkup(document: ReturnType<typeof version6Document>): Prom
   render(<App />)
   await waitFor(() => expect(screen.getByRole('textbox', { name: 'Expression 1' }))
     .toHaveValue(document.items[0].source))
-  return screen.getByRole('img', { name: /Two-dimensional [VP]GA viewport/ }).innerHTML
-    .replaceAll('><', '>\n<')
+  return [...screen.getByRole('img', { name: /Two-dimensional [VP]GA viewport/ }).children].map(normalized).join('\n')
+}
+
+/** One element per line with sorted attributes, so that only what is drawn is compared. */
+function normalized(element: Element): string {
+  const attributes = [...element.attributes].map(({ name, value }) => `${name}="${value}"`).sort().join(' ')
+  const children = [...element.children]
+  const content = children.length > 0
+    ? '\n' + children.map(normalized).join('\n') + '\n'
+    : element.textContent ?? ''
+  return `<${element.tagName.toLowerCase()} ${attributes}>${content}</${element.tagName.toLowerCase()}>`
 }
 
 // The snapshots were recorded on the renderer of format version 6. A saved

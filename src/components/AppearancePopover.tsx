@@ -2,14 +2,15 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type 
 import { createPortal } from 'react-dom'
 import { paletteEntry, RAMP_ORDER, STUDIO_COLORS } from './appearancePalette'
 import { popoverPosition } from './popoverPosition'
-import type { ExpressionAppearance, ExpressionControl, PointListDisplay, StrokeStyle } from '../document/expressionDocument'
+import type { ExpressionAppearance, ExpressionControl, PointListDisplay, PointStyle, StrokeStyle } from '../document/expressionDocument'
 import {
   APPEARANCE_SETTING_RANGES,
   DEFAULT_APPEARANCE_SOURCES,
   type AppearanceSetting,
   type ItemAppearanceSources,
 } from '../application/evaluateAppearanceSources'
-import { DEFAULT_STROKE_WIDTHS } from '../visualization/stroke'
+import { DEFAULT_POINT_SIZE, DEFAULT_STROKE_WIDTHS, POINT_OUTER_SCALE } from '../visualization/stroke'
+import { PointShape } from '../visualization/PointShape'
 
 const POPOVER_WIDTH = 272
 /** Height assumed before the menu is measured, and where layout is unavailable. */
@@ -230,7 +231,22 @@ export function AppearancePopover({
       {/* The stroke row sets the arrow, drawn while the direction shows. */}
       {idealPointDisplay !== 'ideal' && strokeRow(DEFAULT_STROKE_WIDTHS.segment)}
     </>
+  ) : kind === 'Point' && onAppearanceChange ? (
+    <>
+      <Segmented label="Point style" value={appearance.pointStyle ?? 'dot'} options={POINT_OPTIONS}
+        onChange={(pointStyle) => change({ pointStyle })} />
+      <SourceFields fields={[{
+        setting: 'pointSize',
+        label: 'Size',
+        source: appearance.pointSizeSource ?? '',
+        placeholder: DEFAULT_POINT_SIZE,
+        error: sources.pointSize.error,
+        onChange: (pointSizeSource) => change({ pointSizeSource }, 'pointSize'),
+      }]} />
+    </>
   ) : null
+  const pointsBlock = appearance.primitiveStyles?.points
+  const markersShown = pointMarkersVisible || !connected
 
   return createPortal(
     <div
@@ -303,14 +319,43 @@ export function AppearancePopover({
         }]} />}
       </>)}
       {styleContent && section('Style', styleContent)}
-      {list && listPrimitives?.points && onPointMarkersVisibleChange && section('Points',
-        pointListDisplayAvailable && onPointListDisplayChange
-          ? <Segmented label="Point list display" value={pointListDisplay} onChange={onPointListDisplayChange} options={[
-              ['none', 'No connection', CONNECTION_ICONS.none],
-              ['open-polyline', 'Open polyline', CONNECTION_ICONS['open-polyline']],
-              ['closed-loop', 'Closed loop', CONNECTION_ICONS['closed-loop']],
-            ]} />
-          : null,
+      {list && listPrimitives?.points && onPointMarkersVisibleChange && section('Points', (pointListDisplayAvailable && onPointListDisplayChange) || onAppearanceChange ? <>
+        {pointListDisplayAvailable && onPointListDisplayChange &&
+          <Segmented label="Point list display" value={pointListDisplay} onChange={onPointListDisplayChange} options={[
+            ['none', 'No connection', CONNECTION_ICONS.none],
+            ['open-polyline', 'Open polyline', CONNECTION_ICONS['open-polyline']],
+            ['closed-loop', 'Closed loop', CONNECTION_ICONS['closed-loop']],
+          ]} />}
+        {/* The points' own style: markers while drawn, then the links while connected. */}
+        {onAppearanceChange && (markersShown || connected) && <div className="appearance-sub">
+          <h4>Style</h4>
+          {markersShown && <>
+            <Segmented label="Point style" value={pointsBlock?.pointStyle ?? 'dot'} options={POINT_OPTIONS}
+              onChange={(pointStyle) => change({ primitiveStyles: { points: { pointStyle } } })} />
+            <SourceFields fields={[{
+              setting: 'pointSize',
+              label: 'Size',
+              source: pointsBlock?.pointSizeSource ?? '',
+              placeholder: DEFAULT_POINT_SIZE,
+              error: sources.points.pointSize.error,
+              onChange: (pointSizeSource) => change(
+                { primitiveStyles: { points: { pointSizeSource } } }, 'points.pointSize'),
+            }]} />
+          </>}
+          {connected && <SourceFields leading={
+            <Segmented label="Connection style" value={pointsBlock?.strokeStyle ?? 'solid'} options={STROKE_OPTIONS}
+              onChange={(strokeStyle) => change({ primitiveStyles: { points: { strokeStyle } } })} />
+          } fields={[{
+            setting: 'strokeWidth',
+            label: 'Width',
+            source: pointsBlock?.strokeWidthSource ?? '',
+            placeholder: DEFAULT_STROKE_WIDTHS.connection,
+            error: sources.points.strokeWidth.error,
+            onChange: (strokeWidthSource) => change(
+              { primitiveStyles: { points: { strokeWidthSource } } }, 'points.strokeWidth'),
+          }]} />}
+        </div>}
+      </> : null,
         // Markers can be hidden only while the points are connected (#205).
         {
           label: 'Show point markers',
@@ -504,6 +549,25 @@ function OrientationField({ checked, onChange }: Readonly<{ checked: boolean; on
     </label>
   )
 }
+
+/**
+ * A point style's icon, from the mock-up: the outer shape at 20 % opacity and
+ * the core, which grows into it while the button is hovered.
+ */
+function pointIcon(pointStyle: PointStyle): ReactNode {
+  const core = pointStyle === 'diamond' || pointStyle === 'plus' ? 3.1 : 3.6
+  return <>
+    <PointShape pointStyle={pointStyle} x={14} y={10} radius={core * POINT_OUTER_SCALE}
+      fill="currentColor" stroke="none" opacity={0.2} />
+    <g className="point-icon-core">
+      <PointShape pointStyle={pointStyle} x={14} y={10} radius={core} fill="currentColor" stroke="none" />
+    </g>
+  </>
+}
+
+const POINT_OPTIONS: readonly (readonly [PointStyle, string, ReactNode])[] = (
+  [['dot', 'Dot'], ['ring', 'Ring'], ['cross', 'Cross'], ['plus', 'Plus'], ['square', 'Square'], ['diamond', 'Diamond']] as const
+).map(([pointStyle, name]) => [pointStyle, name, pointIcon(pointStyle)] as const)
 
 // Icons drawn in a 28 × 20 box, copied from the validated mock-up (#216).
 const STROKE_OPTIONS: readonly (readonly [StrokeStyle, string, ReactNode])[] = [

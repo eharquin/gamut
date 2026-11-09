@@ -2907,16 +2907,18 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                   />}
                 </g>
               })}
-              {renderedConnections.map(({ id, segments, color, opacity }) => (
+              {renderedConnections.map(({ id, segments, color, opacity, strokeStyle, strokeWidth }) => (
                 <PointListConnectionGlyph
                   key={`connection-${id}`}
                   path={layoutPointListConnection(segments, viewport)}
                   color={color}
                   scale={objectRenderScale}
                   opacity={opacity}
+                  strokeStyle={strokeStyle}
+                  strokeWidth={strokeWidth}
                 />
               ))}
-              {renderedPoints.map(({ id, primitive, entity, point, color, label, markerVisible, opacity }) => {
+              {renderedPoints.map(({ id, primitive, entity, point, color, label, markerVisible, opacity, pointStyle, pointSize }) => {
                 const item = expressionDoc.items.find((candidate) => candidate.id === id)
                 return <PointMarkerGlyph
                   key={id}
@@ -2931,6 +2933,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                   markerVisible={markerVisible}
                   controller={handleController}
                   opacity={opacity}
+                  pointStyle={pointStyle}
+                  pointSize={pointSize}
                 />
               })}
               {anchorPreview && <g className="anchor-preview" aria-hidden="true">

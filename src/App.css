@@ -1652,6 +1652,23 @@ body.reordering-items .reorder-handle {
   line-height: 1.35;
 }
 
+/* A point style icon: the core grows into its outer shape on hover, as on the canvas. */
+.point-icon-core {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 350ms ease;
+}
+
+.appearance-segmented button:hover .point-icon-core {
+  transform: scale(2.2222);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .point-icon-core {
+    transition: none;
+  }
+}
+
 /* A primitive type's own style inside a list section. */
 .appearance-sub {
   display: grid;
@@ -2042,6 +2059,17 @@ code {
   fill-opacity: 0.2;
   pointer-events: all;
   cursor: crosshair;
+}
+
+/* A shaped point keeps its contour as the hit target and draws its outer shape apart. */
+.manipulation-base-contour.is-movable.is-shaped {
+  fill-opacity: 0;
+}
+
+.point-outer {
+  fill: currentColor;
+  opacity: 0.2;
+  pointer-events: none;
 }
 
 .manipulation-base-point {
