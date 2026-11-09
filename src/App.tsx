@@ -2099,7 +2099,11 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                               appearance: { visible: !visible },
                             })}
                           >
-                            <span aria-hidden="true">{visible ? '◉' : '⊘'}</span>
+                            <svg className="visibility-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                              <path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8z" />
+                              <circle cx="8" cy="8" r="2" />
+                              {!visible && <path className="visibility-icon-slash" d="M2.5 13.5 13.5 2.5" />}
+                            </svg>
                           </button>
                       )}
                       {valid && !drawable &&
