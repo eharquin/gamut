@@ -3777,6 +3777,27 @@ describe('NoViz calculator mode (#55)', () => {
     expect(document.getElementById('expression-panel')).not.toHaveClass('is-collapsed')
   })
 
+  it('forgets the view kept for the return when another document opens', async () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+    expect(screen.getByRole('textbox', { name: 'Zoom level' })).not.toHaveValue('100%')
+    fireEvent.click(screen.getByRole('button', { name: 'Hide canvas (NoViz calculator)' }))
+
+    const opened = toCanonicalDocument(expressionDocument([{ id: 'v', source: 'Opened = vector(3, 4)' }], {}, { id: 'opened' }), 'light')
+    const bytes = new TextEncoder().encode(JSON.stringify({
+      ...opened, view: { ...opened.view, visualizerId: null, positionEnabled: false, viewport: { kind: 'none' } },
+    }))
+    fireEvent.drop(document.body, { dataTransfer: {
+      types: ['Files'], dropEffect: 'none',
+      files: [{ name: 'opened.gamut.json', type: 'application/json', arrayBuffer: async () => bytes.slice().buffer }],
+    } })
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('Opened = vector(3, 4)'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+    expect(canvas()).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Zoom level' })).toHaveValue('100%')
+  })
+
   describe('undo and redo across an algebra change', () => {
     const switchTo = (current: string, index: number) => {
       fireEvent.click(screen.getByRole('button', { name: `${current}. Change algebra` }))

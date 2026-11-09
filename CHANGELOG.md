@@ -108,7 +108,7 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A NoViz calculator mode: a button at the top left of the canvas collapses
   the canvas to the right and leaves the expression panel full width, and a
   button at the right edge of the panel brings the canvas back at the view it
-  had. Nothing is drawn, and position fields, visibility buttons, labels, the
+  had in this session, as long as the same document stays open. Nothing is drawn, and position fields, visibility buttons, labels, the
   appearance menu, and the rendering settings are hidden while evaluation,
   scalar controls, history, and import and export keep working. NoViz is saved
   in the document (`visualizerId: null`, viewport `none`, positions off) and
