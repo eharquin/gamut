@@ -577,6 +577,14 @@ describe('document dependency evaluation', () => {
   })
 })
 
+describe('empty VGA(2) positions (#235)', () => {
+  it('keep evaluating to zero', () => {
+    const [, position, head] = evaluate('V = vector(2, 1)', 'P = V.position', 'H = V.head')
+    expect(position.evaluation).toMatchObject({ status: 'valid', inspection: '0' })
+    expect(head.evaluation).toMatchObject({ status: 'valid', inspection: '2e1 + e2' })
+  })
+})
+
 describe('PGA(2) list positions', () => {
   const pgaContext = { engine: createPga2Engine(), interpretation: PGA_2D_INTERPRETATION }
   const evaluatePga = (items: readonly ExpressionItem[]) =>
@@ -591,6 +599,18 @@ describe('PGA(2) list positions', () => {
     // Without a position, every ideal point sits at the origin point e12.
     expect(position.evaluation).toMatchObject({ status: 'valid', inspection: '[e12, e12]' })
     expect(head.evaluation).toMatchObject({ status: 'valid', inspection: '[e01 + e12, e02 + e12]' })
+  })
+
+  it('evaluates the empty position of an ideal point to the origin point (#235)', () => {
+    const [, position, head] = evaluatePga([
+      { id: 'j', source: 'J = ipoint(0, 1)' },
+      { id: 'position', source: 'P = J.position' },
+      { id: 'head', source: 'H = J.head' },
+    ])
+    // The arrow is drawn from the origin point, so J.position is e12 and
+    // J.head the displayed head e01 + e12, not e01.
+    expect(position.evaluation).toMatchObject({ status: 'valid', inspection: 'e12' })
+    expect(head.evaluation).toMatchObject({ status: 'valid', inspection: 'e01 + e12' })
   })
 
   it('inspects PGA lists with the PGA blade names', () => {

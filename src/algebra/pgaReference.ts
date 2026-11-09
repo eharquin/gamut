@@ -81,9 +81,10 @@ export const PGA_2_REFERENCE: readonly ReferenceSection[] = [
     entries: [
       entry(
         'position point(x, y)',
-        'optional field under an ideal-point row, where the arrow starts; an empty field uses the origin',
+        'optional field under an ideal-point row, where the arrow starts; an empty field is the origin point e12, so J.position and J.head match the drawing',
         { source: 'I = ipoint(1, 0)', positionSource: 'point(1, 2)' },
         { source: 'J = ipoint(0, 1)' },
+        { source: 'J.position', inspection: 'e12' }, { source: 'J.head', inspection: 'e01 + e12' },
       ),
       entry(
         'position P, position I.head',
