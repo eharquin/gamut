@@ -31,6 +31,12 @@ function openDisplaySettings(): HTMLElement {
   return trigger
 }
 
+/** Runs a document command from the settings menu, as a user would. */
+function runDocumentCommand(name: 'Import' | 'Export' | 'Copy link'): void {
+  openDisplaySettings()
+  fireEvent.click(within(screen.getByRole('dialog', { name: 'Display settings' })).getByRole('button', { name }))
+}
+
 function viewportCanvas(): SVGSVGElement {
   return screen.getByRole('img', {
     name: /Two-dimensional [VP]GA viewport/,
@@ -69,10 +75,35 @@ describe('VGA 2D vertical slice', () => {
     })
     render(<App />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+    runDocumentCommand('Export')
 
     expect(clickedLinks).toHaveLength(1)
     expect(clickedLinks[0].download).toBe('Untitled-document.gamut.json')
+  })
+
+  it('offers Import, Export, and Copy link in the settings menu instead of the header', () => {
+    const fileDialogs = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => undefined)
+    render(<App />)
+    const header = document.querySelector('header.app-header') as HTMLElement
+    for (const name of ['Import', 'Export', 'Copy link', 'Copy iframe code'])
+      expect(within(header).queryByRole('button', { name })).not.toBeInTheDocument()
+
+    const trigger = openDisplaySettings()
+    const menu = screen.getByRole('dialog', { name: 'Display settings' })
+    const section = within(menu).getByRole('region', { name: 'Document' })
+    expect(within(section).getAllByRole('button').map((button) => button.textContent?.trim()))
+      .toEqual(['Import', 'Export', 'Copy link'])
+    expect(within(menu).queryByRole('button', { name: 'Copy iframe code' })).not.toBeInTheDocument()
+
+    // Import opens the existing file input, closes the menu, and returns focus.
+    const importButton = within(section).getByRole('button', { name: 'Import' })
+    importButton.focus()
+    expect(importButton).toHaveFocus()
+    fireEvent.click(importButton)
+    expect(fileDialogs).toHaveBeenCalledOnce()
+    expect(fileDialogs.mock.contexts[0]).toBe(screen.getByLabelText('Import document file'))
+    expect(screen.queryByRole('dialog', { name: 'Display settings' })).not.toBeInTheDocument()
+    expect(trigger).toHaveFocus()
   })
 
   it('imports a version 0.1 document with the historical filename suffix', async () => {

@@ -5,7 +5,7 @@ import { deflateRawSync } from 'node:zlib'
 import { createHash } from 'node:crypto'
 import { toCanonicalDocument, serializeCanonicalDocument } from './canonicalDocument'
 import { expressionDocument } from './expressionDocument'
-import { createSceneLink, decodeSceneFragment, encodeSceneFragment, MAX_SHARE_FRAGMENT_LENGTH, sceneIframeCode } from './sceneLink'
+import { createSceneLink, decodeSceneFragment, encodeSceneFragment, MAX_SHARE_FRAGMENT_LENGTH } from './sceneLink'
 
 const document = toCanonicalDocument(expressionDocument([
   { id: 'point', source: 'V = vector(2, 3)' },
@@ -25,12 +25,10 @@ describe('self-contained scene links', () => {
     expect(fragment).toMatch(/^#scene=1\.deflate-raw\./)
   })
 
-  it('builds a link without stale query or fragment and escapes iframe attributes', async () => {
+  it('builds a link without stale query or fragment', async () => {
     const url = await createSceneLink(document, 'https://example.org/gamut/?old=1#old')
     expect(url).toMatch(/^https:\/\/example.org\/gamut\/#scene=/)
     expect(await decodeSceneFragment(new URL(url).hash)).toEqual(document)
-    expect(sceneIframeCode(url)).toContain('allow="fullscreen"')
-    expect(sceneIframeCode('https://example.org/?a="<&b=1')).toContain('&quot;&lt;&amp;b=1')
   })
 
   it('preserves PGA identifiers, scalar playback, custom appearances and a nondefault viewport', async () => {

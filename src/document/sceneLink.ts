@@ -116,8 +116,3 @@ export async function createSceneLink(document: CanonicalDocument, applicationUr
   url.hash = await encodeSceneFragment(document)
   return url.href
 }
-
-export function sceneIframeCode(url: string): string {
-  const escaped = url.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
-  return `<iframe src="${escaped}" title="Interactive GAMUT scene" width="800" height="600" allow="fullscreen"></iframe>`
-}

@@ -114,7 +114,7 @@
   background: color-mix(in srgb, var(--accent-soft) 65%, var(--surface));
 }
 
-.document-import-command {
+.app-header > .display-settings {
   margin-left: auto;
 }
 
@@ -1289,6 +1289,39 @@ body.reordering-items .reorder-handle {
   color: var(--muted);
   font: 600 0.72rem var(--font-mono);
   text-align: right;
+}
+
+.settings-commands {
+  display: grid;
+  gap: 2px;
+}
+
+.settings-command {
+  min-height: 30px;
+  padding: 0 8px;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 0.76rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-command:hover:not(:disabled) {
+  color: var(--accent);
+  background: var(--surface-hover);
+}
+
+.settings-command:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.settings-command:disabled {
+  color: var(--muted);
+  cursor: default;
 }
 
 @media (prefers-reduced-motion: reduce) {
