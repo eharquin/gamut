@@ -20,6 +20,12 @@ function pgaValue(source: string, normalization?: ItemNormalization) {
 
 // Coefficient order: 1, e0, e1, e2, e01, e02, e12, e012.
 describe('normalization modes (#185)', () => {
+  it('applies the single VGA norm whatever the stored mode, so a forced mode acts as auto', () => {
+    const value = vga.call('vector', [vga.scalar(3), vga.scalar(4)])
+    for (const mode of ['natural', 'euclidean', 'ideal'] as const)
+      expect(appliedNorm(mode, value, vga, VGA_2D_INTERPRETATION)).toBe('euclidean')
+  })
+
   it('normalizes a Euclidean point by norm in auto and norm modes, and by inorm in inorm mode', () => {
     expect(pgaValue('point(3, 4, 2)', 'natural')).toEqual([0, 0, 0, 0, 2, -1.5, 1, 0])
     expect(pgaValue('point(3, 4, 2)', 'euclidean')).toEqual([0, 0, 0, 0, 2, -1.5, 1, 0])

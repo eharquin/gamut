@@ -24,6 +24,7 @@ import {
   SettingsMenu,
   type DisplaySettings,
 } from './components/SettingsMenu'
+import { ThemeToggle } from './components/ThemeToggle'
 import { resolveItemAppearance } from './components/appearancePalette'
 import { OPAQUE_INTERPRETATION, type InterpretedEntity, type Point2d } from './geometry/interpretation'
 import type { VisualizationPrimitive } from './visualization/primitives'
@@ -81,6 +82,9 @@ import {
 } from './presentation/formatNumber'
 import { evaluateScalarControl } from './application/evaluateScalarControl'
 import { hasIdealNorm, isUnitNorm, measuredNorm, normalizeItemValue } from './application/normalization'
+import { DEFAULT_APPEARANCE_SOURCES, evaluateAppearanceSources } from './application/evaluateAppearanceSources'
+import { placeLabels, type LabelObstacle } from './visualization/labels'
+import { DEFAULT_POINT_SIZE, POINT_OUTER_SCALE } from './visualization/stroke'
 import { directScalarEdit } from './language/directScalarEdit'
 import {
   directConstructorComponents,
@@ -290,6 +294,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     coalesceKey?: string,
   ) => dispatchHistory({ type: 'execute', command, coalesceKey }), [])
   const nextId = useRef(2)
+  const labelPlacementCache = useRef<{ key: string; placed: ReturnType<typeof placeLabels> } | null>(null)
   const inputRefs = useRef(new Map<string, HTMLInputElement>())
   const pendingFocus = useRef<string | null>(null)
   const lastEditorFocus = useRef<EditorFocus | null>(null)
@@ -388,6 +393,24 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const [appearanceItemId, setAppearanceItemId] = useState<string | null>(null)
   /** The row whose normalization choice is open under its expression. */
   const [normalizationChoiceId, setNormalizationChoiceId] = useState<string | null>(null)
+  // The choice closes on a click outside it and its button, and when its row
+  // can no longer be normalized (no button is rendered for it any more).
+  useEffect(() => {
+    if (normalizationChoiceId === null) return
+    if (!normalizationToggleRefs.current.has(normalizationChoiceId)) {
+      setNormalizationChoiceId(null)
+      return
+    }
+    const closeOutside = (event: PointerEvent) => {
+      const target = event.target as Node | null
+      const toggle = normalizationToggleRefs.current.get(normalizationChoiceId)
+      const choice = document.getElementById(`normalization-choice-${normalizationChoiceId}`)
+      if (target && (toggle?.contains(target) || choice?.contains(target))) return
+      setNormalizationChoiceId(null)
+    }
+    document.addEventListener('pointerdown', closeOutside)
+    return () => document.removeEventListener('pointerdown', closeOutside)
+  })
   const normalizationToggleRefs = useRef(new Map<string, HTMLButtonElement>())
   const [expandedListIds, setExpandedListIds] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -1114,6 +1137,10 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       : [])),
     [evaluatedItems],
   )
+  const appearanceSources = useMemo(
+    () => evaluateAppearanceSources(expressionDoc, evaluatedItems, engine),
+    [evaluatedItems, expressionDoc, engine],
+  )
 
   const stopPlayback = useCallback((itemId: string) => {
     const playback = activePlaybacks.get(itemId)
@@ -1307,16 +1334,25 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     window.addEventListener('keydown', cancel)
     return () => window.removeEventListener('keydown', cancel)
   }, [])
-  const resolvedStyles = useMemo(
-    () => Object.fromEntries(evaluatedItems.map(({ item, evaluation }) => {
+  const resolvedAppearances = useMemo(
+    () => evaluatedItems.map(({ item, evaluation }) => {
       const kind = evaluation?.status === 'valid'
         ? evaluation.valueType === 'list'
           ? 'List'
           : interpretation.describe(evaluation.entity)
         : 'Object'
-      return [item.id, resolveItemAppearance(expressionDoc.appearance[item.id], kind, declaredName(item.source)).styleId]
-    })),
+      return [item.id, resolveItemAppearance(expressionDoc.appearance[item.id], kind, declaredName(item.source))] as const
+    }),
     [evaluatedItems, expressionDoc.appearance],
+  )
+  const resolvedStyles = useMemo(
+    () => Object.fromEntries(resolvedAppearances.map(([id, resolved]) => [id, resolved.styleId])),
+    [resolvedAppearances],
+  )
+  // A line with no stored orientation is saved without it, as it is drawn.
+  const resolvedOrientation = useMemo(
+    () => Object.fromEntries(resolvedAppearances.map(([id, resolved]) => [id, resolved.orientationVisible])),
+    [resolvedAppearances],
   )
 
   useEffect(() => {
@@ -1348,12 +1384,12 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   useEffect(() => {
     if (ephemeral || import.meta.env.MODE === 'test') return
     try {
-      persistence.save(toCanonicalDocument(expressionDoc, theme, resolvedStyles))
+      persistence.save(toCanonicalDocument(expressionDoc, theme, resolvedStyles, resolvedOrientation))
       setDocumentDiagnostic((current) => current?.startsWith('DOCUMENT_VIEW_UNSUPPORTED') ? current : null)
     } catch {
       setDocumentDiagnostic('STORE_WRITE_FAILED: Changes remain open, but the last saved revision was retained.')
     }
-  }, [expressionDoc, persistence, resolvedStyles, theme, ephemeral])
+  }, [expressionDoc, persistence, resolvedStyles, resolvedOrientation, theme, ephemeral])
 
   const origin = toScreen(viewport, { x: 0, y: 0 })
   // The Studio-sized glyphs are the 1× baseline exposed to users. The
@@ -1361,7 +1397,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   // while restoring a meaningful multiplicative setting.
   const objectRenderScale = expressionDoc.view.display.objectScale * 1.5
   const { rendered: renderedPrimitives, connections: renderedConnections, omitted: omittedRenderElements } = collectRenderedPrimitives(
-    evaluatedItems, expressionDoc.appearance, interpretation, declaredName,
+    evaluatedItems, expressionDoc.appearance, interpretation, declaredName, appearanceSources,
   )
   const renderedVectors = renderedPrimitives.flatMap((entry) =>
     entry.primitive.kind === 'oriented-segment'
@@ -1394,6 +1430,63 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     entry.primitive.kind === 'line-at-infinity'
       ? [{ ...entry, primitive: entry.primitive, layout: layoutLineAtInfinity(viewport, objectRenderScale) }]
       : [])
+
+  // Labels are placed together, so that an automatic label can avoid the
+  // other labels and the points and handles of other objects (#226).
+  const labelAnchors = new Map<string, Point2d>()
+  const labelObstacles: LabelObstacle[] = []
+  const ownerOf = (id: string) => id.split(':')[0]
+  const handleRadius = 10 * objectRenderScale
+  const addSegmentObstacles = (id: string, layout: Readonly<{ start: Point2d; end: Point2d }>) => {
+    if (ownerOf(id) !== id) return
+    labelObstacles.push({ ownerId: id, center: layout.start, radius: handleRadius })
+    labelObstacles.push({ ownerId: id, center: layout.end, radius: 12 })
+  }
+  renderedVectors.forEach(({ id, layout }) => {
+    labelAnchors.set(id, layout.end)
+    addSegmentObstacles(id, layout)
+  })
+  renderedAreas.forEach(({ id, layout }) => {
+    labelAnchors.set(id, layout.labelPoint)
+    if (ownerOf(id) === id) labelObstacles.push({ ownerId: id, center: layout.base, radius: handleRadius })
+  })
+  renderedPoints.forEach(({ id, point, pointSize, markerVisible }) => {
+    labelAnchors.set(id, point)
+    // A hidden marker is not drawn, so it does not push labels away.
+    if (markerVisible === false) return
+    const core = (pointSize ?? DEFAULT_POINT_SIZE) * objectRenderScale
+    labelObstacles.push({ ownerId: ownerOf(id), center: point, radius: ownerOf(id) === id ? core * POINT_OUTER_SCALE : core })
+  })
+  renderedLines.forEach(({ id, layout }) => labelAnchors.set(id, layout.labelPoint))
+  renderedInfinity.forEach(({ id, layout }) => labelAnchors.set(id, {
+    x: layout.center.x + layout.radiusX * Math.SQRT1_2,
+    y: layout.center.y - layout.radiusY * Math.SQRT1_2,
+  }))
+  renderedIdealPoints.forEach(({ id, arrow, marker }) => {
+    if (arrow) {
+      labelAnchors.set(id, arrow.end)
+      addSegmentObstacles(id, arrow)
+    } else if (marker) labelAnchors.set(id, marker.tail)
+  })
+  const labelRequests = renderedPrimitives.flatMap(({ id, label, labelSettings }) => {
+    const at = labelAnchors.get(id)
+    return label && at ? [{ key: id, ownerId: ownerOf(id), text: label, at, settings: labelSettings }] : []
+  })
+  // Placement compares every label with every obstacle, so it is redone only
+  // when its inputs change, not on every frame of an unrelated animation.
+  const labelPlacementKey = labelRequests.length === 0
+    ? ''
+    : JSON.stringify([labelRequests, labelObstacles, expressionDoc.view.display.objectScale])
+  if (labelPlacementCache.current?.key !== labelPlacementKey) {
+    labelPlacementCache.current = {
+      key: labelPlacementKey,
+      placed: labelRequests.length === 0
+        ? new Map()
+        : placeLabels(labelRequests, labelObstacles, expressionDoc.view.display.objectScale),
+    }
+  }
+  const placedLabels = labelPlacementCache.current.placed
+  const placedLabel = (id: string) => placedLabels.get(id) ?? null
 
   useEffect(() => {
     const id = pendingFocus.current
@@ -1740,7 +1833,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     setSharing(true)
     setShareResult(null)
     try {
-      const url = await createSceneLink(toCanonicalDocument(expressionDoc, theme, resolvedStyles), new URL(import.meta.env.BASE_URL, window.location.href).href)
+      const url = await createSceneLink(toCanonicalDocument(expressionDoc, theme, resolvedStyles, resolvedOrientation), new URL(import.meta.env.BASE_URL, window.location.href).href)
       let copied = false
       try { await navigator.clipboard.writeText(url); copied = true } catch { /* The selectable text remains available when clipboard access is blocked. */ }
       setShareResult({
@@ -1757,7 +1850,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const saveLocalCopy = () => {
     try {
       const id = crypto.randomUUID()
-      persistence.save(toCanonicalDocument({ ...expressionDoc, id }, theme, resolvedStyles))
+      persistence.save(toCanonicalDocument({ ...expressionDoc, id }, theme, resolvedStyles, resolvedOrientation))
       // Keep undo history; only the identity changes.
       dispatchHistory({ type: 'update-identity', id })
       // Reloading must reopen the saved copy, not the original shared scene.
@@ -1772,7 +1865,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const exportDocument = () => {
     try {
       const source = serializeCanonicalDocument(
-        toCanonicalDocument(expressionDoc, theme, resolvedStyles),
+        toCanonicalDocument(expressionDoc, theme, resolvedStyles, resolvedOrientation),
       )
       const blob = new Blob([source], { type: 'application/json;charset=utf-8' })
       const url = URL.createObjectURL(blob)
@@ -1939,6 +2032,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           aria-label="Import document file"
           onChange={importDocument}
         />
+        <ThemeToggle theme={theme} onThemeChange={setTheme} />
         <SettingsMenu
           display={expressionDoc.view.display}
           theme={theme}
@@ -2054,7 +2148,9 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
               const hasUnitNorm =
                 supportsNormalization &&
                 isUnitNorm(item.normalization, evaluation.value, engine, interpretation)
-              const normalizationText = NORMALIZATION_TEXT[item.normalization ?? 'off']
+              // VGA has one norm: a forced mode from an imported document reads as auto.
+              const normalizationMode = item.normalization && !hasIdealNorm(engine) ? 'natural' : item.normalization
+              const normalizationText = NORMALIZATION_TEXT[normalizationMode ?? 'off']
               const normalizationChoiceOpen = supportsNormalization && normalizationChoiceId === item.id
               const normalizationOptions = (hasIdealNorm(engine)
                 ? ['off', 'natural', 'euclidean', 'ideal'] as const
@@ -2081,6 +2177,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                 declaredName(item.source),
               )
               const objectName = displayLabel ?? kind
+              const labelFieldShown = drawable && labelVisible && evaluation?.status === 'valid' &&
+                evaluation.valueType !== 'list'
               const valid = evaluation?.status === 'valid'
               const approximated = valid && evaluation.valueType === 'single' &&
                 evaluation.entity.kind !== 'mixed-multivector' &&
@@ -2249,10 +2347,17 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                               aria-label={`Normalization: ${normalizationText}`}
                               aria-expanded={normalizationChoiceOpen}
                               aria-controls={normalizationChoiceOpen ? `normalization-choice-${item.id}` : undefined}
-                              title={item.normalization
-                                ? `Normalized by ${NORM_NAME[unitNorm!]}${item.normalization === 'natural' ? ' (automatic)' : ''}`
-                                : 'Not normalized'}
+                              title={!normalizationMode
+                                ? 'Not normalized'
+                                : normalizationUnavailable
+                                  ? 'Normalization unavailable: the value is unchanged'
+                                  : `Normalized by ${NORM_NAME[unitNorm!]}${normalizationMode === 'natural' ? ' (automatic)' : ''}`}
                               onClick={() => setNormalizationChoiceId((current) => current === item.id ? null : item.id)}
+                              onKeyDown={(event) => {
+                                if (event.key !== 'Escape' || !normalizationChoiceOpen) return
+                                event.stopPropagation()
+                                setNormalizationChoiceId(null)
+                              }}
                             >{item.normalization ? normalizationText : 'norm'}</button>
                             <span
                               className={`unit-norm-indicator${hasUnitNorm ? ' is-unit' : ''}`}
@@ -2283,7 +2388,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                             <button
                               key={option}
                               type="button"
-                              aria-pressed={(item.normalization ?? 'off') === option}
+                              aria-pressed={(normalizationMode ?? 'off') === option}
                               onClick={() => {
                                 executeCommand({
                                   kind: 'update-normalization', itemId: item.id,
@@ -2295,6 +2400,24 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                             >{NORMALIZATION_TEXT[option]}</button>
                           ))}
                         </div>
+                      )}
+                      {/* The label text is edited under the expression while the label is shown (#226). */}
+                      {labelFieldShown && (
+                        <label className="expression-label-row">
+                          <span aria-hidden="true">Label</span>
+                          <input
+                            className="expression-label-input"
+                            aria-label={`Label of ${annotation ? 'annotation' : 'expression'} ${position}`}
+                            value={label}
+                            placeholder={declaredName(item.source) ?? ''}
+                            onChange={(event) => executeCommand({
+                              kind: 'update-appearance', itemId: item.id, appearance: { label: event.target.value },
+                            }, `appearance-label:${item.id}`)}
+                            onBlur={() => dispatchHistory({ type: 'boundary' })}
+                            spellCheck={false}
+                            autoComplete="off"
+                          />
+                        </label>
                       )}
 
                       {evaluation || positionEvaluation ? (
@@ -2603,9 +2726,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                       styleId={styleId}
                       visible={visible}
                       labelVisible={labelVisible}
-                      label={label}
                       borderVisible={expressionDoc.appearance[item.id]?.borderVisible ?? false}
-                      orientationVisible={expressionDoc.appearance[item.id]?.orientationVisible ?? true}
+                      orientationVisible={resolveItemAppearance(expressionDoc.appearance[item.id], kind, null).orientationVisible}
                       bivectorShape={expressionDoc.appearance[item.id]?.bivectorShape ?? 'from-vectors'}
                       idealPointDisplay={expressionDoc.appearance[item.id]?.idealPointDisplay ?? 'vector'}
                       pointListDisplay={expressionDoc.appearance[item.id]?.primitiveStyles?.points?.connection ?? 'none'}
@@ -2617,6 +2739,9 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                         ? listPrimitiveTypes(evaluation.elements)
                         : undefined}
                       linesVisible={expressionDoc.appearance[item.id]?.primitiveStyles?.lines?.visible ?? true}
+                      appearance={expressionDoc.appearance[item.id]}
+                      linesOrientationVisible={resolveItemAppearance(expressionDoc.appearance[item.id], kind, null).linesOrientationVisible}
+                      sources={appearanceSources.get(item.id) ?? DEFAULT_APPEARANCE_SOURCES}
                       parallelogramAvailable={evaluation?.status === 'valid' &&
                         evaluation.valueType === 'single' &&
                         evaluation.primitive?.kind === 'oriented-area' &&
@@ -2634,9 +2759,6 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                       onLabelVisibleChange={(nextVisible) => executeCommand({
                         kind: 'update-appearance', itemId: item.id, appearance: { labelVisible: nextVisible },
                       })}
-                      onLabelChange={(nextLabel) => executeCommand({
-                        kind: 'update-appearance', itemId: item.id, appearance: { label: nextLabel },
-                      }, `appearance-label:${item.id}`)}
                       onBorderVisibleChange={(borderVisible) => executeCommand({
                         kind: 'update-appearance', itemId: item.id, appearance: { borderVisible },
                       })}
@@ -2658,6 +2780,9 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                       onLinesVisibleChange={(linesVisible) => executeCommand({
                         kind: 'update-appearance', itemId: item.id, appearance: { primitiveStyles: { lines: { visible: linesVisible } } },
                       })}
+                      onAppearanceChange={(appearance, coalesceKey) => executeCommand({
+                        kind: 'update-appearance', itemId: item.id, appearance,
+                      }, coalesceKey === undefined ? undefined : `appearance-${coalesceKey}:${item.id}`)}
                       onControlChange={(control) => {
                         if (isPlaying) stopPlayback(item.id)
                         pausedPlaybacks.current.delete(item.id)
@@ -2837,7 +2962,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                 })}
               </g>}
 
-              {renderedVectors.map(({ id, primitive, entity, layout, color, label }) => {
+              {renderedVectors.map(({ id, primitive, entity, layout, color, strokeStyle, strokeWidth, opacity }) => {
                 const item = expressionDoc.items.find((candidate) => candidate.id === id)
                 return <OrientedSegmentGlyph
                   key={id}
@@ -2845,15 +2970,18 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                   primitive={primitive}
                   layout={layout}
                   color={color}
-                  label={label}
+                  label={placedLabel(id)}
                   scale={objectRenderScale}
                   itemPresent={!!item}
                   headMovable={!!item && headMovable(item, entity)}
                   baseMovable={!!item && objectBaseMovable(item, entity)}
                   controller={handleController}
+                  strokeStyle={strokeStyle}
+                  strokeWidth={strokeWidth}
+                  opacity={opacity}
                 />
               })}
-              {renderedAreas.map(({ id, primitive, entity, layout, color, label, borderVisible, orientationVisible }) => {
+              {renderedAreas.map(({ id, primitive, entity, layout, color, borderVisible, orientationVisible, strokeStyle, strokeWidth, opacity }) => {
                 const item = expressionDoc.items.find((candidate) => candidate.id === id)
                 return <OrientedAreaGlyph
                   key={id}
@@ -2861,16 +2989,19 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                   primitive={primitive}
                   layout={layout}
                   color={color}
-                  label={label}
+                  label={placedLabel(id)}
                   scale={objectRenderScale}
                   borderVisible={borderVisible}
                   orientationVisible={orientationVisible}
                   itemPresent={!!item}
                   baseMovable={!!item && objectBaseMovable(item, entity)}
                   controller={handleController}
+                  strokeStyle={strokeStyle}
+                  strokeWidth={strokeWidth}
+                  opacity={opacity}
                 />
               })}
-              {renderedLines.map(({ id, primitive, entity, layout, color, label, orientationVisible }) => {
+              {renderedLines.map(({ id, primitive, entity, layout, color, orientationVisible, strokeStyle, strokeWidth, opacity }) => {
                 const item = expressionDoc.items.find((candidate) => candidate.id === id)
                 const selection = selectedLine?.itemId === id
                   ? layoutLineSelection(primitive, selectedLine.anchor, viewport, objectRenderScale)
@@ -2881,7 +3012,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                   primitive={primitive}
                   layout={layout}
                   color={color}
-                  label={label}
+                  label={placedLabel(id)}
                   scale={objectRenderScale}
                   itemPresent={!!item}
                   movable={!!item && lineMovable(item, entity)}
@@ -2889,20 +3020,24 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                   orientationTicks={lineOrientationTicks(primitive, layout, objectRenderScale)}
                   selection={selection}
                   controller={handleController}
+                  strokeStyle={strokeStyle}
+                  strokeWidth={strokeWidth}
+                  opacity={opacity}
                 />
               })}
-              {renderedInfinity.map(({ id, primitive, layout, color, label }) => (
-                <LineAtInfinityGlyph key={id} accessibleName={primitive.accessibleName} layout={layout} color={color} label={label} scale={objectRenderScale} />
+              {renderedInfinity.map(({ id, primitive, layout, color, opacity }) => (
+                <LineAtInfinityGlyph key={id} accessibleName={primitive.accessibleName} layout={layout} color={color} label={placedLabel(id)} scale={objectRenderScale} opacity={opacity} />
               ))}
-              {renderedIdealPoints.map(({ id, primitive, entity, arrow, marker, color, label }) => {
+              {renderedIdealPoints.map(({ id, primitive, entity, arrow, marker, color, strokeStyle, strokeWidth, opacity }) => {
                 const item = expressionDoc.items.find((candidate) => candidate.id === id)
                 return <g key={id}>
                   {marker && <DirectionMarkerGlyph
                     accessibleName={primitive.accessibleName}
                     layout={marker}
                     color={color}
-                    label={arrow ? null : label}
+                    label={arrow ? null : placedLabel(id)}
                     scale={objectRenderScale}
+                    opacity={opacity}
                   />}
                   {arrow && <OrientedSegmentGlyph
                     id={id}
@@ -2912,24 +3047,30 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                     }, accessibleName: primitive.accessibleName }}
                     layout={arrow}
                     color={color}
-                    label={label}
+                    label={placedLabel(id)}
                     scale={objectRenderScale}
                     itemPresent={!!item}
                     headMovable={!!item && headMovable(item, entity)}
                     baseMovable={!!item && objectBaseMovable(item, entity)}
                     controller={handleController}
+                    strokeStyle={strokeStyle}
+                    strokeWidth={strokeWidth}
+                    opacity={opacity}
                   />}
                 </g>
               })}
-              {renderedConnections.map(({ id, segments, color }) => (
+              {renderedConnections.map(({ id, segments, color, opacity, strokeStyle, strokeWidth }) => (
                 <PointListConnectionGlyph
                   key={`connection-${id}`}
                   path={layoutPointListConnection(segments, viewport)}
                   color={color}
                   scale={objectRenderScale}
+                  opacity={opacity}
+                  strokeStyle={strokeStyle}
+                  strokeWidth={strokeWidth}
                 />
               ))}
-              {renderedPoints.map(({ id, primitive, entity, point, color, label, markerVisible }) => {
+              {renderedPoints.map(({ id, primitive, entity, point, color, markerVisible, opacity, pointStyle, pointSize }) => {
                 const item = expressionDoc.items.find((candidate) => candidate.id === id)
                 return <PointMarkerGlyph
                   key={id}
@@ -2937,12 +3078,15 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                   primitive={primitive}
                   point={point}
                   color={color}
-                  label={label}
+                  label={placedLabel(id)}
                   scale={objectRenderScale}
                   itemPresent={!!item}
                   movable={!!item && objectBaseMovable(item, entity)}
                   markerVisible={markerVisible}
                   controller={handleController}
+                  opacity={opacity}
+                  pointStyle={pointStyle}
+                  pointSize={pointSize}
                 />
               })}
               {anchorPreview && <g className="anchor-preview" aria-hidden="true">

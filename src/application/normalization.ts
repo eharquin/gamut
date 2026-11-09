@@ -23,9 +23,11 @@ export function appliedNorm(
   engine: AlgebraEngine,
   interpretation: AnyInterpretation,
 ): NormKind | null {
+  // An algebra with one norm (VGA) applies it whatever the stored mode, so a
+  // forced mode read from an imported document behaves as auto.
+  if (!hasIdealNorm(engine)) return 'euclidean'
   if (mode === 'euclidean') return 'euclidean'
   if (mode === 'ideal') return 'ideal'
-  if (!hasIdealNorm(engine)) return 'euclidean'
   return interpretation.naturalNorm?.(interpretation.interpret(value)) ?? null
 }
 

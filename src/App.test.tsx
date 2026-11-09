@@ -16,7 +16,8 @@ import {
   paletteEntry,
 } from './components/appearancePalette'
 import { CLEAR_HOLD_MS } from './components/ClearExpressionsButton'
-import { toCanonicalDocument } from './document/canonicalDocument'
+import { serializeCanonicalDocument, toCanonicalDocument } from './document/canonicalDocument'
+import { ACTIVE_DOCUMENT_KEY } from './document/documentStorage'
 import { expressionDocument } from './document/expressionDocument'
 
 afterEach(() => {
@@ -2031,7 +2032,9 @@ describe('VGA 2D vertical slice', () => {
     expect(screen.getByRole('button', { name: 'Use color green 4' })).toHaveAttribute('aria-pressed', 'true')
     fireEvent.click(screen.getByRole('button', { name: 'Use color green 4' }))
     fireEvent.click(screen.getByRole('switch', { name: 'Show label' }))
-    fireEvent.change(screen.getByRole('textbox', { name: 'Text' }), {
+    // The text is edited under the expression, not in the menu (#226).
+    expect(screen.queryByRole('textbox', { name: 'Text' })).not.toBeInTheDocument()
+    fireEvent.change(screen.getByRole('textbox', { name: 'Label of expression 1' }), {
       target: { value: 'Velocity' },
     })
 
@@ -2102,7 +2105,7 @@ describe('VGA 2D vertical slice', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open Vector menu for V' }))
     fireEvent.click(screen.getByRole('switch', { name: 'Show label' }))
 
-    const label = screen.getByRole('textbox', { name: 'Text' })
+    const label = screen.getByRole('textbox', { name: 'Label of expression 1' })
     fireEvent.change(label, { target: { value: 'Velocity' } })
     expect(screen.getByText('Velocity', { selector: 'text' })).toBeInTheDocument()
 
@@ -2119,7 +2122,7 @@ describe('VGA 2D vertical slice', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: 'Open Vector menu for V' }))
     fireEvent.click(screen.getByRole('switch', { name: 'Show label' }))
-    const label = screen.getByRole('textbox', { name: 'Text' })
+    const label = screen.getByRole('textbox', { name: 'Label of expression 1' })
 
     label.focus()
     fireEvent.change(label, { target: { value: 'V' } })
@@ -2178,6 +2181,25 @@ describe('VGA 2D vertical slice', () => {
 
     fireEvent.change(theme, { target: { value: 'light' } })
     expect(document.documentElement).toHaveAttribute('data-theme', 'light')
+  })
+
+  it('switches between light and dark from the header, starting from the system theme', () => {
+    render(<App />)
+    expect(document.documentElement).toHaveAttribute('data-theme', 'system')
+    const header = screen.getByRole('banner')
+    const settings = within(header).getByRole('button', { name: 'Settings' })
+    const toggle = within(header).getByRole('button', { name: 'Switch to dark theme' })
+    expect(toggle.compareDocumentPosition(settings) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+    fireEvent.click(toggle)
+    expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
+    fireEvent.click(within(header).getByRole('button', { name: 'Switch to light theme' }))
+    expect(document.documentElement).toHaveAttribute('data-theme', 'light')
+
+    // The settings menu still offers the system theme.
+    openSettings()
+    fireEvent.change(screen.getByRole('combobox', { name: 'Theme' }), { target: { value: 'system' } })
+    expect(document.documentElement).toHaveAttribute('data-theme', 'system')
   })
 
   it('chooses automatic VGA normalization from the row without rewriting the expression', () => {
@@ -2870,7 +2892,32 @@ describe('PGA 2D foundation workflow', () => {
     fireEvent.keyDown(document, { key: 'Escape' })
   })
 
-  it('draws a connected point list as segments alone, keeping its labels', () => {
+  it('lets an automatic label ignore the markers a connected list hides', () => {
+    selectPga()
+    const first = screen.getByRole('textbox', { name: 'Expression 1' })
+    fireEvent.change(first, { target: { value: 'A = point(0, 0)' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add expression' }))
+    // P's first point sits just above and right of A, where A's label goes.
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 2' }), {
+      target: { value: 'P = [point(0.15, 0.15), point(3, 0), point(3, 3)]' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Open Point menu for A' }))
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Point' })).getByRole('switch', { name: 'Show label' }))
+    fireEvent.keyDown(document, { key: 'Escape' })
+    const label = () => screen.getByText('A', { selector: 'text' })
+    // The visible marker pushes the label away from top right.
+    expect(label().getAttribute('dominant-baseline') ?? label().getAttribute('text-anchor')).not.toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open List (3) menu for P' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open polyline' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'Show point markers' }))
+    fireEvent.keyDown(document, { key: 'Escape' })
+    // Hidden, it no longer does: the label returns to top right.
+    expect(label()).not.toHaveAttribute('dominant-baseline')
+    expect(label()).not.toHaveAttribute('text-anchor')
+  })
+
+  it('draws a connected point list as segments alone, keeping its accessible names', () => {
     selectPga()
     const first = screen.getByRole('textbox', { name: 'Expression 1' })
     fireEvent.change(first, { target: { value: 'P = [point(0, 0), point(1, 0), point(1, 1)]' } })
@@ -2886,8 +2933,9 @@ describe('PGA 2D foundation workflow', () => {
     expect(markers).not.toBeChecked()
     expect(screen.queryByLabelText(/^P\[\d\]$/)).not.toBeInTheDocument()
     expect(document.querySelector('.point-list-connection')!.getAttribute('d')!.match(/M/g)).toHaveLength(3)
-    fireEvent.click(screen.getByRole('switch', { name: 'Show label' }))
-    expect(document.querySelectorAll('.object-label')).toHaveLength(3)
+    // A list has no label: no Label section and no numbered labels (#226).
+    expect(screen.queryByRole('switch', { name: 'Show label' })).not.toBeInTheDocument()
+    expect(document.querySelectorAll('.object-label')).toHaveLength(0)
 
     // Without a connection, markers return, whatever the stored marker visibility.
     fireEvent.click(screen.getByRole('button', { name: 'No connection' }))
@@ -3190,7 +3238,8 @@ describe('PGA 2D foundation workflow', () => {
     const canvas = viewportCanvas()
     sizeViewportCanvas(canvas)
     const body = screen.getByRole('button', { name: 'Move L' })
-    expect(document.querySelector('.line-orientation')).not.toBeNull()
+    // A new line starts without its orientation (#221).
+    expect(document.querySelector('.line-orientation')).toBeNull()
     expect(document.querySelector('.unbounded-line-halo')).toBeNull()
 
     // Hover shows the translucent double border.
@@ -3232,10 +3281,10 @@ describe('PGA 2D foundation workflow', () => {
     fireEvent.keyDown(screen.getByRole('button', { name: 'Move L' }), { key: 'ArrowRight', shiftKey: true })
     expect(/^L = line\([-\d.]+, [-\d.]+, [-\d.]+\)$/.test((first as HTMLInputElement).value)).toBe(true)
 
-    // An orientation toggle hides the ticks; a non-literal line has no handles.
+    // The orientation switch shows the ticks; a non-literal line has no handles.
     fireEvent.click(screen.getByRole('button', { name: 'Open Line menu for L' }))
     fireEvent.click(screen.getByRole('switch', { name: 'Orientation visible' }))
-    expect(document.querySelector('.line-orientation')).toBeNull()
+    expect(document.querySelector('.line-orientation')).not.toBeNull()
     fireEvent.keyDown(document, { key: 'Escape' })
     fireEvent.change(first, { target: { value: 'L = 2 * line(1, 1, 0)' } })
     expect(screen.queryByRole('button', { name: 'Move L' })).not.toBeInTheDocument()
@@ -3328,7 +3377,148 @@ describe('PGA 2D foundation workflow', () => {
   })
 })
 
+describe('stroke width and opacity from the appearance menu (#221)', () => {
+  it('draws a width that follows a scalar, and falls back to the default with a red line', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: 'V = vector(2, 1)' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add expression' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 2' }), { target: { value: 'w = 2' } })
+    const shaft = () => document.querySelector('line.vector[aria-label="V"]') as SVGLineElement
+    expect(shaft()).not.toHaveAttribute('style')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Vector menu for V' }))
+    const dialog = screen.getByRole('dialog', { name: 'Vector' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Dashed' }))
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Width' }), { target: { value: 'w' } })
+    // 2 reference pixels at object scale 1 (render scale 1.5); dashes follow the width.
+    expect(shaft().style.strokeWidth).toBe('3')
+    expect(shaft().style.strokeDasharray).toBe('12 9')
+    expect(dialog.querySelector('.appearance-error')).toBeNull()
+
+    // The width follows the scalar, as it would while a slider animates.
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 2' }), { target: { value: 'w = 4' } })
+    expect(shaft().style.strokeWidth).toBe('6')
+
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Width' }), { target: { value: 'zz' } })
+    expect(shaft().style.strokeWidth).toBe('')
+    expect(within(dialog).getByRole('textbox', { name: 'Width' })).toHaveAttribute('aria-invalid', 'true')
+    expect(dialog.querySelector('.appearance-error')).toHaveTextContent('Width: The name “zz” is not defined. Default used.')
+
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Opacity' }), { target: { value: '25' } })
+    // Opacity fades the drawn marks only; handles stay fully visible.
+    expect(shaft().parentElement).toHaveAttribute('opacity', '0.25')
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Opacity' }), { target: { value: '' } })
+    expect(shaft().parentElement).not.toHaveAttribute('opacity')
+  })
+})
+
+describe('point style and size from the appearance menu (#222)', () => {
+  it('draws the chosen style and size, the outer shape following the core', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: 'VGA · 2D. Change algebra' }))
+    fireEvent.click(within(screen.getByRole('menu')).getAllByRole('menuitemradio')[1])
+    for (const textbox of screen.getAllByRole('textbox', { name: /^Expression \d+$/ }).slice(1)) {
+      fireEvent.change(textbox, { target: { value: '' } })
+      fireEvent.keyDown(textbox, { key: 'Backspace' })
+    }
+    expect(screen.getAllByRole('textbox', { name: /^Expression \d+$/ })).toHaveLength(1)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: 'A = point(1, 1)' } })
+    expect(document.querySelector('circle.manipulation-base-point')).toHaveAttribute('r', '6.75')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Point menu for A' }))
+    const dialog = screen.getByRole('dialog', { name: 'Point' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Square' }))
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Size' }), { target: { value: '6' } })
+    expect(document.querySelector('rect.manipulation-base-point')).toHaveAttribute('width', '18')
+    expect(Number(document.querySelector('rect.point-outer')!.getAttribute('width'))).toBeCloseTo(40)
+
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Size' }), { target: { value: '40' } })
+    expect(document.querySelector('rect.manipulation-base-point')).toHaveAttribute('width', '13.5')
+    expect(dialog.querySelector('.appearance-error')).toHaveTextContent('Size: 40 is outside 1 to 20. Default used.')
+  })
+})
+
+describe('labels edited under the expression and placed from the menu (#226)', () => {
+  it('edits the text under the expression and places the label from the menu', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: 'V = vector(2, 1)' } })
+    expect(screen.queryByRole('textbox', { name: 'Label of expression 1' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Open Vector menu for V' }))
+    const dialog = screen.getByRole('dialog', { name: 'Vector' })
+    fireEvent.click(within(dialog).getByRole('switch', { name: 'Show label' }))
+
+    const field = screen.getByRole('textbox', { name: 'Label of expression 1' })
+    expect(field).toHaveAttribute('placeholder', 'V')
+    // Under the expression, inside its row.
+    expect(screen.getByRole('textbox', { name: 'Expression 1' }).closest('article')).toContainElement(field)
+    const text = () => screen.getByText(/^(V|Velocity)$/, { selector: 'text' })
+    const tip = document.querySelector('line.vector[aria-label="V"]')!
+    expect(text()).not.toHaveAttribute('text-anchor')
+    expect(Number(text().getAttribute('y'))).toBeLessThan(Number(tip.getAttribute('y2')))
+
+    fireEvent.change(field, { target: { value: 'Velocity' } })
+    expect(text()).toHaveTextContent('Velocity')
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Bottom left' }))
+    expect(text()).toHaveAttribute('text-anchor', 'end')
+    expect(text()).toHaveAttribute('dominant-baseline', 'hanging')
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Angle' }), { target: { value: '30' } })
+    expect(text().getAttribute('transform')).toMatch(/^rotate\(-30 /)
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Size' }), { target: { value: '20' } })
+    expect(text().style.fontSize).toBe('20px')
+  })
+
+  it('moves an automatic label away from another point', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: 'V = vector(2, 1)' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add expression' }))
+    // W's base handle sits just above and right of V's head.
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 2' }), { target: { value: 'W = vector(1, 1)' } })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Position 2' }), { target: { value: '(2.15, 1.15)' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Open Vector menu for V' }))
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Vector' })).getByRole('switch', { name: 'Show label' }))
+    // Top right would cover W's base, so the label takes a later position.
+    const label = screen.getByText('V', { selector: 'text' })
+    expect(label.getAttribute('dominant-baseline') ?? label.getAttribute('text-anchor')).not.toBeNull()
+  })
+})
+
 describe('normalization chosen from the expression row (#185)', () => {
+  it('closes the choice on Escape from its button and on a click outside', () => {
+    render(<App />)
+    const toggle = screen.getByRole('button', { name: 'Normalization: off' })
+    fireEvent.click(toggle)
+    expect(screen.getByRole('group', { name: 'Normalize with' })).toBeInTheDocument()
+    fireEvent.keyDown(toggle, { key: 'Escape' })
+    expect(screen.queryByRole('group', { name: 'Normalize with' })).not.toBeInTheDocument()
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+
+    fireEvent.click(toggle)
+    // A click inside the choice keeps it open; a click elsewhere closes it.
+    fireEvent.pointerDown(screen.getByRole('group', { name: 'Normalize with' }))
+    expect(screen.getByRole('group', { name: 'Normalize with' })).toBeInTheDocument()
+    fireEvent.pointerDown(document.body)
+    expect(screen.queryByRole('group', { name: 'Normalize with' })).not.toBeInTheDocument()
+  })
+
+  it('reads a forced mode stored in a VGA document as auto', () => {
+    const stored = toCanonicalDocument(expressionDocument([
+      { id: 'v', source: 'V = vector(3, 4)', normalization: 'ideal' },
+    ], {}, { id: 'imported-vga' }), 'light')
+    window.localStorage.setItem(ACTIVE_DOCUMENT_KEY, serializeCanonicalDocument(stored))
+    vi.stubEnv('MODE', 'development')
+    render(<App />)
+    const toggle = screen.getByRole('button', { name: 'Normalization: auto' })
+    expect(toggle).toHaveAttribute('title', 'Normalized by the Euclidean norm (automatic)')
+    expect(screen.getByText('0.6e1 + 0.8e2', { selector: 'output' })).toBeInTheDocument()
+    fireEvent.click(toggle)
+    expect(within(screen.getByRole('group', { name: 'Normalize with' })).getByRole('button', { name: 'auto' }))
+      .toHaveAttribute('aria-pressed', 'true')
+    vi.unstubAllEnvs()
+    window.localStorage.clear()
+  })
+
   it('offers off, auto, norm and inorm in PGA, and shows the applied mode and unit badge', () => {
     render(<App />)
     fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: '' } })

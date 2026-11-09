@@ -100,10 +100,14 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   The style registry adds the `orange`, `teal`, `purple`, and `pink` ramps.
   Version 6 documents migrate with empty sources and the label anchored
   `top-right`, as before, and draw unchanged; new objects place their label
-  automatically. The new settings are not drawn or editable yet.
+  automatically. The new settings are not drawn or editable yet, except those
+  listed under Interface and accessibility.
 
 ### Interface and accessibility
 
+- The settings button shows a cogwheel. Beside it, a sun and moon button
+  switches between the light and dark themes in one click; by default the
+  application follows the system theme, which the settings menu still offers.
 - The appearance menu is reworked (#216): the header shows the object kind,
   a visibility eye (the same setting as the row's eye), and the close button;
   titled sections fold from a chevron on their title. **Color** offers nine
@@ -115,6 +119,37 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   **Animate** switch replaces the number or slider choice: on, the scalar is
   an animated slider with Once, Loop, or Ping-pong; off, a number field. A
   slider without animation keeps its display until the switch is used.
+- Lines, vectors, bivector outlines, and ideal-point arrows can be drawn
+  solid, dashed, or dotted, with a stroke width (#221). **Style** shows the
+  three stroke icons and a **Width** field on one row; the bivector row
+  appears with its outline, the ideal-point row while the direction arrow is
+  drawn. Dashes and round dots grow with the width. **Opacity**, under the
+  shades of **Color**, fades the fill and stroke of any drawn object together.
+  Width and opacity take a number or a scalar expression such as `w`, so they
+  follow a slider while it animates; a refused value (invalid text, unknown
+  name, non-scalar or out of range) draws the default and shows a red line
+  under the field. The **Lines** section of a list has its own **Style**:
+  stroke, width, and orientation, independent of the item's stroke.
+- A new line starts without its orientation; saved documents keep the
+  orientation they store.
+- Points can be drawn as a dot, ring, cross, plus, square, or diamond, with a
+  size (#222). Each style keeps an outer shape of its own form, 10 / 4.5
+  times the core at 20 % opacity, in place of the outer disk; the core grows
+  into it on hover and while dragged, without animation under reduced motion.
+  **Style** shows the six icons, then a **Size** field, a number or a scalar
+  expression. The **Points** section of a list has its own **Style**: marker
+  style and size, then the stroke and width of the links while the points are
+  connected. A dot of default size draws as before.
+- Labels are edited under their expression and placed from the menu (#226).
+  While a label is shown, its text field sits under the expression, with the
+  declared name as placeholder. **Label** keeps its switch in the title, then
+  **Angle** and **Size**, then **Distance** beside a 3 × 3 position grid whose
+  center is **Auto**: the label takes the first of the eight positions, from
+  the top right clockwise, where it overlaps no other label and no point or
+  handle of another object, and the top right when none is free. New objects
+  place their label automatically; saved documents keep the top-right label.
+  A list has no label any more: its Label section and the numbered labels of
+  its elements are removed, and the elements keep their accessible names.
 - The row's **norm** button chooses the normalization mode (#185): a click
   opens off · auto · norm · inorm under the expression, and choosing closes
   it. The button shows the active mode (auto, norm, inorm) in the accent

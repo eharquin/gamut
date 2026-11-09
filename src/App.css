@@ -83,6 +83,7 @@
 .scalar-play-button:focus-visible,
 .viewport-command:focus-visible,
 .settings-menu-button:focus-visible,
+.theme-toggle:focus-visible,
 .settings-select:focus-visible,
 .settings-number:focus-visible,
 .appearance-header button:focus-visible {
@@ -111,8 +112,13 @@
   background: color-mix(in srgb, var(--accent-soft) 65%, var(--surface));
 }
 
-.app-header > .settings-menu {
+.app-header > .theme-toggle {
   margin-left: auto;
+}
+
+/* The header gap is 14px; the two buttons sit 6px apart as one group. */
+.app-header > .theme-toggle + .settings-menu {
+  margin-left: -8px;
 }
 
 .document-file-input {
@@ -648,6 +654,38 @@ body.reordering-items .reorder-handle {
 .expression-editor-row .expression-source {
   min-width: 0;
   flex: 1;
+}
+
+/* The label text, under the expression it labels. */
+.expression-label-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 4px 2px 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.expression-label-input {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  padding: 0 7px;
+  color: var(--text);
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font: 500 0.74rem var(--font-mono);
+}
+
+.expression-label-input::placeholder {
+  color: var(--text-dim);
+}
+
+.expression-label-input:focus {
+  border-color: var(--accent);
+  outline: none;
 }
 
 .normalize-control {
@@ -1630,6 +1668,173 @@ body.reordering-items .reorder-handle {
   justify-self: start;
 }
 
+/* Numeric settings: a choice and a narrow field on one row, or two equal columns. */
+.appearance-row {
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.appearance-row > .appearance-segmented {
+  flex: 1 1 0;
+}
+
+.appearance-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.appearance-opacity {
+  margin-top: 6px;
+}
+
+.appearance-field.is-narrow {
+  flex: 0 0 64px;
+}
+
+/* The box holds the typed source and its unit. */
+.appearance-source {
+  min-width: 0;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  background: var(--background);
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+}
+
+.appearance-source:focus-within {
+  border-color: var(--accent);
+}
+
+.appearance-source.is-invalid {
+  border-color: var(--error);
+}
+
+.appearance-field .appearance-source input:not([role='switch']) {
+  flex: 1 1 0;
+  width: 100%;
+  height: 100%;
+  padding: 0 0 0 6px;
+  background: transparent;
+  border: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.appearance-unit {
+  padding: 0 5px 0 2px;
+  font-size: 0.62rem;
+}
+
+.appearance-error {
+  margin: -2px 0 0;
+  color: var(--error);
+  font-size: 0.64rem;
+  line-height: 1.35;
+}
+
+/* A point style icon: the core grows into its outer shape on hover, as on the canvas. */
+.point-icon-core {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 350ms ease;
+}
+
+.appearance-segmented button:hover .point-icon-core {
+  transform: scale(2.2222);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .point-icon-core {
+    transition: none;
+  }
+}
+
+/* Distance and the anchor grid: the grid centered in its column, the field centered on it. */
+.appearance-pair-anchor {
+  align-items: center;
+}
+
+.appearance-anchor-grid {
+  justify-self: center;
+  display: grid;
+  grid-template-columns: repeat(3, 18px);
+  grid-template-rows: repeat(3, 18px);
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+
+.appearance-anchor-grid button {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.appearance-anchor-grid button::after {
+  content: '';
+  width: 5px;
+  height: 5px;
+  background: var(--text-dim);
+  border-radius: 50%;
+}
+
+.appearance-anchor-grid button:hover::after {
+  background: var(--muted);
+}
+
+.appearance-anchor-grid button[aria-pressed='true'] {
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+.appearance-anchor-grid button[aria-pressed='true']::after {
+  width: 8px;
+  height: 8px;
+  background: var(--accent);
+}
+
+.appearance-anchor-grid button.is-auto::after {
+  width: 10px;
+  height: 10px;
+  background: transparent;
+  border: 1.5px dashed var(--muted);
+  border-radius: 2px;
+}
+
+.appearance-anchor-grid button.is-auto:hover::after {
+  border-color: var(--text);
+}
+
+.appearance-anchor-grid button.is-auto[aria-pressed='true']::after {
+  background: var(--accent-soft);
+  border: 1.5px solid var(--accent);
+}
+
+/* A primitive type's own style inside a list section. */
+.appearance-sub {
+  display: grid;
+  gap: 6px;
+  margin-top: 2px;
+  padding: 6px 0 0 10px;
+  border-left: 2px solid var(--border-subtle);
+}
+
+.appearance-sub h4 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 600;
+}
+
 /* Switches: section titles, switch rows, and switch fields share one look. */
 .appearance-popover input[role='switch'] {
   position: relative;
@@ -2004,6 +2209,17 @@ code {
   fill-opacity: 0.2;
   pointer-events: all;
   cursor: crosshair;
+}
+
+/* A shaped point keeps its contour as the hit target and draws its outer shape apart. */
+.manipulation-base-contour.is-movable.is-shaped {
+  fill-opacity: 0;
+}
+
+.point-outer {
+  fill: currentColor;
+  opacity: 0.2;
+  pointer-events: none;
 }
 
 .manipulation-base-point {

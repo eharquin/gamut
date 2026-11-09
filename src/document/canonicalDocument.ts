@@ -519,10 +519,12 @@ export function toCanonicalDocument(
   document: ExpressionDocument,
   theme: ThemeMode,
   resolvedStyles: Readonly<Record<string, string>> = {},
+  /** Orientation of items that store none, from their kind: a new line starts without it. */
+  resolvedOrientation: Readonly<Record<string, boolean>> = {},
 ): CanonicalDocument {
   const appearance = Object.fromEntries(document.items.map((item) => {
     const stored = document.appearance[item.id]
-    const orientationVisible = stored?.orientationVisible ?? true
+    const orientationVisible = stored?.orientationVisible ?? resolvedOrientation[item.id] ?? true
     const points = stored?.primitiveStyles?.points
     const lines = stored?.primitiveStyles?.lines
     const canonical: Appearance = {
