@@ -25,6 +25,7 @@ import {
   SettingsMenu,
   type DisplaySettings,
 } from './components/SettingsMenu'
+import { ThemeToggle } from './components/ThemeToggle'
 import { resolveItemAppearance } from './components/appearancePalette'
 import { OPAQUE_INTERPRETATION, type InterpretedEntity, type Point2d } from './geometry/interpretation'
 import type { VisualizationPrimitive } from './visualization/primitives'
@@ -298,6 +299,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     coalesceKey?: string,
   ) => dispatchHistory({ type: 'execute', command, coalesceKey }), [])
   const nextId = useRef(2)
+  const labelPlacementCache = useRef<{ key: string; placed: ReturnType<typeof placeLabels> } | null>(null)
   const inputRefs = useRef(new Map<string, HTMLInputElement>())
   const pendingFocus = useRef<string | null>(null)
   const lastEditorFocus = useRef<EditorFocus | null>(null)
@@ -1432,8 +1434,10 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     labelAnchors.set(id, layout.labelPoint)
     if (ownerOf(id) === id) labelObstacles.push({ ownerId: id, center: layout.base, radius: handleRadius })
   })
-  renderedPoints.forEach(({ id, point, pointSize }) => {
+  renderedPoints.forEach(({ id, point, pointSize, markerVisible }) => {
     labelAnchors.set(id, point)
+    // A hidden marker is not drawn, so it does not push labels away.
+    if (markerVisible === false) return
     const core = (pointSize ?? DEFAULT_POINT_SIZE) * objectRenderScale
     labelObstacles.push({ ownerId: ownerOf(id), center: point, radius: ownerOf(id) === id ? core * POINT_OUTER_SCALE : core })
   })
@@ -1448,14 +1452,24 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       addSegmentObstacles(id, arrow)
     } else if (marker) labelAnchors.set(id, marker.tail)
   })
-  const placedLabels = placeLabels(
-    renderedPrimitives.flatMap(({ id, label, labelSettings }) => {
-      const at = labelAnchors.get(id)
-      return label && at ? [{ key: id, ownerId: ownerOf(id), text: label, at, settings: labelSettings }] : []
-    }),
-    labelObstacles,
-    expressionDoc.view.display.objectScale,
-  )
+  const labelRequests = renderedPrimitives.flatMap(({ id, label, labelSettings }) => {
+    const at = labelAnchors.get(id)
+    return label && at ? [{ key: id, ownerId: ownerOf(id), text: label, at, settings: labelSettings }] : []
+  })
+  // Placement compares every label with every obstacle, so it is redone only
+  // when its inputs change, not on every frame of an unrelated animation.
+  const labelPlacementKey = labelRequests.length === 0
+    ? ''
+    : JSON.stringify([labelRequests, labelObstacles, expressionDoc.view.display.objectScale])
+  if (labelPlacementCache.current?.key !== labelPlacementKey) {
+    labelPlacementCache.current = {
+      key: labelPlacementKey,
+      placed: labelRequests.length === 0
+        ? new Map()
+        : placeLabels(labelRequests, labelObstacles, expressionDoc.view.display.objectScale),
+    }
+  }
+  const placedLabels = labelPlacementCache.current.placed
   const placedLabel = (id: string) => placedLabels.get(id) ?? null
 
   useEffect(() => {
@@ -2002,6 +2016,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           aria-label="Import document file"
           onChange={importDocument}
         />
+        <ThemeToggle theme={theme} onThemeChange={setTheme} />
         <SettingsMenu
           display={expressionDoc.view.display}
           theme={theme}

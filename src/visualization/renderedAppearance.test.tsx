@@ -111,7 +111,18 @@ describe('stroked glyphs', () => {
   it('draw a set width scaled by the object scale, with dashes scaled by the drawn width', () => {
     const markup = vector({ strokeStyle: 'dashed', strokeWidth: 2, opacity: 0.25 })
     expect(markup).toContain('style="stroke-width:3;stroke-dasharray:12 9"')
-    expect(markup).toContain('<g style="color:#E8A000;opacity:0.25">')
+    expect(markup).toContain('<g style="color:#E8A000"><g opacity="0.25">')
+  })
+
+  it('fade the drawn marks only, never the handles or the keyboard focus ring', () => {
+    const focused = { ...controller, focusRingKey: 'v:head' }
+    const markup = vector({ opacity: 0, headMovable: true, itemPresent: true, baseMovable: true, label: { text: 'V', x: 108, y: -8 }, controller: focused })
+    const faded = markup.split('<g opacity="0">').slice(1).map((part) => part.slice(0, part.indexOf('</g>'))).join('')
+    expect(faded).toContain('class="vector"')
+    expect(faded).toContain('class="object-label"')
+    for (const handle of ['manipulation-focus-ring', 'vector-head-target', 'manipulation-base-contour'])
+      expect(faded).not.toContain(handle)
+    expect(markup).toContain('manipulation-focus-ring')
   })
 
   it('dot the default shaft without changing its width', () => {
@@ -191,6 +202,21 @@ describe('point glyphs', () => {
     const cross = point({ pointStyle: 'cross', pointSize: 2 }).querySelector('path.manipulation-base-point') as SVGPathElement
     expect(Number(cross.style.strokeWidth)).toBeCloseTo(3 * 0.62)
     expect(point({ pointStyle: 'plus' }).querySelector('path.point-outer')).not.toBeNull()
+  })
+
+  it('keep a usable hit target and a focus ring outside the outer shape at any size', () => {
+    const radius = (host: HTMLElement, selector: string) => Number(host.querySelector(selector)!.getAttribute('r'))
+    const focused = { ...controller, focusRingKey: 'a:base' }
+    // A tiny point keeps the default 10 px hit disk (15 at scale 1.5), with its outer shape drawn apart.
+    const tiny = point({ pointSize: 1, controller: focused })
+    expect(radius(tiny, '.manipulation-base-contour')).toBe(15)
+    expect(tiny.querySelector('circle.point-outer')).not.toBeNull()
+    expect(radius(tiny, '.manipulation-focus-ring')).toBe(21)
+    // Diamond tips reach 1.3 times the outer radius; the hit target and the ring cover them.
+    const large = point({ pointStyle: 'diamond', pointSize: 10, controller: focused })
+    const outer = 10 * 1.5 * (10 / 4.5)
+    expect(radius(large, '.manipulation-base-contour')).toBeCloseTo(outer * 1.3)
+    expect(radius(large, '.manipulation-focus-ring')).toBeCloseTo(outer * 1.3 + 6)
   })
 
   it('grow the core of any style on hover, through the hovered class', () => {
