@@ -72,6 +72,7 @@ import {
   type ThemeMode,
 } from './document/canonicalDocument'
 import { browserDocumentStorage } from './document/documentStorage'
+import { selectDroppedDocument } from './document/droppedDocument'
 import { createSceneLink, decodeSceneFragment, hasSceneFragment, SHARE_URL_WARNING_LENGTH } from './document/sceneLink'
 import {
   formatDisplayMultivector,
@@ -403,6 +404,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const [viewportLocked, setViewportLocked] = useState(() => sharedSession ? false : restoredViewportLock())
   const [shareResult, setShareResult] = useState<{ content: string; label: string; message: string } | null>(null)
   const [sharing, setSharing] = useState(false)
+  const [fileDragActive, setFileDragActive] = useState(false)
   const [activePlaybacks, setActivePlaybacks] = useState<
     ReadonlyMap<string, ActiveScalarPlayback>
   >(() => new Map())
@@ -1644,6 +1646,15 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     const file = event.target.files?.[0]
     event.target.value = ''
     if (!file) return
+    await importDocumentFile(file)
+  }
+
+  /**
+   * Opens a chosen or dropped document file: size limit, parsing, migration,
+   * validation, the replace or duplicate choice, and diagnostics. A temporary
+   * scene-link session stays temporary.
+   */
+  const importDocumentFile = async (file: File) => {
     if (activePlaybacks.size > 0) stopAllPlaybacks()
     try {
       const parsed = parseCanonicalDocumentBytes(new Uint8Array(await file.arrayBuffer()))
@@ -1671,6 +1682,52 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       )
     }
   }
+
+  // Dropping a document file anywhere on the window opens it through the
+  // import path. Only drags that carry files are handled, so text dragged
+  // into an editor and the pointer-driven reordering and viewport drags are
+  // unaffected.
+  const importDroppedFile = useRef(importDocumentFile)
+  useEffect(() => { importDroppedFile.current = importDocumentFile })
+  useEffect(() => {
+    let depth = 0
+    const carriesFiles = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes('Files')
+    const enter = (event: DragEvent) => {
+      if (!carriesFiles(event)) return
+      event.preventDefault()
+      depth += 1
+      setFileDragActive(true)
+    }
+    const over = (event: DragEvent) => {
+      if (!carriesFiles(event)) return
+      event.preventDefault()
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+    }
+    const leave = (event: DragEvent) => {
+      if (!carriesFiles(event)) return
+      depth = Math.max(0, depth - 1)
+      if (depth === 0) setFileDragActive(false)
+    }
+    const drop = (event: DragEvent) => {
+      if (!carriesFiles(event)) return
+      event.preventDefault()
+      depth = 0
+      setFileDragActive(false)
+      const dropped = selectDroppedDocument(event.dataTransfer?.files ?? [])
+      if (dropped.status === 'rejected') setDocumentDiagnostic(dropped.diagnostic)
+      else if (dropped.status === 'file') void importDroppedFile.current(dropped.file)
+    }
+    window.addEventListener('dragenter', enter)
+    window.addEventListener('dragover', over)
+    window.addEventListener('dragleave', leave)
+    window.addEventListener('drop', drop)
+    return () => {
+      window.removeEventListener('dragenter', enter)
+      window.removeEventListener('dragover', over)
+      window.removeEventListener('dragleave', leave)
+      window.removeEventListener('drop', drop)
+    }
+  }, [])
 
   const copyScene = async () => {
     setSharing(true)
@@ -2844,6 +2901,13 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       <output className="visually-hidden" aria-live="polite">
         {reorderAnnouncement}
       </output>
+      <div className="file-drop-status" role="status">
+        {fileDragActive && (
+          <div className="file-drop-overlay">
+            <p>Drop a JSON document to open it</p>
+          </div>
+        )}
+      </div>
       {infoDialog === 'expressions' && (
         <ExpressionReferenceDialog
           returnFocusRef={expressionReferenceButtonRef}

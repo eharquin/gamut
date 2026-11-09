@@ -15,6 +15,10 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Document section of the settings menu. **Copy iframe code** and its iframe
   snippet were removed: Slides.com accepts the plain HTTPS link in its iframe
   source field.
+- A document opens by dropping its `.json` file anywhere on the window, through
+  the same path as **Import**. An announced overlay shows while a file is
+  dragged over the window; several files or a non-JSON file are rejected with
+  a diagnostic and leave the current document unchanged.
 - Shared scenes open as temporary sessions without reading or writing browser
   storage. An explicit **Save local copy** creates a new document identity;
   JSON export remains available when storage is blocked or a link is too large.
