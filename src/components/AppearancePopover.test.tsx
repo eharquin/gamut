@@ -96,8 +96,21 @@ describe('appearance menu', () => {
       expect(button.textContent).toBe('')
       expect(button.getAttribute('title')).toBe(button.getAttribute('aria-label'))
     }
-    expect(within(dialog).getByRole('switch', { name: 'Orientation visible' }).closest('label'))
-      .toHaveClass('appearance-field-toggle')
+    const orientation = within(dialog).getByRole('switch', { name: 'Orientation visible' }).closest('label')!
+    expect(orientation).toHaveClass('appearance-field-toggle')
+    expect(orientation.querySelector('span')).toHaveTextContent(/^Orientation$/)
+  })
+
+  it('selects the shape actually drawn when From vectors is unavailable', () => {
+    const shapeButton = (name: string) =>
+      within(screen.getByRole('group', { name: 'Bivector shape' })).getByRole('button', { name })
+    open({ kind: 'Bivector', bivectorShape: 'from-vectors', parallelogramAvailable: false, onBivectorShapeChange: vi.fn() })
+    expect(shapeButton('Disk')).toHaveAttribute('aria-pressed', 'true')
+    expect(shapeButton('From vectors')).toHaveAttribute('aria-pressed', 'false')
+    expect(shapeButton('From vectors')).toBeDisabled()
+    cleanup()
+    open({ kind: 'Bivector', bivectorShape: 'from-vectors', parallelogramAvailable: true, onBivectorShapeChange: vi.fn() })
+    expect(shapeButton('From vectors')).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('names and titles the icons of the ideal point display', () => {

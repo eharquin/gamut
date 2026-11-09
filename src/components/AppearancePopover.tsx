@@ -157,7 +157,7 @@ export function AppearancePopover({
   const styleContent = kind === 'Bivector' ? (
     <>
       {onBivectorShapeChange && <>
-        <Segmented label="Bivector shape" value={bivectorShape} onChange={onBivectorShapeChange} options={[
+        <Segmented label="Bivector shape" value={bivectorShape === 'from-vectors' && !parallelogramAvailable ? 'disk' : bivectorShape} onChange={onBivectorShapeChange} options={[
           ['from-vectors', 'From vectors', SHAPE_ICONS['from-vectors'], !parallelogramAvailable],
           ['disk', 'Disk', SHAPE_ICONS.disk],
           ['square', 'Square', SHAPE_ICONS.square],
@@ -364,8 +364,8 @@ function Segmented<T extends string>({ label, value, options, onChange }: Readon
 function OrientationField({ checked, onChange }: Readonly<{ checked: boolean; onChange(checked: boolean): void }>) {
   return (
     <label className="appearance-field appearance-field-toggle">
-      <span>Orientation visible</span>
-      <input type="checkbox" role="switch" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+      <span>Orientation</span>
+      <input type="checkbox" role="switch" aria-label="Orientation visible" checked={checked} onChange={(event) => onChange(event.target.checked)} />
     </label>
   )
 }
