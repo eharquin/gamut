@@ -149,6 +149,7 @@ export const VGA_2D_INTERPRETATION: Interpretation<StandardVga2Entity> = Object.
     const [scalar, , , bivector] = value.coefficients
     return scalar === 0 && bivector === 0
   },
+  positionDescription: 'a VGA 2D vector or zero',
   positionOf: (value) => ({ x: value.coefficients[1], y: value.coefficients[2] }),
   positionValue: (point, basis: AlgebraBasis) => ownedMultivector([0, point.x, point.y, 0], basis),
   visualization(entity) {

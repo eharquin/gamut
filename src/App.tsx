@@ -10,6 +10,7 @@ import {
   type KeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
+  type ReactElement,
 } from 'react'
 import { showcaseMetadata } from './algebra/algebraDefinition'
 import { createBuiltinAlgebraRegistry } from './algebra/builtinAlgebras'
@@ -62,7 +63,15 @@ import {
 } from './visualization/viewportCreation'
 import { describeViewport } from './visualization/viewportDescription'
 import { DirectionMarkerGlyph, LineAtInfinityGlyph, OrientedAreaGlyph, OrientedSegmentGlyph, PointListConnectionGlyph, PointMarkerGlyph, UnboundedLineGlyph, type HandleController } from './visualization/glyphs'
-import { findAnchorCandidates, selectAnchor, type AnchorCandidate } from './visualization/anchoring'
+import {
+  findAnchorCandidates,
+  nearbyAnchors,
+  rearmAnchors,
+  anchorKey,
+  selectAnchor,
+  type AnchorCandidate,
+  type AnchorProximity,
+} from './visualization/anchoring'
 import { collectRenderedPrimitives, layoutIdealArrow, layoutIdealMarker, layoutLineAtInfinity, layoutLineSelection, layoutOrientedArea, layoutOrientedSegment, layoutPointListConnection, layoutUnboundedLine, lineNormalLength, listPrimitiveTypes, pointListVertices, lineOrientationTicks } from './visualization/layout'
 import { requireAvailableAlgebra } from './application/algebraAvailability'
 import {
@@ -112,6 +121,9 @@ const algebraRegistry = createBuiltinAlgebraRegistry()
 const restoreOptions = {
   visualizerAvailable: (visualizerId: string) => algebraRegistry.resolveVisualizer(visualizerId) !== null,
 }
+/** How far, in CSS pixels, a pressed handle must move before its drag starts. */
+const DRAG_DEAD_ZONE = 3
+
 /** The standard visualizer of an algebra, so that undo and redo keep each algebra's own visualizer. */
 function standardVisualizerId(algebra: ExpressionDocument['algebra']): string | null {
   const resolution = algebraRegistry.resolve(algebra)
@@ -155,6 +167,11 @@ function playbackParametersEqual(
 
 function declaredName(source: string): string | null {
   return /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/.exec(source)?.[1] ?? null
+}
+
+/** Whether a node is a manipulation handle of the canvas. */
+function isHandleElement(target: EventTarget | null): boolean {
+  return target instanceof Element && target.hasAttribute('data-handle-key')
 }
 
 function naturalList(values: readonly string[]): string {
@@ -380,6 +397,10 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     itemId: string
     kind: ManipulationKind
     pointerId: number
+    /** Where the press was, in client pixels, until the pointer has moved past the dead zone. */
+    press: Readonly<{ x: number; y: number }> | null
+    /** Anchors a base drag started on, not taken until the pointer leaves them (#100). */
+    disarmedAnchors: ReadonlySet<string>
   }> | null>(null)
   /** Where a line translation started, so each move is measured from the press. */
   const lineDragOrigin = useRef<Readonly<{
@@ -391,6 +412,36 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const [selectedLine, setSelectedLine] = useState<Readonly<{ itemId: string; anchor: Point2d }> | null>(null)
   const anchorValidityCache = useRef(new Map<string, boolean>())
   const [hoveredManipulation, setHoveredManipulation] = useState<string | null>(null)
+  // Where handles coincide, those of the selected object are drawn on top and
+  // take the press (#100): the object whose expression row has focus or the
+  // pointer, otherwise the last object a pointer manipulated in the viewport.
+  // The drawing order is kept for the length of a drag and while a handle has
+  // keyboard focus, so that a handle is never moved in the document while it
+  // holds pointer capture or focus, which moving it would release.
+  const [rowFocusId, setRowFocusId] = useState<string | null>(null)
+  const [rowHoverId, setRowHoverId] = useState<string | null>(null)
+  const [lastManipulatedId, setLastManipulatedId] = useState<string | null>(null)
+  const [dragSelection, setDragSelection] = useState<Readonly<{ itemId: string | null }> | null>(null)
+  const [handleFocusSelection, setHandleFocusSelection] =
+    useState<Readonly<{ itemId: string | null }> | null>(null)
+  const frozenSelection = dragSelection ?? handleFocusSelection
+  // A deleted object's row fires neither blur nor pointer leave, so its id is
+  // ignored here and cleared once the document has changed.
+  const isPresentItem = (itemId: string | null): itemId is string =>
+    itemId !== null && expressionDoc.items.some((item) => item.id === itemId)
+  const selectedObjectId = frozenSelection
+    ? frozenSelection.itemId
+    : [rowFocusId, rowHoverId, lastManipulatedId].find(isPresentItem) ?? null
+  useEffect(() => {
+    const present = new Set(expressionDoc.items.map((item) => item.id))
+    const clearDeleted = (itemId: string | null) =>
+      itemId !== null && !present.has(itemId) ? null : itemId
+    setRowFocusId(clearDeleted)
+    setRowHoverId(clearDeleted)
+    setLastManipulatedId(clearDeleted)
+    // A focused handle removed with its object fires no blur either.
+    if (!isHandleElement(document.activeElement)) setHandleFocusSelection(null)
+  }, [expressionDoc.items])
   // Keyboard focus on a handle is drawn as an SVG ring rather than a CSS
   // outline, which WebKit fails to repaint when focus moves between SVG
   // elements. The ring follows the input modality at the moment of focus,
@@ -796,6 +847,23 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     const b = primitive.normal.y * primitive.scale
     return [a, b, -(a * primitive.point.x + b * primitive.point.y)]
   }
+  /** Where the anchors of a base drag are measured from, in CSS pixels. */
+  const anchorProximity = (draggedId: string, pointer: Point2d): AnchorProximity => {
+    const rectangle = viewportSvgRef.current?.getBoundingClientRect()
+    const cssScaleX = rectangle && rectangle.width > 0 ? rectangle.width / viewport.width : 1
+    const cssScaleY = rectangle && rectangle.height > 0 ? rectangle.height / viewport.height : 1
+    return {
+      draggedId,
+      rendered: renderedPrimitives,
+      viewport,
+      pointer,
+      cssScale: { x: cssScaleX, y: cssScaleY },
+      nameOf: (itemId) => {
+        const targetItem = expressionDoc.items.find((item) => item.id === itemId)
+        return targetItem ? declaredName(targetItem.source) : null
+      },
+    }
+  }
   const beginManipulation = (
     event: ReactPointerEvent<SVGElement>,
     itemId: string,
@@ -808,7 +876,17 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     // ring. Selection is prevented by user-select on the canvas instead.
     event.currentTarget.setPointerCapture?.(event.pointerId)
     guardGestureSelection('manipulate')
-    manipulationDrag.current = { itemId, kind, pointerId: event.pointerId }
+    const disarmedAnchors = kind === 'base'
+      ? new Set(nearbyAnchors(anchorProximity(itemId, screenPoint(event.clientX, event.clientY)))
+          .map(anchorKey))
+      : new Set<string>()
+    manipulationDrag.current = {
+      itemId, kind, pointerId: event.pointerId,
+      press: { x: event.clientX, y: event.clientY },
+      disarmedAnchors,
+    }
+    setDragSelection({ itemId: selectedObjectId })
+    setLastManipulatedId(itemId)
     anchorValidityCache.current.clear()
     if (kind === 'line') {
       const rendered = renderedPrimitives.find((candidate) => candidate.id === itemId)
@@ -966,23 +1044,25 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           formatViewportCoordinate(current.y + delta.y, viewport.pixelsPerUnit)}.`)
   }
   const moveViewportPan = (event: ReactPointerEvent<SVGSVGElement>) => {
-    const manipulation = manipulationDrag.current
-    if (manipulation?.pointerId === event.pointerId) {
+    const pressed = manipulationDrag.current
+    if (pressed?.pointerId === event.pointerId) {
+      // A press that has not yet moved past the dead zone is a click: it
+      // writes nothing, so it cannot unlink a base or nudge an object.
+      if (pressed.press && Math.hypot(
+        event.clientX - pressed.press.x,
+        event.clientY - pressed.press.y,
+      ) < DRAG_DEAD_ZONE) return
+      const manipulation = pressed.press ? { ...pressed, press: null } : pressed
+      manipulationDrag.current = manipulation
       const pointer = screenPoint(event.clientX, event.clientY)
       if (manipulation.kind === 'base') {
-        const rectangle = event.currentTarget.getBoundingClientRect()
-        const cssScaleX = rectangle.width > 0 ? rectangle.width / viewport.width : 1
-        const cssScaleY = rectangle.height > 0 ? rectangle.height / viewport.height : 1
+        const proximity = anchorProximity(manipulation.itemId, pointer)
+        const disarmedAnchors = rearmAnchors(manipulation.disarmedAnchors, nearbyAnchors(proximity))
+        if (disarmedAnchors !== manipulation.disarmedAnchors)
+          manipulationDrag.current = { ...manipulation, disarmedAnchors }
         const candidates = findAnchorCandidates({
-          draggedId: manipulation.itemId,
-          rendered: renderedPrimitives,
-          viewport,
-          pointer,
-          cssScale: { x: cssScaleX, y: cssScaleY },
-          nameOf: (itemId) => {
-            const targetItem = expressionDoc.items.find((item) => item.id === itemId)
-            return targetItem ? declaredName(targetItem.source) : null
-          },
+          ...proximity,
+          disarmed: disarmedAnchors,
           isValid: (candidate) => {
             const key = `${manipulation.itemId}:${candidate.targetId}:${candidate.property}`
             const cached = anchorValidityCache.current.get(key)
@@ -1037,6 +1117,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   // Keyboard users reach handles with Tab as before.
   const finishManipulation = (outcome: 'commit' | 'cancel') => {
     manipulationDrag.current = null
+    setDragSelection(null)
     anchorValidityCache.current.clear()
     setAnchorPreview(null)
     dispatchHistory(outcome === 'commit'
@@ -2158,6 +2239,15 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     formatNumber: displayedNumber,
   })
 
+  // The glyphs of the selected object are drawn after all others, so that its
+  // handles are on top where handles coincide (#100). Keys are item ids, list
+  // element ids `id:index`, or `connection-id` for a list's links.
+  const raiseSelectedGlyphs = (glyphs: readonly ReactElement[]): readonly ReactElement[] => {
+    if (selectedObjectId === null) return glyphs
+    const owned = (glyph: ReactElement) =>
+      ownerOf(String(glyph.key).replace(/^connection-/, '')) === selectedObjectId
+    return [...glyphs.filter((glyph) => !owned(glyph)), ...glyphs.filter(owned)]
+  }
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -2418,6 +2508,13 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                     if (element) expressionRowRefs.current.set(item.id, element)
                     else expressionRowRefs.current.delete(item.id)
                   }}
+                  onFocus={() => setRowFocusId(item.id)}
+                  onBlur={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget))
+                      setRowFocusId((current) => current === item.id ? null : current)
+                  }}
+                  onPointerEnter={() => setRowHoverId(item.id)}
+                  onPointerLeave={() => setRowHoverId((current) => current === item.id ? null : current)}
                   className={`expression-item${visible ? '' : ' is-hidden'}${
                     empty ? ' is-empty-expression' : ''
                   }${dropBefore ? ' drop-before' : ''}${dropAfter ? ' drop-after' : ''} ${
@@ -3146,6 +3243,14 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
               onLostPointerCapture={loseViewportCapture}
               onKeyDown={navigateViewportWithKeyboard}
               onDoubleClick={createVectorFromViewport}
+              onFocus={(event) => {
+                if (isHandleElement(event.target))
+                  setHandleFocusSelection((current) => current ?? { itemId: selectedObjectId })
+              }}
+              onBlur={(event) => {
+                if (isHandleElement(event.target) && !isHandleElement(event.relatedTarget))
+                  setHandleFocusSelection(null)
+              }}
             >
               <desc id="canvas-description">{canvasDescription}</desc>
               {expressionDoc.view.display.gridVisible && <g aria-hidden="true">
@@ -3186,90 +3291,14 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                 })}
               </g>}
 
-              {renderedVectors.map(({ id, primitive, entity, layout, color, strokeStyle, strokeWidth, opacity }) => {
-                const item = expressionDoc.items.find((candidate) => candidate.id === id)
-                return <OrientedSegmentGlyph
-                  key={id}
-                  id={id}
-                  primitive={primitive}
-                  layout={layout}
-                  color={color}
-                  label={placedLabel(id)}
-                  scale={objectRenderScale}
-                  itemPresent={!!item}
-                  headMovable={!!item && headMovable(item, entity)}
-                  baseMovable={!!item && objectBaseMovable(item, entity)}
-                  controller={handleController}
-                  strokeStyle={strokeStyle}
-                  strokeWidth={strokeWidth}
-                  opacity={opacity}
-                />
-              })}
-              {renderedAreas.map(({ id, primitive, entity, layout, color, borderVisible, orientationVisible, strokeStyle, strokeWidth, opacity }) => {
-                const item = expressionDoc.items.find((candidate) => candidate.id === id)
-                return <OrientedAreaGlyph
-                  key={id}
-                  id={id}
-                  primitive={primitive}
-                  layout={layout}
-                  color={color}
-                  label={placedLabel(id)}
-                  scale={objectRenderScale}
-                  borderVisible={borderVisible}
-                  orientationVisible={orientationVisible}
-                  itemPresent={!!item}
-                  baseMovable={!!item && objectBaseMovable(item, entity)}
-                  controller={handleController}
-                  strokeStyle={strokeStyle}
-                  strokeWidth={strokeWidth}
-                  opacity={opacity}
-                />
-              })}
-              {renderedLines.map(({ id, primitive, entity, layout, color, orientationVisible, strokeStyle, strokeWidth, opacity }) => {
-                const item = expressionDoc.items.find((candidate) => candidate.id === id)
-                const selection = selectedLine?.itemId === id
-                  ? layoutLineSelection(primitive, selectedLine.anchor, viewport, objectRenderScale)
-                  : null
-                return <UnboundedLineGlyph
-                  key={id}
-                  id={id}
-                  primitive={primitive}
-                  layout={layout}
-                  color={color}
-                  label={placedLabel(id)}
-                  scale={objectRenderScale}
-                  itemPresent={!!item}
-                  movable={!!item && lineMovable(item, entity)}
-                  orientationVisible={orientationVisible}
-                  orientationTicks={lineOrientationTicks(primitive, layout, objectRenderScale)}
-                  selection={selection}
-                  controller={handleController}
-                  strokeStyle={strokeStyle}
-                  strokeWidth={strokeWidth}
-                  opacity={opacity}
-                />
-              })}
-              {renderedInfinity.map(({ id, primitive, layout, color, opacity }) => (
-                <LineAtInfinityGlyph key={id} accessibleName={primitive.accessibleName} layout={layout} color={color} label={placedLabel(id)} scale={objectRenderScale} opacity={opacity} />
-              ))}
-              {renderedIdealPoints.map(({ id, primitive, entity, arrow, marker, color, strokeStyle, strokeWidth, opacity }) => {
-                const item = expressionDoc.items.find((candidate) => candidate.id === id)
-                return <g key={id}>
-                  {marker && <DirectionMarkerGlyph
-                    accessibleName={primitive.accessibleName}
-                    layout={marker}
-                    color={color}
-                    label={arrow ? null : placedLabel(id)}
-                    scale={objectRenderScale}
-                    opacity={opacity}
-                  />}
-                  {arrow && <OrientedSegmentGlyph
+              {raiseSelectedGlyphs([
+                ...renderedVectors.map(({ id, primitive, entity, layout, color, strokeStyle, strokeWidth, opacity }) => {
+                  const item = expressionDoc.items.find((candidate) => candidate.id === id)
+                  return <OrientedSegmentGlyph
+                    key={id}
                     id={id}
-                    primitive={{ kind: 'oriented-segment', start: primitive.position, end: {
-                      x: primitive.position.x + primitive.direction.x * primitive.magnitude,
-                      y: primitive.position.y + primitive.direction.y * primitive.magnitude,
-                    }, accessibleName: primitive.accessibleName }}
-                    layout={arrow}
+                    primitive={primitive}
+                    layout={layout}
                     color={color}
                     label={placedLabel(id)}
                     scale={objectRenderScale}
@@ -3280,39 +3309,117 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                     strokeStyle={strokeStyle}
                     strokeWidth={strokeWidth}
                     opacity={opacity}
-                  />}
-                </g>
-              })}
-              {renderedConnections.map(({ id, segments, color, opacity, strokeStyle, strokeWidth }) => (
-                <PointListConnectionGlyph
-                  key={`connection-${id}`}
-                  path={layoutPointListConnection(segments, viewport)}
-                  color={color}
-                  scale={objectRenderScale}
-                  opacity={opacity}
-                  strokeStyle={strokeStyle}
-                  strokeWidth={strokeWidth}
-                />
-              ))}
-              {renderedPoints.map(({ id, primitive, entity, point, color, markerVisible, opacity, pointStyle, pointSize }) => {
-                const item = expressionDoc.items.find((candidate) => candidate.id === id)
-                return <PointMarkerGlyph
-                  key={id}
-                  id={id}
-                  primitive={primitive}
-                  point={point}
-                  color={color}
-                  label={placedLabel(id)}
-                  scale={objectRenderScale}
-                  itemPresent={!!item}
-                  movable={!!item && objectBaseMovable(item, entity)}
-                  markerVisible={markerVisible}
-                  controller={handleController}
-                  opacity={opacity}
-                  pointStyle={pointStyle}
-                  pointSize={pointSize}
-                />
-              })}
+                  />
+                }),
+                ...renderedAreas.map(({ id, primitive, entity, layout, color, borderVisible, orientationVisible, strokeStyle, strokeWidth, opacity }) => {
+                  const item = expressionDoc.items.find((candidate) => candidate.id === id)
+                  return <OrientedAreaGlyph
+                    key={id}
+                    id={id}
+                    primitive={primitive}
+                    layout={layout}
+                    color={color}
+                    label={placedLabel(id)}
+                    scale={objectRenderScale}
+                    borderVisible={borderVisible}
+                    orientationVisible={orientationVisible}
+                    itemPresent={!!item}
+                    baseMovable={!!item && objectBaseMovable(item, entity)}
+                    controller={handleController}
+                    strokeStyle={strokeStyle}
+                    strokeWidth={strokeWidth}
+                    opacity={opacity}
+                  />
+                }),
+                ...renderedLines.map(({ id, primitive, entity, layout, color, orientationVisible, strokeStyle, strokeWidth, opacity }) => {
+                  const item = expressionDoc.items.find((candidate) => candidate.id === id)
+                  const selection = selectedLine?.itemId === id
+                    ? layoutLineSelection(primitive, selectedLine.anchor, viewport, objectRenderScale)
+                    : null
+                  return <UnboundedLineGlyph
+                    key={id}
+                    id={id}
+                    primitive={primitive}
+                    layout={layout}
+                    color={color}
+                    label={placedLabel(id)}
+                    scale={objectRenderScale}
+                    itemPresent={!!item}
+                    movable={!!item && lineMovable(item, entity)}
+                    orientationVisible={orientationVisible}
+                    orientationTicks={lineOrientationTicks(primitive, layout, objectRenderScale)}
+                    selection={selection}
+                    controller={handleController}
+                    strokeStyle={strokeStyle}
+                    strokeWidth={strokeWidth}
+                    opacity={opacity}
+                  />
+                }),
+                ...renderedInfinity.map(({ id, primitive, layout, color, opacity }) => (
+                  <LineAtInfinityGlyph key={id} accessibleName={primitive.accessibleName} layout={layout} color={color} label={placedLabel(id)} scale={objectRenderScale} opacity={opacity} />
+                )),
+                ...renderedIdealPoints.map(({ id, primitive, entity, arrow, marker, color, strokeStyle, strokeWidth, opacity }) => {
+                  const item = expressionDoc.items.find((candidate) => candidate.id === id)
+                  return <g key={id}>
+                    {marker && <DirectionMarkerGlyph
+                      accessibleName={primitive.accessibleName}
+                      layout={marker}
+                      color={color}
+                      label={arrow ? null : placedLabel(id)}
+                      scale={objectRenderScale}
+                      opacity={opacity}
+                    />}
+                    {arrow && <OrientedSegmentGlyph
+                      id={id}
+                      primitive={{ kind: 'oriented-segment', start: primitive.position, end: {
+                        x: primitive.position.x + primitive.direction.x * primitive.magnitude,
+                        y: primitive.position.y + primitive.direction.y * primitive.magnitude,
+                      }, accessibleName: primitive.accessibleName }}
+                      layout={arrow}
+                      color={color}
+                      label={placedLabel(id)}
+                      scale={objectRenderScale}
+                      itemPresent={!!item}
+                      headMovable={!!item && headMovable(item, entity)}
+                      baseMovable={!!item && objectBaseMovable(item, entity)}
+                      controller={handleController}
+                      strokeStyle={strokeStyle}
+                      strokeWidth={strokeWidth}
+                      opacity={opacity}
+                    />}
+                  </g>
+                }),
+                ...renderedConnections.map(({ id, segments, color, opacity, strokeStyle, strokeWidth }) => (
+                  <PointListConnectionGlyph
+                    key={`connection-${id}`}
+                    path={layoutPointListConnection(segments, viewport)}
+                    color={color}
+                    scale={objectRenderScale}
+                    opacity={opacity}
+                    strokeStyle={strokeStyle}
+                    strokeWidth={strokeWidth}
+                  />
+                )),
+                ...renderedPoints.map(({ id, primitive, entity, point, color, markerVisible, opacity, pointStyle, pointSize }) => {
+                  const item = expressionDoc.items.find((candidate) => candidate.id === id)
+                  return <PointMarkerGlyph
+                    key={id}
+                    id={id}
+                    primitive={primitive}
+                    point={point}
+                    color={color}
+                    label={placedLabel(id)}
+                    scale={objectRenderScale}
+                    itemPresent={!!item}
+                    movable={!!item && objectBaseMovable(item, entity)}
+                    markerVisible={markerVisible}
+                    controller={handleController}
+                    opacity={opacity}
+                    pointStyle={pointStyle}
+                    pointSize={pointSize}
+                  />
+                }),
+              ])}
               {anchorPreview && <g className="anchor-preview" aria-hidden="true">
                 <circle cx={anchorPreview.point.x} cy={anchorPreview.point.y} r="12" />
                 <circle cx={anchorPreview.point.x} cy={anchorPreview.point.y} r="3" />
