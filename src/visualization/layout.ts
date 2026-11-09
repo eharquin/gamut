@@ -1,5 +1,5 @@
 import type { EvaluatedDocumentItem } from '../application/evaluateDocument'
-import type { ExpressionAppearance, PointListDisplay, StrokeStyle } from '../document/expressionDocument'
+import type { ExpressionAppearance, PointListDisplay, PointStyle, StrokeStyle } from '../document/expressionDocument'
 import { DEFAULT_APPEARANCE_SOURCES, type ItemAppearanceSources } from '../application/evaluateAppearanceSources'
 import { resolveItemAppearance } from '../components/appearancePalette'
 import type { AnyInterpretation, InterpretedEntity } from '../geometry/interpretation'
@@ -32,6 +32,9 @@ export type RenderedPrimitive = Readonly<{
   strokeWidth: number | null
   /** Opacity from 0 to 1 applied to fill and stroke together, or `null` when unset. */
   opacity: number | null
+  pointStyle: PointStyle
+  /** Point core radius in reference pixels, or `null` for the kind default. */
+  pointSize: number | null
 }>
 
 /**
@@ -56,6 +59,8 @@ export type RenderedPointListConnection = Readonly<{
   id: string
   color: string
   opacity: number | null
+  strokeStyle: StrokeStyle
+  strokeWidth: number | null
   segments: readonly PointListLink[]
 }>
 
@@ -210,7 +215,7 @@ export function collectRenderedPrimitives(
     const {
       visible, color, labelVisible, displayLabel, borderVisible, orientationVisible, bivectorShape,
       idealPointDisplay, pointListDisplay, pointMarkersVisible, linesVisible, strokeStyle,
-      lineStrokeStyle, linesOrientationVisible,
+      lineStrokeStyle, linesOrientationVisible, pointStyle, listPointStyle, connectionStrokeStyle,
     } = resolveItemAppearance(
       appearance[evaluated.item.id],
       kind,
@@ -232,7 +237,10 @@ export function collectRenderedPrimitives(
       const segments = vertices
         ? pointListSegments(vertices.slice(0, elements.length), pointListDisplay)
         : []
-      if (segments.length > 0) connections.push({ id: evaluated.item.id, color, opacity, segments })
+      if (segments.length > 0) connections.push({
+        id: evaluated.item.id, color, opacity, segments,
+        strokeStyle: connectionStrokeStyle, strokeWidth: sources.points.strokeWidth.value,
+      })
       const markerVisible = vertices === null || pointMarkersVisible
       // Hidden lines are skipped in place, so the other elements keep their index.
       // Each primitive type has its own style: lines take the list's line
@@ -254,6 +262,8 @@ export function collectRenderedPrimitives(
             strokeStyle: line ? lineStrokeStyle : 'solid' as const,
             strokeWidth: line ? sources.lines.strokeWidth.value : null,
             opacity,
+            pointStyle: listPointStyle,
+            pointSize: sources.points.pointSize.value,
             label: labelVisible ? (baseLabel ? `${baseLabel}[${elementIndex}]` : element.primitive.accessibleName) : null,
           }]
       })
@@ -272,6 +282,8 @@ export function collectRenderedPrimitives(
           strokeStyle,
           strokeWidth: sources.strokeWidth.value,
           opacity,
+          pointStyle,
+          pointSize: sources.pointSize.value,
           label: labelVisible ? (baseLabel ?? evaluated.evaluation.primitive.accessibleName) : null,
         }]
       : []

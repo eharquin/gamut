@@ -4,8 +4,9 @@ import type {
   PointerEvent as ReactPointerEvent,
   ReactNode,
 } from 'react'
-import type { StrokeStyle } from '../document/expressionDocument'
-import { DEFAULT_STROKE_WIDTHS, strokePattern } from './stroke'
+import type { PointStyle, StrokeStyle } from '../document/expressionDocument'
+import { PointShape } from './PointShape'
+import { DEFAULT_STROKE_WIDTHS, POINT_OUTER_SCALE, strokePattern } from './stroke'
 import type { Point2d } from '../geometry/interpretation'
 import type { AreaLayout, DirectionLayout, InfinityLayout, LineLayout, SegmentLayout } from './layout'
 import type {
@@ -79,18 +80,42 @@ type BaseHandleProps = Readonly<{
   yieldToHead?: boolean
   /** Verb of the accessible name; `Move base of` for objects with a separate position. */
   handleLabel?: string
+  pointStyle?: PointStyle
+  /** Core radius in reference pixels; `null` keeps the default 4.5. */
+  pointSize?: number | null
 }>
 
-/** The base contour, base point, and keyboard focus ring shared by every located glyph. */
+/**
+ * The base contour, base point, and keyboard focus ring shared by every
+ * located glyph. A movable base shows an outer shape at 20 % opacity: the
+ * contour disk for a dot, otherwise the core's own form drawn behind a
+ * transparent contour that stays the hit target. The core grows into it on
+ * hover and while dragged.
+ */
 function BaseHandle({
   itemId, point, mathematical, accessibleName, movable, scale, controller, yieldToHead,
-  handleLabel = 'Move base of',
+  handleLabel = 'Move base of', pointStyle = 'dot', pointSize = null,
 }: BaseHandleProps) {
   const key = `${itemId}:base`
+  // Written apart for the default so that the untouched drawing is unchanged.
+  const coreRadius = pointSize === null ? 4.5 * scale : pointSize * scale
+  const outerRadius = pointSize === null ? 10 * scale : pointSize * scale * POINT_OUTER_SCALE
+  // A set size or a non-round style draws its outer shape apart, so that the
+  // hit target can keep a usable size: never below the default 10 px disk, and
+  // covering the tips of the diamond and plus, which reach past their radius.
+  const shaped = pointStyle !== 'dot' || pointSize !== null
+  const extent = outerRadius * (pointStyle === 'diamond' || pointStyle === 'plus' ? 1.3 : 1)
+  const hitRadius = shaped ? Math.max(extent, 10 * scale) : outerRadius
   return <>
+    {movable && shaped && <PointShape
+      className="point-outer"
+      pointStyle={pointStyle}
+      x={point.x} y={point.y} radius={outerRadius}
+      aria-hidden="true"
+    />}
     <circle
-      className={`manipulation-base-contour${movable ? ' is-movable' : ''}`}
-      cx={point.x} cy={point.y} r={10 * scale}
+      className={`manipulation-base-contour${movable ? ' is-movable' : ''}${shaped ? ' is-shaped' : ''}`}
+      cx={point.x} cy={point.y} r={hitRadius}
       style={{
         strokeWidth: Math.max(0, 24 - 20 * scale),
         ...(yieldToHead ? { pointerEvents: 'none' as const } : {}),
@@ -107,14 +132,15 @@ function BaseHandle({
       onPointerDown={movable ? (event) => controller.pointerDown(event, itemId, 'base') : undefined}
       onKeyDown={movable ? (event) => controller.keyDown(event, itemId, 'base', mathematical) : undefined}
     />
-    <circle
+    <PointShape
       className={`manipulation-base-point${controller.hoveredKey === key ? ' is-hovered' : ''}`}
-      cx={point.x} cy={point.y} r={4.5 * scale}
+      pointStyle={pointStyle}
+      x={point.x} y={point.y} radius={coreRadius}
       aria-hidden="true"
     />
     {controller.focusRingKey === key && <circle
       className="manipulation-focus-ring"
-      cx={point.x} cy={point.y} r={14 * scale}
+      cx={point.x} cy={point.y} r={Math.max(14 * scale, extent + 4 * scale)}
       aria-hidden="true"
     />}
   </>
@@ -329,17 +355,22 @@ export type PointMarkerGlyphProps = Readonly<{
   markerVisible?: boolean
   controller: HandleController
   opacity?: number | null
+  pointStyle?: PointStyle
+  /** Core radius in reference pixels; `null` keeps the default 4.5. */
+  pointSize?: number | null
 }>
 
-/** A located point: a filled marker whose handle moves the point itself. */
+/** A located point: a marker of the chosen style whose handle moves the point itself. */
 export function PointMarkerGlyph({
   id, primitive, point, color, label, scale, itemPresent, movable, markerVisible = true, controller, opacity,
+  pointStyle = 'dot', pointSize = null,
 }: PointMarkerGlyphProps) {
   return <g style={{ color }}>
     <Marks opacity={opacity}>
-    {markerVisible && <circle
+    {markerVisible && <PointShape
       className="point-marker"
-      cx={point.x} cy={point.y} r={4.5 * scale}
+      pointStyle={pointStyle}
+      x={point.x} y={point.y} radius={pointSize === null ? 4.5 * scale : pointSize * scale}
       aria-label={primitive.accessibleName}
     />}
     </Marks>
@@ -352,6 +383,8 @@ export function PointMarkerGlyph({
       movable={movable}
       scale={scale}
       controller={controller}
+      pointStyle={pointStyle}
+      pointSize={pointSize}
     />}
     {label && <Marks opacity={opacity}><text className="object-label" x={point.x + 8} y={point.y - 8}>{label}</text></Marks>}
   </g>
@@ -362,18 +395,24 @@ export type PointListConnectionGlyphProps = Readonly<{
   color: string
   scale: number
   opacity?: number | null
+  strokeStyle?: StrokeStyle
+  /** Width in reference pixels; `null` keeps the default 2. */
+  strokeWidth?: number | null
 }>
 
 /**
  * The segments joining a connected point list, drawn beneath its markers.
  * They carry no handle: the markers keep the list's labels and manipulation.
  */
-export function PointListConnectionGlyph({ path, color, scale, opacity }: PointListConnectionGlyphProps) {
+export function PointListConnectionGlyph({
+  path, color, scale, opacity, strokeStyle = 'solid', strokeWidth = null,
+}: PointListConnectionGlyphProps) {
+  const width = (strokeWidth ?? DEFAULT_STROKE_WIDTHS.connection) * scale
   return <path
     className="point-list-connection"
     d={path}
-    style={glyphStyle(color, opacity)}
-    strokeWidth={2 * scale}
+    style={{ ...glyphStyle(color, opacity), ...strokePattern(strokeStyle, width) }}
+    strokeWidth={width}
     aria-hidden="true"
   />
 }

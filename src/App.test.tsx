@@ -3374,3 +3374,30 @@ describe('stroke width and opacity from the appearance menu (#221)', () => {
     expect(shaft().parentElement).not.toHaveAttribute('opacity')
   })
 })
+
+describe('point style and size from the appearance menu (#222)', () => {
+  it('draws the chosen style and size, the outer shape following the core', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: 'VGA · 2D. Change algebra' }))
+    fireEvent.click(within(screen.getByRole('menu')).getAllByRole('menuitemradio')[1])
+    for (const textbox of screen.getAllByRole('textbox', { name: /^Expression \d+$/ }).slice(1)) {
+      fireEvent.change(textbox, { target: { value: '' } })
+      fireEvent.keyDown(textbox, { key: 'Backspace' })
+    }
+    expect(screen.getAllByRole('textbox', { name: /^Expression \d+$/ })).toHaveLength(1)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: 'A = point(1, 1)' } })
+    expect(document.querySelector('circle.manipulation-base-point')).toHaveAttribute('r', '6.75')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Point menu for A' }))
+    const dialog = screen.getByRole('dialog', { name: 'Point' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Square' }))
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Size' }), { target: { value: '6' } })
+    expect(document.querySelector('rect.manipulation-base-point')).toHaveAttribute('width', '18')
+    expect(Number(document.querySelector('rect.point-outer')!.getAttribute('width'))).toBeCloseTo(40)
+
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Size' }), { target: { value: '40' } })
+    expect(document.querySelector('rect.manipulation-base-point')).toHaveAttribute('width', '13.5')
+    expect(dialog.querySelector('.appearance-error')).toHaveTextContent('Size: 40 is outside 1 to 20. Default used.')
+  })
+})

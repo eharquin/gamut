@@ -288,3 +288,62 @@ describe('stroke, width and opacity settings', () => {
       .toEqual(['Line style'])
   })
 })
+
+describe('point style and size settings (#222)', () => {
+  it('shows six point style icons on one line, then the Size field', () => {
+    const onAppearanceChange = vi.fn()
+    const { dialog } = open({ kind: 'Point', onAppearanceChange, appearance: { pointStyle: 'ring', pointSizeSource: '6' } })
+    const styles = within(dialog).getByRole('group', { name: 'Point style' })
+    expect(within(styles).getAllByRole('button').map((button) => [button.getAttribute('aria-label'), button.getAttribute('title')]))
+      .toEqual([['Dot', 'Dot'], ['Ring', 'Ring'], ['Cross', 'Cross'], ['Plus', 'Plus'], ['Square', 'Square'], ['Diamond', 'Diamond']])
+    expect(within(styles).getByRole('button', { name: 'Ring' })).toHaveAttribute('aria-pressed', 'true')
+    // Each icon is the outer shape and a core that grows on hover.
+    expect(within(styles).getByRole('button', { name: 'Square' }).querySelectorAll('rect')).toHaveLength(2)
+    expect(within(styles).getByRole('button', { name: 'Square' }).querySelector('.point-icon-core rect')).not.toBeNull()
+    const size = within(dialog).getByRole('textbox', { name: 'Size' })
+    expect(styles.nextElementSibling).toContainElement(size)
+    expect(size).toHaveValue('6')
+    expect(size).toHaveAttribute('placeholder', '4.5')
+    fireEvent.click(within(styles).getByRole('button', { name: 'Diamond' }))
+    expect(onAppearanceChange).toHaveBeenLastCalledWith({ pointStyle: 'diamond' }, undefined)
+    fireEvent.change(size, { target: { value: 's' } })
+    expect(onAppearanceChange).toHaveBeenLastCalledWith({ pointSizeSource: 's' }, 'pointSize')
+  })
+
+  it('gives the Points of a list their Style: markers, then the links while connected', () => {
+    const onAppearanceChange = vi.fn()
+    const base = {
+      kind: 'List (3)', listPrimitives: { points: true, lines: false }, onPointMarkersVisibleChange: vi.fn(),
+      onPointListDisplayChange: vi.fn(), pointListDisplayAvailable: true, onAppearanceChange,
+      appearance: { pointStyle: 'cross' as const, primitiveStyles: { points: { pointSizeSource: '3' } } },
+    }
+    open({ ...base, pointListDisplay: 'none' })
+    let points = screen.getByRole('switch', { name: 'Show point markers' }).closest('section')!
+    expect(within(points).getAllByRole('group').map((group) => group.getAttribute('aria-label')))
+      .toEqual(['Point list display', 'Point style'])
+    // No inheritance from the item's own point style.
+    expect(within(points).getByRole('button', { name: 'Dot' })).toHaveAttribute('aria-pressed', 'true')
+    expect(within(points).getByRole('textbox', { name: 'Size' })).toHaveValue('3')
+    fireEvent.click(within(points).getByRole('button', { name: 'Plus' }))
+    expect(onAppearanceChange).toHaveBeenLastCalledWith({ primitiveStyles: { points: { pointStyle: 'plus' } } }, undefined)
+    cleanup()
+
+    open({ ...base, pointListDisplay: 'open-polyline' })
+    points = screen.getByRole('switch', { name: 'Show point markers' }).closest('section')!
+    expect(within(points).getAllByRole('group').map((group) => group.getAttribute('aria-label')))
+      .toEqual(['Point list display', 'Point style', 'Connection style'])
+    const width = within(points).getByRole('textbox', { name: 'Width' })
+    expect(width).toHaveAttribute('placeholder', '2')
+    fireEvent.change(width, { target: { value: 'w' } })
+    expect(onAppearanceChange).toHaveBeenLastCalledWith({ primitiveStyles: { points: { strokeWidthSource: 'w' } } }, 'points.strokeWidth')
+    fireEvent.click(within(points).getByRole('button', { name: 'Dashed' }))
+    expect(onAppearanceChange).toHaveBeenLastCalledWith({ primitiveStyles: { points: { strokeStyle: 'dashed' } } }, undefined)
+    cleanup()
+
+    // Links alone: only the link stroke remains.
+    open({ ...base, pointListDisplay: 'closed-loop', pointMarkersVisible: false })
+    points = screen.getByRole('switch', { name: 'Show point markers' }).closest('section')!
+    expect(within(points).getAllByRole('group').map((group) => group.getAttribute('aria-label')))
+      .toEqual(['Point list display', 'Connection style'])
+  })
+})

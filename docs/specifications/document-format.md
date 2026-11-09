@@ -74,9 +74,8 @@ produces an explicit recovery diagnostic. Viewport display controls and
 annotations do not yet have dedicated editing interfaces. The format version
 7 appearance fields and list primitive styles are validated, migrated, and
 preserved. `strokeStyle`, `strokeWidthSource`, `opacitySource`,
-`primitiveStyles.lines`, `primitiveStyles.points.connection`, and
-`primitiveStyles.points.visible` affect the drawing; the point and label
-settings and the point-connection stroke do not yet. Appearance sources are
+`pointStyle`, `pointSizeSource`, and both `primitiveStyles` blocks affect the
+drawing; the label settings do not yet. Appearance sources are
 evaluated after the value nodes they read, which is equivalent to the graph
 order of section 5 since no source can reference them. An item with no
 stored `orientationVisible` is saved with its kind's default: hidden for a

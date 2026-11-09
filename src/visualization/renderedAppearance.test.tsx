@@ -6,7 +6,7 @@ import { evaluateDocument } from '../application/evaluateDocument'
 import { expressionDocument, type ExpressionAppearance } from '../document/expressionDocument'
 import { PGA_2D_INTERPRETATION } from '../geometry/pga2Interpretation'
 import { collectRenderedPrimitives } from './layout'
-import { OrientedAreaGlyph, OrientedSegmentGlyph, type HandleController } from './glyphs'
+import { OrientedAreaGlyph, OrientedSegmentGlyph, PointMarkerGlyph, type HandleController } from './glyphs'
 import { DEFAULT_STROKE_WIDTHS, strokePattern } from './stroke'
 
 const engine = createPga2Engine()
@@ -137,5 +137,90 @@ describe('stroked glyphs', () => {
       itemPresent={false} baseMovable={false} controller={controller} strokeStyle="dashed" strokeWidth={1} /></svg>)
     expect(area(false)).not.toContain('stroke-dasharray')
     expect(area(true)).toContain('stroke-width:1.5;stroke-dasharray:6 4.5')
+  })
+})
+
+describe('point styles and sizes (#222)', () => {
+  it('carries the point style and size of an item, and those of the points block to a list', () => {
+    const { rendered: elements, connections } = rendered(
+      [['s', 's = 6'], ['a', 'A = point(1, 1)'], ['p', 'P = [point(0, 0), point(2, 1), point(1, 3)]']],
+      {
+        a: { pointStyle: 'ring', pointSizeSource: 's' },
+        p: { pointStyle: 'cross', pointSizeSource: '9', primitiveStyles: { points: {
+          pointStyle: 'diamond', pointSizeSource: '3', connection: 'closed-loop', strokeStyle: 'dashed', strokeWidthSource: 's / 2',
+        } } },
+      },
+    )
+    expect(elements[0]).toMatchObject({ pointStyle: 'ring', pointSize: 6 })
+    expect(elements.slice(1).map(({ pointStyle, pointSize }) => [pointStyle, pointSize]))
+      .toEqual([['diamond', 3], ['diamond', 3], ['diamond', 3]])
+    expect(connections[0]).toMatchObject({ strokeStyle: 'dashed', strokeWidth: 3 })
+  })
+
+  it('keeps the default dot and size when nothing is set', () => {
+    const { rendered: [point], connections } = rendered(
+      [['p', 'P = [point(0, 0), point(2, 1)]']], { p: { primitiveStyles: { points: { connection: 'open-polyline' } } } })
+    expect(point).toMatchObject({ pointStyle: 'dot', pointSize: null })
+    expect(connections[0]).toMatchObject({ strokeStyle: 'solid', strokeWidth: null })
+  })
+})
+
+const point = (props: Partial<Parameters<typeof PointMarkerGlyph>[0]> = {}) => {
+  const host = document.createElement('div')
+  host.innerHTML = renderToStaticMarkup(<svg><PointMarkerGlyph id="a"
+    primitive={{ kind: 'point-marker', point: { x: 0, y: 0 }, accessibleName: 'A' } as never}
+    point={{ x: 50, y: 40 }} color="#1482C8" label={null} scale={1.5} itemPresent movable
+    controller={controller} {...props} /></svg>)
+  return host
+}
+
+describe('point glyphs', () => {
+  it('draw a dot with the contour disk as its outer shape, as before', () => {
+    const host = point()
+    expect(host.querySelector('.point-outer')).toBeNull()
+    expect(host.querySelector('.manipulation-base-contour')).not.toHaveClass('is-shaped')
+    expect(host.querySelector('.manipulation-base-contour')).toHaveAttribute('r', '15')
+    expect(host.querySelector('circle.manipulation-base-point')).toHaveAttribute('r', '6.75')
+  })
+
+  it('give every other style an outer shape of its own form, 10 / 4.5 times the core', () => {
+    const host = point({ pointStyle: 'square', pointSize: 6 })
+    const outer = host.querySelector('rect.point-outer')!
+    const core = host.querySelector('rect.manipulation-base-point')!
+    expect(Number(core.getAttribute('width'))).toBe(18)
+    expect(Number(outer.getAttribute('width'))).toBeCloseTo(40)
+    expect(host.querySelector('rect.point-marker')).toHaveAttribute('width', '18')
+    // The contour stays the hit target, transparent.
+    expect(host.querySelector('circle.manipulation-base-contour')).toHaveClass('is-shaped')
+    expect(Number(host.querySelector('circle.manipulation-base-contour')!.getAttribute('r'))).toBeCloseTo(20)
+  })
+
+  it('stroke ring, cross and plus in proportion to their size, so that the stroke grows with them', () => {
+    const ring = point({ pointStyle: 'ring' }).querySelector('circle.manipulation-base-point') as SVGCircleElement
+    expect(ring.style.fill).toBe('none')
+    expect(Number(ring.style.strokeWidth)).toBeCloseTo(6.75 * 0.45)
+    const cross = point({ pointStyle: 'cross', pointSize: 2 }).querySelector('path.manipulation-base-point') as SVGPathElement
+    expect(Number(cross.style.strokeWidth)).toBeCloseTo(3 * 0.62)
+    expect(point({ pointStyle: 'plus' }).querySelector('path.point-outer')).not.toBeNull()
+  })
+
+  it('keep a usable hit target and a focus ring outside the outer shape at any size', () => {
+    const radius = (host: HTMLElement, selector: string) => Number(host.querySelector(selector)!.getAttribute('r'))
+    const focused = { ...controller, focusRingKey: 'a:base' }
+    // A tiny point keeps the default 10 px hit disk (15 at scale 1.5), with its outer shape drawn apart.
+    const tiny = point({ pointSize: 1, controller: focused })
+    expect(radius(tiny, '.manipulation-base-contour')).toBe(15)
+    expect(tiny.querySelector('circle.point-outer')).not.toBeNull()
+    expect(radius(tiny, '.manipulation-focus-ring')).toBe(21)
+    // Diamond tips reach 1.3 times the outer radius; the hit target and the ring cover them.
+    const large = point({ pointStyle: 'diamond', pointSize: 10, controller: focused })
+    const outer = 10 * 1.5 * (10 / 4.5)
+    expect(radius(large, '.manipulation-base-contour')).toBeCloseTo(outer * 1.3)
+    expect(radius(large, '.manipulation-focus-ring')).toBeCloseTo(outer * 1.3 + 6)
+  })
+
+  it('grow the core of any style on hover, through the hovered class', () => {
+    const host = point({ pointStyle: 'diamond', controller: { ...controller, hoveredKey: 'a:base' } })
+    expect(host.querySelector('path.manipulation-base-point')).toHaveClass('is-hovered')
   })
 })

@@ -132,6 +132,14 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   stroke, width, and orientation, independent of the item's stroke.
 - A new line starts without its orientation; saved documents keep the
   orientation they store.
+- Points can be drawn as a dot, ring, cross, plus, square, or diamond, with a
+  size (#222). Each style keeps an outer shape of its own form, 10 / 4.5
+  times the core at 20 % opacity, in place of the outer disk; the core grows
+  into it on hover and while dragged, without animation under reduced motion.
+  **Style** shows the six icons, then a **Size** field, a number or a scalar
+  expression. The **Points** section of a list has its own **Style**: marker
+  style and size, then the stroke and width of the links while the points are
+  connected. A dot of default size draws as before.
 
 - The settings menu is named **Settings** for assistive technology, since it
   also holds the document commands (Import, Export, Copy link).
