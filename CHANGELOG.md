@@ -181,6 +181,9 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   positions are built in the active algebra's basis.
 - List inspections name the blades of the active algebra, so a PGA list reads
   `[2e01 - e02 + e12, e12]` instead of showing `undefined` terms.
+- Switching algebra gives the document the title and description of the
+  example it loads, so a PGA(2) document no longer keeps the *VGA 2D Rotation
+  Example* title or exports as `VGA-2D-Rotation-Example.gamut.json`.
 
 ## 0.1.0 - 2026-09-13
 

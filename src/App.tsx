@@ -11,6 +11,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
+import { showcaseMetadata } from './algebra/algebraDefinition'
 import { type AlgebraEngine } from './algebra/algebraEngine'
 import { createBuiltinAlgebraRegistry } from './algebra/builtinAlgebras'
 import { evaluateDocument } from './application/evaluateDocument'
@@ -1836,6 +1837,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       },
       interpretation: { interpretationId: definition.standardInterpretationId, interpretationVersion: 1 },
       visualizerId: definition.standardVisualizerId,
+      ...showcaseMetadata(definition),
     })
     // The algebra's showcase makes the switch land on a working example.
     showcaseItems(definition.showcase).forEach((item) => executeCommand({ kind: 'insert-item', item }))
