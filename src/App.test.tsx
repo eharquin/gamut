@@ -2504,6 +2504,7 @@ describe('VGA 2D vertical slice', () => {
     const dialog = screen.getByRole('dialog', {
       name: 'Expression Reference',
     })
+    expect(dialog).toHaveTextContent('Syntax for Vector Geometric Algebra (VGA · 2D) documents.')
     expect(dialog).toHaveTextContent('Operators')
     expect(dialog).toHaveTextContent('A & B')
     expect(dialog).toHaveTextContent('a % m')
@@ -2518,6 +2519,27 @@ describe('VGA 2D vertical slice', () => {
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(trigger).toHaveFocus()
+  })
+})
+
+describe('expression reference of a PGA(2) document', () => {
+  it('shows the PGA constructors, blades, norms, and motor functions, and no VGA-only syntax', () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'VGA · 2D. Change algebra' }))
+    fireEvent.click(within(screen.getByRole('menu')).getAllByRole('menuitemradio')[1])
+    fireEvent.click(screen.getByRole('button', { name: 'Expression reference' }))
+
+    const dialog = screen.getByRole('dialog', { name: 'Expression Reference' })
+    expect(dialog).toHaveTextContent('Syntax for Projective Geometric Algebra (PGA · 2D) documents.')
+    for (const syntax of [
+      'point(x, y)', 'point(x, y, w)', 'ipoint(x, y)', 'line(a, b, c)',
+      'e0, e1, e2, e01, e02, e12, e012', 'A.inorm', 'A.e012', 'log(M), sqrt(M)', 'I.head',
+      'position point(x, y)', 'L[[2, 0, 2]]', 'a % m',
+    ]) expect(dialog).toHaveTextContent(syntax)
+    expect(dialog).not.toHaveTextContent('VGA')
+    expect(dialog).not.toHaveTextContent('vector(2, 1)')
+    expect(dialog).not.toHaveTextContent('V = (2, 1)')
   })
 })
 

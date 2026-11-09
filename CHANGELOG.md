@@ -80,6 +80,12 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Interface and accessibility
 
+- The expression reference follows the document's algebra and names it. A
+  PGA(2) document lists `point(x, y)`, `point(x, y, w)`, `ipoint(x, y)`,
+  `line(a, b, c)`, the blades `e0` to `e012` with the null `e0`, `A.inorm`,
+  every coefficient extraction, `log(M)` and `sqrt(M)` for unit motors, and
+  ideal-point positions and heads, and no longer shows VGA tuples, `vector`,
+  or VGA norms. Every documented entry is evaluated by a test in its algebra.
 - A list of points can be connected as an open polyline or a closed loop
   from its appearance menu. Links join consecutive points in evaluated list
   order: a segment between two finite points, and the ray from a finite point
