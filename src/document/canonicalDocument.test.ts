@@ -419,6 +419,15 @@ describe('canonical document format version 7', () => {
     expect(serializeCanonicalDocument(parseCanonicalDocument(encoded))).toBe(encoded)
   })
 
+  it('saves a new line without orientation, and keeps a stored orientation', () => {
+    const document = expressionDocument([{ id: 'new', source: 'L = line(1, 1, 0)' }, { id: 'kept', source: 'M = line(1, 0, 0)' }],
+      { kept: { orientationVisible: true } })
+    const canonical = toCanonicalDocument(document, 'light', {}, { new: false, kept: false })
+    expect(canonical.appearance.new.orientationVisible).toBe(false)
+    expect(canonical.appearance.new.primitiveStyles.lines.orientationVisible).toBe(false)
+    expect(canonical.appearance.kept.orientationVisible).toBe(true)
+  })
+
   it('places the label of a new object automatically', () => {
     const canonical = toCanonicalDocument(expressionDocument([{ id: 'v', source: 'V = e1' }]), 'system')
     expect(canonical.appearance.v.labelAnchor).toBe('auto')

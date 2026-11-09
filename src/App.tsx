@@ -81,6 +81,7 @@ import {
   formatDisplayValue,
 } from './presentation/formatNumber'
 import { evaluateScalarControl } from './application/evaluateScalarControl'
+import { DEFAULT_APPEARANCE_SOURCES, evaluateAppearanceSources } from './application/evaluateAppearanceSources'
 import { directScalarEdit } from './language/directScalarEdit'
 import {
   directConstructorComponents,
@@ -1116,6 +1117,10 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       : [])),
     [evaluatedItems],
   )
+  const appearanceSources = useMemo(
+    () => evaluateAppearanceSources(expressionDoc, evaluatedItems, engine),
+    [evaluatedItems, expressionDoc, engine],
+  )
 
   const stopPlayback = useCallback((itemId: string) => {
     const playback = activePlaybacks.get(itemId)
@@ -1309,16 +1314,25 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     window.addEventListener('keydown', cancel)
     return () => window.removeEventListener('keydown', cancel)
   }, [])
-  const resolvedStyles = useMemo(
-    () => Object.fromEntries(evaluatedItems.map(({ item, evaluation }) => {
+  const resolvedAppearances = useMemo(
+    () => evaluatedItems.map(({ item, evaluation }) => {
       const kind = evaluation?.status === 'valid'
         ? evaluation.valueType === 'list'
           ? 'List'
           : interpretation.describe(evaluation.entity)
         : 'Object'
-      return [item.id, resolveItemAppearance(expressionDoc.appearance[item.id], kind, declaredName(item.source)).styleId]
-    })),
+      return [item.id, resolveItemAppearance(expressionDoc.appearance[item.id], kind, declaredName(item.source))] as const
+    }),
     [evaluatedItems, expressionDoc.appearance],
+  )
+  const resolvedStyles = useMemo(
+    () => Object.fromEntries(resolvedAppearances.map(([id, resolved]) => [id, resolved.styleId])),
+    [resolvedAppearances],
+  )
+  // A line with no stored orientation is saved without it, as it is drawn.
+  const resolvedOrientation = useMemo(
+    () => Object.fromEntries(resolvedAppearances.map(([id, resolved]) => [id, resolved.orientationVisible])),
+    [resolvedAppearances],
   )
 
   useEffect(() => {
@@ -1350,12 +1364,12 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   useEffect(() => {
     if (ephemeral || import.meta.env.MODE === 'test') return
     try {
-      persistence.save(toCanonicalDocument(expressionDoc, theme, resolvedStyles))
+      persistence.save(toCanonicalDocument(expressionDoc, theme, resolvedStyles, resolvedOrientation))
       setDocumentDiagnostic((current) => current?.startsWith('DOCUMENT_VIEW_UNSUPPORTED') ? current : null)
     } catch {
       setDocumentDiagnostic('STORE_WRITE_FAILED: Changes remain open, but the last saved revision was retained.')
     }
-  }, [expressionDoc, persistence, resolvedStyles, theme, ephemeral])
+  }, [expressionDoc, persistence, resolvedStyles, resolvedOrientation, theme, ephemeral])
 
   const origin = toScreen(viewport, { x: 0, y: 0 })
   // The Studio-sized glyphs are the 1× baseline exposed to users. The
@@ -1363,7 +1377,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   // while restoring a meaningful multiplicative setting.
   const objectRenderScale = expressionDoc.view.display.objectScale * 1.5
   const { rendered: renderedPrimitives, connections: renderedConnections, omitted: omittedRenderElements } = collectRenderedPrimitives(
-    evaluatedItems, expressionDoc.appearance, interpretation, declaredName,
+    evaluatedItems, expressionDoc.appearance, interpretation, declaredName, appearanceSources,
   )
   const renderedVectors = renderedPrimitives.flatMap((entry) =>
     entry.primitive.kind === 'oriented-segment'
@@ -1742,7 +1756,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     setSharing(true)
     setShareResult(null)
     try {
-      const url = await createSceneLink(toCanonicalDocument(expressionDoc, theme, resolvedStyles), new URL(import.meta.env.BASE_URL, window.location.href).href)
+      const url = await createSceneLink(toCanonicalDocument(expressionDoc, theme, resolvedStyles, resolvedOrientation), new URL(import.meta.env.BASE_URL, window.location.href).href)
       let copied = false
       try { await navigator.clipboard.writeText(url); copied = true } catch { /* The selectable text remains available when clipboard access is blocked. */ }
       setShareResult({
@@ -1759,7 +1773,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const saveLocalCopy = () => {
     try {
       const id = crypto.randomUUID()
-      persistence.save(toCanonicalDocument({ ...expressionDoc, id }, theme, resolvedStyles))
+      persistence.save(toCanonicalDocument({ ...expressionDoc, id }, theme, resolvedStyles, resolvedOrientation))
       // Keep undo history; only the identity changes.
       dispatchHistory({ type: 'update-identity', id })
       // Reloading must reopen the saved copy, not the original shared scene.
@@ -1774,7 +1788,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const exportDocument = () => {
     try {
       const source = serializeCanonicalDocument(
-        toCanonicalDocument(expressionDoc, theme, resolvedStyles),
+        toCanonicalDocument(expressionDoc, theme, resolvedStyles, resolvedOrientation),
       )
       const blob = new Blob([source], { type: 'application/json;charset=utf-8' })
       const url = URL.createObjectURL(blob)
@@ -2558,7 +2572,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                       labelVisible={labelVisible}
                       label={label}
                       borderVisible={expressionDoc.appearance[item.id]?.borderVisible ?? false}
-                      orientationVisible={expressionDoc.appearance[item.id]?.orientationVisible ?? true}
+                      orientationVisible={resolveItemAppearance(expressionDoc.appearance[item.id], kind, null).orientationVisible}
                       bivectorShape={expressionDoc.appearance[item.id]?.bivectorShape ?? 'from-vectors'}
                       idealPointDisplay={expressionDoc.appearance[item.id]?.idealPointDisplay ?? 'vector'}
                       pointListDisplay={expressionDoc.appearance[item.id]?.primitiveStyles?.points?.connection ?? 'none'}
@@ -2570,6 +2584,9 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                         ? listPrimitiveTypes(evaluation.elements)
                         : undefined}
                       linesVisible={expressionDoc.appearance[item.id]?.primitiveStyles?.lines?.visible ?? true}
+                      appearance={expressionDoc.appearance[item.id]}
+                      linesOrientationVisible={resolveItemAppearance(expressionDoc.appearance[item.id], kind, null).linesOrientationVisible}
+                      sources={appearanceSources.get(item.id) ?? DEFAULT_APPEARANCE_SOURCES}
                       parallelogramAvailable={evaluation?.status === 'valid' &&
                         evaluation.valueType === 'single' &&
                         evaluation.primitive?.kind === 'oriented-area' &&
@@ -2611,6 +2628,9 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                       onLinesVisibleChange={(linesVisible) => executeCommand({
                         kind: 'update-appearance', itemId: item.id, appearance: { primitiveStyles: { lines: { visible: linesVisible } } },
                       })}
+                      onAppearanceChange={(appearance, coalesceKey) => executeCommand({
+                        kind: 'update-appearance', itemId: item.id, appearance,
+                      }, coalesceKey === undefined ? undefined : `appearance-${coalesceKey}:${item.id}`)}
                       onControlChange={(control) => {
                         if (isPlaying) stopPlayback(item.id)
                         pausedPlaybacks.current.delete(item.id)
@@ -2790,7 +2810,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                 })}
               </g>}
 
-              {renderedVectors.map(({ id, primitive, entity, layout, color, label }) => {
+              {renderedVectors.map(({ id, primitive, entity, layout, color, label, strokeStyle, strokeWidth, opacity }) => {
                 const item = expressionDoc.items.find((candidate) => candidate.id === id)
                 return <OrientedSegmentGlyph
                   key={id}
@@ -2804,9 +2824,12 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                   headMovable={!!item && headMovable(item, entity)}
                   baseMovable={!!item && objectBaseMovable(item, entity)}
                   controller={handleController}
+                  strokeStyle={strokeStyle}
+                  strokeWidth={strokeWidth}
+                  opacity={opacity}
                 />
               })}
-              {renderedAreas.map(({ id, primitive, entity, layout, color, label, borderVisible, orientationVisible }) => {
+              {renderedAreas.map(({ id, primitive, entity, layout, color, label, borderVisible, orientationVisible, strokeStyle, strokeWidth, opacity }) => {
                 const item = expressionDoc.items.find((candidate) => candidate.id === id)
                 return <OrientedAreaGlyph
                   key={id}
@@ -2821,9 +2844,12 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                   itemPresent={!!item}
                   baseMovable={!!item && objectBaseMovable(item, entity)}
                   controller={handleController}
+                  strokeStyle={strokeStyle}
+                  strokeWidth={strokeWidth}
+                  opacity={opacity}
                 />
               })}
-              {renderedLines.map(({ id, primitive, entity, layout, color, label, orientationVisible }) => {
+              {renderedLines.map(({ id, primitive, entity, layout, color, label, orientationVisible, strokeStyle, strokeWidth, opacity }) => {
                 const item = expressionDoc.items.find((candidate) => candidate.id === id)
                 const selection = selectedLine?.itemId === id
                   ? layoutLineSelection(primitive, selectedLine.anchor, viewport, objectRenderScale)
@@ -2842,12 +2868,15 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                   orientationTicks={lineOrientationTicks(primitive, layout, objectRenderScale)}
                   selection={selection}
                   controller={handleController}
+                  strokeStyle={strokeStyle}
+                  strokeWidth={strokeWidth}
+                  opacity={opacity}
                 />
               })}
-              {renderedInfinity.map(({ id, primitive, layout, color, label }) => (
-                <LineAtInfinityGlyph key={id} accessibleName={primitive.accessibleName} layout={layout} color={color} label={label} scale={objectRenderScale} />
+              {renderedInfinity.map(({ id, primitive, layout, color, label, opacity }) => (
+                <LineAtInfinityGlyph key={id} accessibleName={primitive.accessibleName} layout={layout} color={color} label={label} scale={objectRenderScale} opacity={opacity} />
               ))}
-              {renderedIdealPoints.map(({ id, primitive, entity, arrow, marker, color, label }) => {
+              {renderedIdealPoints.map(({ id, primitive, entity, arrow, marker, color, label, strokeStyle, strokeWidth, opacity }) => {
                 const item = expressionDoc.items.find((candidate) => candidate.id === id)
                 return <g key={id}>
                   {marker && <DirectionMarkerGlyph
@@ -2856,6 +2885,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                     color={color}
                     label={arrow ? null : label}
                     scale={objectRenderScale}
+                    opacity={opacity}
                   />}
                   {arrow && <OrientedSegmentGlyph
                     id={id}
@@ -2871,18 +2901,22 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                     headMovable={!!item && headMovable(item, entity)}
                     baseMovable={!!item && objectBaseMovable(item, entity)}
                     controller={handleController}
+                    strokeStyle={strokeStyle}
+                    strokeWidth={strokeWidth}
+                    opacity={opacity}
                   />}
                 </g>
               })}
-              {renderedConnections.map(({ id, segments, color }) => (
+              {renderedConnections.map(({ id, segments, color, opacity }) => (
                 <PointListConnectionGlyph
                   key={`connection-${id}`}
                   path={layoutPointListConnection(segments, viewport)}
                   color={color}
                   scale={objectRenderScale}
+                  opacity={opacity}
                 />
               ))}
-              {renderedPoints.map(({ id, primitive, entity, point, color, label, markerVisible }) => {
+              {renderedPoints.map(({ id, primitive, entity, point, color, label, markerVisible, opacity }) => {
                 const item = expressionDoc.items.find((candidate) => candidate.id === id)
                 return <PointMarkerGlyph
                   key={id}
@@ -2896,6 +2930,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                   movable={!!item && objectBaseMovable(item, entity)}
                   markerVisible={markerVisible}
                   controller={handleController}
+                  opacity={opacity}
                 />
               })}
               {anchorPreview && <g className="anchor-preview" aria-hidden="true">

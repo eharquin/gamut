@@ -1,0 +1,306 @@
+<desc id="canvas-description">4 vectors and 2 bivectors are visible. V runs from the origin to 2, 1. W runs from the origin to -1, 2. U[0] runs from the origin to 1, -1. U[1] runs from the origin to -2, -1. B is an oriented parallelogram with signed value 5, area 5, counterclockwise orientation, positioned at the origin. D is an oriented loop with signed value 0.5, area 0.5, counterclockwise orientation, positioned at the origin. Double-click empty viewport space to create a vector.</desc>
+<g aria-hidden="true">
+<line class="grid-line" x1="3.1999999999999886" y1="0" x2="3.1999999999999886" y2="480">
+</line>
+<line class="grid-line" x1="17.599999999999966" y1="0" x2="17.599999999999966" y2="480">
+</line>
+<line class="grid-line is-major" x1="32" y1="0" x2="32" y2="480">
+</line>
+<line class="grid-line" x1="46.39999999999998" y1="0" x2="46.39999999999998" y2="480">
+</line>
+<line class="grid-line" x1="60.799999999999955" y1="0" x2="60.799999999999955" y2="480">
+</line>
+<line class="grid-line" x1="75.19999999999999" y1="0" x2="75.19999999999999" y2="480">
+</line>
+<line class="grid-line" x1="89.6" y1="0" x2="89.6" y2="480">
+</line>
+<line class="grid-line is-major" x1="104" y1="0" x2="104" y2="480">
+</line>
+<line class="grid-line" x1="118.39999999999998" y1="0" x2="118.39999999999998" y2="480">
+</line>
+<line class="grid-line" x1="132.79999999999995" y1="0" x2="132.79999999999995" y2="480">
+</line>
+<line class="grid-line" x1="147.2" y1="0" x2="147.2" y2="480">
+</line>
+<line class="grid-line" x1="161.6" y1="0" x2="161.6" y2="480">
+</line>
+<line class="grid-line is-major" x1="176" y1="0" x2="176" y2="480">
+</line>
+<line class="grid-line" x1="190.39999999999998" y1="0" x2="190.39999999999998" y2="480">
+</line>
+<line class="grid-line" x1="204.8" y1="0" x2="204.8" y2="480">
+</line>
+<line class="grid-line" x1="219.2" y1="0" x2="219.2" y2="480">
+</line>
+<line class="grid-line" x1="233.6" y1="0" x2="233.6" y2="480">
+</line>
+<line class="grid-line is-major" x1="248" y1="0" x2="248" y2="480">
+</line>
+<line class="grid-line" x1="262.4" y1="0" x2="262.4" y2="480">
+</line>
+<line class="grid-line" x1="276.8" y1="0" x2="276.8" y2="480">
+</line>
+<line class="grid-line" x1="291.2" y1="0" x2="291.2" y2="480">
+</line>
+<line class="grid-line" x1="305.59999999999997" y1="0" x2="305.59999999999997" y2="480">
+</line>
+<line class="grid-line is-major" x1="320" y1="0" x2="320" y2="480">
+</line>
+<line class="grid-line" x1="334.40000000000003" y1="0" x2="334.40000000000003" y2="480">
+</line>
+<line class="grid-line" x1="348.8" y1="0" x2="348.8" y2="480">
+</line>
+<line class="grid-line" x1="363.2" y1="0" x2="363.2" y2="480">
+</line>
+<line class="grid-line" x1="377.59999999999997" y1="0" x2="377.59999999999997" y2="480">
+</line>
+<line class="grid-line is-major" x1="392" y1="0" x2="392" y2="480">
+</line>
+<line class="grid-line" x1="406.4" y1="0" x2="406.4" y2="480">
+</line>
+<line class="grid-line" x1="420.8" y1="0" x2="420.8" y2="480">
+</line>
+<line class="grid-line" x1="435.2" y1="0" x2="435.2" y2="480">
+</line>
+<line class="grid-line" x1="449.6" y1="0" x2="449.6" y2="480">
+</line>
+<line class="grid-line is-major" x1="464" y1="0" x2="464" y2="480">
+</line>
+<line class="grid-line" x1="478.4" y1="0" x2="478.4" y2="480">
+</line>
+<line class="grid-line" x1="492.8" y1="0" x2="492.8" y2="480">
+</line>
+<line class="grid-line" x1="507.2" y1="0" x2="507.2" y2="480">
+</line>
+<line class="grid-line" x1="521.6" y1="0" x2="521.6" y2="480">
+</line>
+<line class="grid-line is-major" x1="536" y1="0" x2="536" y2="480">
+</line>
+<line class="grid-line" x1="550.4" y1="0" x2="550.4" y2="480">
+</line>
+<line class="grid-line" x1="564.8" y1="0" x2="564.8" y2="480">
+</line>
+<line class="grid-line" x1="579.2" y1="0" x2="579.2" y2="480">
+</line>
+<line class="grid-line" x1="593.6" y1="0" x2="593.6" y2="480">
+</line>
+<line class="grid-line is-major" x1="608" y1="0" x2="608" y2="480">
+</line>
+<line class="grid-line" x1="622.4" y1="0" x2="622.4" y2="480">
+</line>
+<line class="grid-line" x1="636.8" y1="0" x2="636.8" y2="480">
+</line>
+<line class="grid-line" x1="0" y1="470.4" x2="640" y2="470.4">
+</line>
+<line class="grid-line is-major" x1="0" y1="456" x2="640" y2="456">
+</line>
+<line class="grid-line" x1="0" y1="441.6" x2="640" y2="441.6">
+</line>
+<line class="grid-line" x1="0" y1="427.20000000000005" x2="640" y2="427.20000000000005">
+</line>
+<line class="grid-line" x1="0" y1="412.8" x2="640" y2="412.8">
+</line>
+<line class="grid-line" x1="0" y1="398.4" x2="640" y2="398.4">
+</line>
+<line class="grid-line is-major" x1="0" y1="384" x2="640" y2="384">
+</line>
+<line class="grid-line" x1="0" y1="369.6" x2="640" y2="369.6">
+</line>
+<line class="grid-line" x1="0" y1="355.2" x2="640" y2="355.2">
+</line>
+<line class="grid-line" x1="0" y1="340.8" x2="640" y2="340.8">
+</line>
+<line class="grid-line" x1="0" y1="326.4" x2="640" y2="326.4">
+</line>
+<line class="grid-line is-major" x1="0" y1="312" x2="640" y2="312">
+</line>
+<line class="grid-line" x1="0" y1="297.59999999999997" x2="640" y2="297.59999999999997">
+</line>
+<line class="grid-line" x1="0" y1="283.2" x2="640" y2="283.2">
+</line>
+<line class="grid-line" x1="0" y1="268.8" x2="640" y2="268.8">
+</line>
+<line class="grid-line" x1="0" y1="254.4" x2="640" y2="254.4">
+</line>
+<line class="grid-line is-major" x1="0" y1="240" x2="640" y2="240">
+</line>
+<line class="grid-line" x1="0" y1="225.6" x2="640" y2="225.6">
+</line>
+<line class="grid-line" x1="0" y1="211.20000000000002" x2="640" y2="211.20000000000002">
+</line>
+<line class="grid-line" x1="0" y1="196.8" x2="640" y2="196.8">
+</line>
+<line class="grid-line" x1="0" y1="182.4" x2="640" y2="182.4">
+</line>
+<line class="grid-line is-major" x1="0" y1="168" x2="640" y2="168">
+</line>
+<line class="grid-line" x1="0" y1="153.6" x2="640" y2="153.6">
+</line>
+<line class="grid-line" x1="0" y1="139.2" x2="640" y2="139.2">
+</line>
+<line class="grid-line" x1="0" y1="124.79999999999995" x2="640" y2="124.79999999999995">
+</line>
+<line class="grid-line" x1="0" y1="110.4" x2="640" y2="110.4">
+</line>
+<line class="grid-line is-major" x1="0" y1="96" x2="640" y2="96">
+</line>
+<line class="grid-line" x1="0" y1="81.6" x2="640" y2="81.6">
+</line>
+<line class="grid-line" x1="0" y1="67.19999999999999" x2="640" y2="67.19999999999999">
+</line>
+<line class="grid-line" x1="0" y1="52.799999999999955" x2="640" y2="52.799999999999955">
+</line>
+<line class="grid-line" x1="0" y1="38.400000000000006" x2="640" y2="38.400000000000006">
+</line>
+<line class="grid-line is-major" x1="0" y1="24" x2="640" y2="24">
+</line>
+<line class="grid-line" x1="0" y1="9.599999999999994" x2="640" y2="9.599999999999994">
+</line>
+</g>
+<g aria-hidden="true">
+<line class="axis" x1="0" y1="240" x2="640" y2="240">
+</line>
+<line class="axis" x1="320" y1="0" x2="320" y2="480">
+</line>
+<circle class="origin" cx="320" cy="240" r="4.5">
+</circle>
+<text class="axis-name" x="626" y="232">x</text>
+<text class="axis-name" x="328" y="16">y</text>
+</g>
+<g aria-hidden="true">
+<g>
+<line class="graduation" x1="32" y1="236" x2="32" y2="244">
+</line>
+<text class="graduation-label" x="32" y="256">-4</text>
+</g>
+<g>
+<line class="graduation" x1="104" y1="236" x2="104" y2="244">
+</line>
+<text class="graduation-label" x="104" y="256">-3</text>
+</g>
+<g>
+<line class="graduation" x1="176" y1="236" x2="176" y2="244">
+</line>
+<text class="graduation-label" x="176" y="256">-2</text>
+</g>
+<g>
+<line class="graduation" x1="248" y1="236" x2="248" y2="244">
+</line>
+<text class="graduation-label" x="248" y="256">-1</text>
+</g>
+<g>
+<line class="graduation" x1="392" y1="236" x2="392" y2="244">
+</line>
+<text class="graduation-label" x="392" y="256">1</text>
+</g>
+<g>
+<line class="graduation" x1="464" y1="236" x2="464" y2="244">
+</line>
+<text class="graduation-label" x="464" y="256">2</text>
+</g>
+<g>
+<line class="graduation" x1="536" y1="236" x2="536" y2="244">
+</line>
+<text class="graduation-label" x="536" y="256">3</text>
+</g>
+<g>
+<line class="graduation" x1="608" y1="236" x2="608" y2="244">
+</line>
+<text class="graduation-label" x="608" y="256">4</text>
+</g>
+<g>
+<line class="graduation" x1="316" y1="456" x2="324" y2="456">
+</line>
+<text class="graduation-label is-y" x="312" y="460">-3</text>
+</g>
+<g>
+<line class="graduation" x1="316" y1="384" x2="324" y2="384">
+</line>
+<text class="graduation-label is-y" x="312" y="388">-2</text>
+</g>
+<g>
+<line class="graduation" x1="316" y1="312" x2="324" y2="312">
+</line>
+<text class="graduation-label is-y" x="312" y="316">-1</text>
+</g>
+<g>
+<line class="graduation" x1="316" y1="168" x2="324" y2="168">
+</line>
+<text class="graduation-label is-y" x="312" y="172">1</text>
+</g>
+<g>
+<line class="graduation" x1="316" y1="96" x2="324" y2="96">
+</line>
+<text class="graduation-label is-y" x="312" y="100">2</text>
+</g>
+<g>
+<line class="graduation" x1="316" y1="24" x2="324" y2="24">
+</line>
+<text class="graduation-label is-y" x="312" y="28">3</text>
+</g>
+</g>
+<g style="color: rgb(232, 160, 0);">
+<line class="vector" x1="320" y1="240" x2="447.73346994592885" y2="176.13326502703558" stroke-width="6" aria-label="V">
+</line>
+<polygon class="vector-arrowhead" points="464,168 452.4292126986784,185.52475053253468 443.0377271931793,166.74177952153647" aria-hidden="true">
+</polygon>
+<circle class="vector-head-point" cx="464" cy="168" r="1.875" aria-hidden="true">
+</circle>
+<circle class="manipulation-hit-target vector-head-target" cx="464" cy="168" r="12" tabindex="0" data-handle-key="v:head" role="button" aria-label="Move head of V">
+</circle>
+<circle class="manipulation-base-contour is-movable" cx="320" cy="240" r="15" style="stroke-width: 0;" tabindex="0" data-handle-key="v:base" role="button" aria-keyshortcuts="Enter Delete" aria-label="Move base of V">
+</circle>
+<circle class="manipulation-base-point" cx="320" cy="240" r="6.75" aria-hidden="true">
+</circle>
+<text class="object-label" x="472" y="160">V</text>
+</g>
+<g style="color: rgb(20, 130, 200);">
+<line class="vector" x1="320" y1="240" x2="256.1332650270356" y2="112.26653005407115" stroke-width="6" aria-label="W">
+</line>
+<polygon class="vector-arrowhead" points="248,96 265.5247505325347,107.5707873013216 246.74177952153647,116.9622728068207" aria-hidden="true">
+</polygon>
+<circle class="vector-head-point" cx="248" cy="96" r="1.875" aria-hidden="true">
+</circle>
+<circle class="manipulation-hit-target vector-head-target" cx="248" cy="96" r="12" tabindex="0" data-handle-key="w:head" role="button" aria-label="Move head of W">
+</circle>
+<circle class="manipulation-base-contour is-movable" cx="320" cy="240" r="15" style="stroke-width: 0;" tabindex="0" data-handle-key="w:base" role="button" aria-keyshortcuts="Enter Delete" aria-label="Move base of W">
+</circle>
+<circle class="manipulation-base-point" cx="320" cy="240" r="6.75" aria-hidden="true">
+</circle>
+</g>
+<g style="color: rgb(65, 191, 130);">
+<line class="vector" x1="320" y1="240" x2="379.14017885038834" y2="299.14017885038834" stroke-width="6" aria-label="U[0]">
+</line>
+<polygon class="vector-arrowhead" points="392,312 371.7155576479296,306.5648000528471 386.56480005284703,291.7155576479296" aria-hidden="true">
+</polygon>
+<text class="object-label" x="400" y="304">U[0]</text>
+</g>
+<g style="color: rgb(65, 191, 130);">
+<line class="vector" x1="320" y1="240" x2="192.26653005407115" y2="303.8667349729644" stroke-width="6" aria-label="U[1]">
+</line>
+<polygon class="vector-arrowhead" points="176,312 187.5707873013216,294.4752494674653 196.96227280682072,313.25822047846356" aria-hidden="true">
+</polygon>
+<text class="object-label" x="184" y="304">U[1]</text>
+</g>
+<g style="color: rgb(195, 10, 58);">
+<path class="bivector has-border" d="M 320 240 L 464 168 L 392 24 L 248 96 Z" stroke-width="4.5" pointer-events="none" aria-label="B is an oriented parallelogram with signed value 5, area 5, counterclockwise orientation, positioned at the origin.">
+</path>
+<g class="bivector-orientation" aria-hidden="true" pointer-events="none">
+<path d="M 356 151.5 A 19.5 19.5 0 1 0 338.03931061694374 124.40634232498131" fill="none" stroke="currentColor" stroke-width="3.12" stroke-linecap="round">
+</path>
+<polygon points="336.5,132 334.19494238804157,124.54837538482028 341.524897960454,126.03423093918099" fill="currentColor">
+</polygon>
+</g>
+<circle class="manipulation-base-contour is-movable" cx="320" cy="240" r="15" style="stroke-width: 0;" tabindex="0" data-handle-key="b:base" role="button" aria-keyshortcuts="Enter Delete" aria-label="Move base of B">
+</circle>
+<circle class="manipulation-base-point" cx="320" cy="240" r="6.75" aria-hidden="true">
+</circle>
+</g>
+<g style="color: rgb(20, 130, 200);">
+<path class="bivector" d="M 348.7238441889032 240 A 28.723844188903154 28.723844188903154 0 1 1 291.2761558110968 240 A 28.723844188903154 28.723844188903154 0 1 1 348.7238441889032 240 Z" stroke-width="4.5" pointer-events="none" aria-label="D is an oriented loop with signed value 0.5, area 0.5, counterclockwise orientation, positioned at the origin.">
+</path>
+<circle class="manipulation-base-contour is-movable" cx="320" cy="240" r="15" style="stroke-width: 0;" tabindex="0" data-handle-key="d:base" role="button" aria-keyshortcuts="Enter Delete" aria-label="Move base of D">
+</circle>
+<circle class="manipulation-base-point" cx="320" cy="240" r="6.75" aria-hidden="true">
+</circle>
+</g>

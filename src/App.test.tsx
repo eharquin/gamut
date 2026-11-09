@@ -3182,7 +3182,8 @@ describe('PGA 2D foundation workflow', () => {
     const canvas = viewportCanvas()
     sizeViewportCanvas(canvas)
     const body = screen.getByRole('button', { name: 'Move L' })
-    expect(document.querySelector('.line-orientation')).not.toBeNull()
+    // A new line starts without its orientation (#221).
+    expect(document.querySelector('.line-orientation')).toBeNull()
     expect(document.querySelector('.unbounded-line-halo')).toBeNull()
 
     // Hover shows the translucent double border.
@@ -3224,10 +3225,10 @@ describe('PGA 2D foundation workflow', () => {
     fireEvent.keyDown(screen.getByRole('button', { name: 'Move L' }), { key: 'ArrowRight', shiftKey: true })
     expect(/^L = line\([-\d.]+, [-\d.]+, [-\d.]+\)$/.test((first as HTMLInputElement).value)).toBe(true)
 
-    // An orientation toggle hides the ticks; a non-literal line has no handles.
+    // The orientation switch shows the ticks; a non-literal line has no handles.
     fireEvent.click(screen.getByRole('button', { name: 'Open Line menu for L' }))
     fireEvent.click(screen.getByRole('switch', { name: 'Orientation visible' }))
-    expect(document.querySelector('.line-orientation')).toBeNull()
+    expect(document.querySelector('.line-orientation')).not.toBeNull()
     fireEvent.keyDown(document, { key: 'Escape' })
     fireEvent.change(first, { target: { value: 'L = 2 * line(1, 1, 0)' } })
     expect(screen.queryByRole('button', { name: 'Move L' })).not.toBeInTheDocument()
@@ -3317,5 +3318,39 @@ describe('PGA 2D foundation workflow', () => {
     fireEvent.pointerMove(canvas, { pointerId: 33, ...screenPoint(Math.cos(0.3), Math.sin(0.3)) })
     fireEvent.pointerUp(canvas, { pointerId: 33 })
     expect(first).toHaveValue('L = line(0.955, 0.296, 0)')
+  })
+})
+
+describe('stroke width and opacity from the appearance menu (#221)', () => {
+  it('draws a width that follows a scalar, and falls back to the default with a red line', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: 'V = vector(2, 1)' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add expression' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 2' }), { target: { value: 'w = 2' } })
+    const shaft = () => document.querySelector('line.vector[aria-label="V"]') as SVGLineElement
+    expect(shaft()).not.toHaveAttribute('style')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Vector menu for V' }))
+    const dialog = screen.getByRole('dialog', { name: 'Vector' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Dashed' }))
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Width' }), { target: { value: 'w' } })
+    // 2 reference pixels at object scale 1 (render scale 1.5); dashes follow the width.
+    expect(shaft().style.strokeWidth).toBe('3')
+    expect(shaft().style.strokeDasharray).toBe('12 9')
+    expect(dialog.querySelector('.appearance-error')).toBeNull()
+
+    // The width follows the scalar, as it would while a slider animates.
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 2' }), { target: { value: 'w = 4' } })
+    expect(shaft().style.strokeWidth).toBe('6')
+
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Width' }), { target: { value: 'zz' } })
+    expect(shaft().style.strokeWidth).toBe('')
+    expect(within(dialog).getByRole('textbox', { name: 'Width' })).toHaveAttribute('aria-invalid', 'true')
+    expect(dialog.querySelector('.appearance-error')).toHaveTextContent('Width: The name “zz” is not defined. Default used.')
+
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Opacity' }), { target: { value: '25' } })
+    expect((shaft().parentElement as unknown as SVGGElement).style.opacity).toBe('0.25')
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Opacity' }), { target: { value: '' } })
+    expect((shaft().parentElement as unknown as SVGGElement).style.opacity).toBe('')
   })
 })

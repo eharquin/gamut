@@ -1,7 +1,10 @@
 import type {
+  CSSProperties,
   KeyboardEvent,
   PointerEvent as ReactPointerEvent,
 } from 'react'
+import type { StrokeStyle } from '../document/expressionDocument'
+import { DEFAULT_STROKE_WIDTHS, strokePattern } from './stroke'
 import type { Point2d } from '../geometry/interpretation'
 import type { AreaLayout, DirectionLayout, InfinityLayout, LineLayout, SegmentLayout } from './layout'
 import type {
@@ -10,6 +13,25 @@ import type {
   PointMarkerPrimitive,
   UnboundedLinePrimitive,
 } from './primitives'
+
+/**
+ * Inline stroke of a glyph. A solid stroke of default width gives nothing, so
+ * an object whose stroke settings are untouched draws exactly as before.
+ */
+function strokeOverride(
+  style: StrokeStyle,
+  customWidth: number | null,
+  defaultWidth: number,
+): CSSProperties | undefined {
+  if (style === 'solid' && customWidth === null) return undefined
+  const width = customWidth ?? defaultWidth
+  return { ...(customWidth === null ? {} : { strokeWidth: width }), ...strokePattern(style, width) }
+}
+
+/** The glyph's color, and its opacity when one is set. */
+function glyphStyle(color: string, opacity: number | null | undefined): CSSProperties {
+  return opacity === null || opacity === undefined ? { color } : { color, opacity }
+}
 
 /** `line` translates a line, `normal` rotates it about the selected anchor. */
 export type ManipulationKind = 'head' | 'base' | 'line' | 'normal'
@@ -100,22 +122,36 @@ export type OrientedSegmentGlyphProps = Readonly<{
   headMovable: boolean
   baseMovable: boolean
   controller: HandleController
+  strokeStyle?: StrokeStyle
+  /** Shaft width in reference pixels; `null` keeps the default 4 screen pixels. */
+  strokeWidth?: number | null
+  opacity?: number | null
 }>
 
 export function OrientedSegmentGlyph({
   id, primitive, layout, color, label, scale, itemPresent, headMovable, baseMovable, controller,
+  strokeStyle = 'solid', strokeWidth = null, opacity,
 }: OrientedSegmentGlyphProps) {
   const { start, end, shaftEnd, arrowPoints } = layout
   const headKey = `${id}:head`
   const headAndBaseCoincide = Math.hypot(end.x - start.x, end.y - start.y) < 1
-  return <g style={{ color }}>
+  const headHovered = controller.hoveredKey === headKey
+  // The stylesheet draws the default shaft 4 px wide, 5 px while the head is
+  // hovered; a set width grows in the same proportion.
+  const shaft = strokeOverride(
+    strokeStyle,
+    strokeWidth === null ? null : strokeWidth * scale * (headHovered ? 1.25 : 1),
+    headHovered ? 5 : 4,
+  )
+  return <g style={glyphStyle(color, opacity)}>
     <line
-      className={`vector${controller.hoveredKey === headKey ? ' is-head-hovered' : ''}`}
+      className={`vector${headHovered ? ' is-head-hovered' : ''}`}
       x1={start.x}
       y1={start.y}
       x2={shaftEnd.x}
       y2={shaftEnd.y}
       strokeWidth={4 * scale}
+      style={shaft}
       aria-label={primitive.accessibleName}
     />
     {arrowPoints && <polygon
@@ -225,17 +261,26 @@ export type OrientedAreaGlyphProps = Readonly<{
   itemPresent: boolean
   baseMovable: boolean
   controller: HandleController
+  /** Stroke of the outline, drawn only when `borderVisible`. */
+  strokeStyle?: StrokeStyle
+  /** Outline width in reference pixels; `null` keeps the default 3 screen pixels. */
+  strokeWidth?: number | null
+  opacity?: number | null
 }>
 
 export function OrientedAreaGlyph({
   id, primitive, layout, color, label, scale, borderVisible, orientationVisible, itemPresent, baseMovable, controller,
+  strokeStyle = 'solid', strokeWidth = null, opacity,
 }: OrientedAreaGlyphProps) {
   const { path, labelPoint, orientationCenter, base } = layout
-  return <g style={{ color }}>
+  return <g style={glyphStyle(color, opacity)}>
     <path
       className={`bivector${borderVisible ? ' has-border' : ''}`}
       d={path}
       strokeWidth={3 * scale}
+      style={borderVisible
+        ? strokeOverride(strokeStyle, strokeWidth === null ? null : strokeWidth * scale, 3)
+        : undefined}
       pointerEvents="none"
       aria-label={primitive.accessibleDescription}
     />
@@ -269,13 +314,14 @@ export type PointMarkerGlyphProps = Readonly<{
   /** False when a connected point list shows its segments alone; the label stays. */
   markerVisible?: boolean
   controller: HandleController
+  opacity?: number | null
 }>
 
 /** A located point: a filled marker whose handle moves the point itself. */
 export function PointMarkerGlyph({
-  id, primitive, point, color, label, scale, itemPresent, movable, markerVisible = true, controller,
+  id, primitive, point, color, label, scale, itemPresent, movable, markerVisible = true, controller, opacity,
 }: PointMarkerGlyphProps) {
-  return <g style={{ color }}>
+  return <g style={glyphStyle(color, opacity)}>
     {markerVisible && <circle
       className="point-marker"
       cx={point.x} cy={point.y} r={4.5 * scale}
@@ -299,17 +345,18 @@ export type PointListConnectionGlyphProps = Readonly<{
   path: string
   color: string
   scale: number
+  opacity?: number | null
 }>
 
 /**
  * The segments joining a connected point list, drawn beneath its markers.
  * They carry no handle: the markers keep the list's labels and manipulation.
  */
-export function PointListConnectionGlyph({ path, color, scale }: PointListConnectionGlyphProps) {
+export function PointListConnectionGlyph({ path, color, scale, opacity }: PointListConnectionGlyphProps) {
   return <path
     className="point-list-connection"
     d={path}
-    style={{ color }}
+    style={glyphStyle(color, opacity)}
     strokeWidth={2 * scale}
     aria-hidden="true"
   />
@@ -340,6 +387,10 @@ export type UnboundedLineGlyphProps = Readonly<{
   orientationTicks: string
   selection: LineSelection | null
   controller: HandleController
+  strokeStyle?: StrokeStyle
+  /** Width in reference pixels; `null` keeps the kind default. */
+  strokeWidth?: number | null
+  opacity?: number | null
 }>
 
 /**
@@ -349,11 +400,13 @@ export type UnboundedLineGlyphProps = Readonly<{
  */
 export function UnboundedLineGlyph({
   id, primitive, layout, color, label, scale, itemPresent, movable, orientationVisible, orientationTicks, selection, controller,
+  strokeStyle = 'solid', strokeWidth = null, opacity,
 }: UnboundedLineGlyphProps) {
   const lineKey = `${id}:line`
   const normalKey = `${id}:normal`
   const hovered = controller.hoveredKey === lineKey
-  return <g style={{ color }}>
+  const width = (strokeWidth ?? DEFAULT_STROKE_WIDTHS.line) * scale
+  return <g style={glyphStyle(color, opacity)}>
     {movable && (hovered || selection) && <line
       className="unbounded-line-halo"
       x1={layout.start.x} y1={layout.start.y}
@@ -371,7 +424,8 @@ export function UnboundedLineGlyph({
       className="unbounded-line"
       x1={layout.start.x} y1={layout.start.y}
       x2={layout.end.x} y2={layout.end.y}
-      strokeWidth={2.5 * scale}
+      strokeWidth={width}
+      style={strokeStyle === 'solid' ? undefined : strokePattern(strokeStyle, width)}
       aria-label={primitive.accessibleName}
     />
     {itemPresent && movable && <line
@@ -449,10 +503,11 @@ export type DirectionMarkerGlyphProps = Readonly<{
   color: string
   label: string | null
   scale: number
+  opacity?: number | null
 }>
 
 /** An ideal point on the line at infinity: an outward arrow whose tip sits on the ellipse. */
-export function DirectionMarkerGlyph({ accessibleName, layout, color, label, scale }: DirectionMarkerGlyphProps) {
+export function DirectionMarkerGlyph({ accessibleName, layout, color, label, scale, opacity }: DirectionMarkerGlyphProps) {
   const headLength = 10 * scale
   const spread = Math.PI / 6
   const head = [
@@ -460,7 +515,7 @@ export function DirectionMarkerGlyph({ accessibleName, layout, color, label, sca
     `${layout.tip.x - headLength * Math.cos(layout.angle - spread)},${layout.tip.y - headLength * Math.sin(layout.angle - spread)}`,
     `${layout.tip.x - headLength * Math.cos(layout.angle + spread)},${layout.tip.y - headLength * Math.sin(layout.angle + spread)}`,
   ].join(' ')
-  return <g style={{ color }}>
+  return <g style={glyphStyle(color, opacity)}>
     <line
       className="direction-marker"
       x1={layout.tail.x} y1={layout.tail.y}
@@ -480,11 +535,12 @@ export type LineAtInfinityGlyphProps = Readonly<{
   color: string
   label: string | null
   scale: number
+  opacity?: number | null
 }>
 
 /** The line at infinity: a dashed ellipse inscribed in the viewport. */
-export function LineAtInfinityGlyph({ accessibleName, layout, color, label, scale }: LineAtInfinityGlyphProps) {
-  return <g style={{ color }}>
+export function LineAtInfinityGlyph({ accessibleName, layout, color, label, scale, opacity }: LineAtInfinityGlyphProps) {
+  return <g style={glyphStyle(color, opacity)}>
     <ellipse
       className="line-at-infinity"
       cx={layout.center.x} cy={layout.center.y}

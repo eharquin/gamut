@@ -1585,6 +1585,89 @@ body.reordering-items .reorder-handle {
   justify-self: start;
 }
 
+/* Numeric settings: a choice and a narrow field on one row, or two equal columns. */
+.appearance-row {
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.appearance-row > .appearance-segmented {
+  flex: 1 1 0;
+}
+
+.appearance-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.appearance-opacity {
+  margin-top: 6px;
+}
+
+.appearance-field.is-narrow {
+  flex: 0 0 64px;
+}
+
+/* The box holds the typed source and its unit. */
+.appearance-source {
+  min-width: 0;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  background: var(--background);
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+}
+
+.appearance-source:focus-within {
+  border-color: var(--accent);
+}
+
+.appearance-source.is-invalid {
+  border-color: var(--error);
+}
+
+.appearance-field .appearance-source input:not([role='switch']) {
+  flex: 1 1 0;
+  width: 100%;
+  height: 100%;
+  padding: 0 0 0 6px;
+  background: transparent;
+  border: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.appearance-unit {
+  padding: 0 5px 0 2px;
+  font-size: 0.62rem;
+}
+
+.appearance-error {
+  margin: -2px 0 0;
+  color: var(--error);
+  font-size: 0.64rem;
+  line-height: 1.35;
+}
+
+/* A primitive type's own style inside a list section. */
+.appearance-sub {
+  display: grid;
+  gap: 6px;
+  margin-top: 2px;
+  padding: 6px 0 0 10px;
+  border-left: 2px solid var(--border-subtle);
+}
+
+.appearance-sub h4 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 600;
+}
+
 /* Switches: section titles, switch rows, and switch fields share one look. */
 .appearance-popover input[role='switch'] {
   position: relative;

@@ -100,7 +100,8 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   The style registry adds the `orange`, `teal`, `purple`, and `pink` ramps.
   Version 6 documents migrate with empty sources and the label anchored
   `top-right`, as before, and draw unchanged; new objects place their label
-  automatically. The new settings are not drawn or editable yet.
+  automatically. The new settings are not drawn or editable yet, except those
+  listed under Interface and accessibility.
 
 ### Interface and accessibility
 
@@ -115,6 +116,19 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   **Animate** switch replaces the number or slider choice: on, the scalar is
   an animated slider with Once, Loop, or Ping-pong; off, a number field. A
   slider without animation keeps its display until the switch is used.
+- Lines, vectors, bivector outlines, and ideal-point arrows can be drawn
+  solid, dashed, or dotted, with a stroke width (#221). **Style** shows the
+  three stroke icons and a **Width** field on one row; the bivector row
+  appears with its outline, the ideal-point row while the direction arrow is
+  drawn. Dashes and round dots grow with the width. **Opacity**, under the
+  shades of **Color**, fades the fill and stroke of any drawn object together.
+  Width and opacity take a number or a scalar expression such as `w`, so they
+  follow a slider while it animates; a refused value (invalid text, unknown
+  name, non-scalar or out of range) draws the default and shows a red line
+  under the field. The **Lines** section of a list has its own **Style**:
+  stroke, width, and orientation, independent of the item's stroke.
+- A new line starts without its orientation; saved documents keep the
+  orientation they store.
 
 - The settings menu is named **Settings** for assistive technology, since it
   also holds the document commands (Import, Export, Copy link).
