@@ -72,7 +72,8 @@ An invalid link displays its diagnostic and retains the existing active
 document when it can be restored, otherwise the normal initial example. This
 fallback session also disables automatic writes. **Save local copy** explicitly
 writes the current document with a new document identity and enables ordinary
-autosave after success. It keeps the undo history and removes the scene
+autosave after success; the header **Save** button does the same and also
+stores the copy in the local library under the name it asks for. It keeps the undo history and removes the scene
 fragment from the address, so reloading opens the saved copy. A failed save retains the temporary session and JSON
 export. No separate local-library implementation is introduced here.
 

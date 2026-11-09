@@ -36,6 +36,7 @@ import {
   showcaseItems,
   vga2FoundationExampleDocument,
   type ExpressionControl,
+  type ExpressionDocument,
   type ExpressionItem,
 } from './document/expressionDocument'
 import { hasContent, type DocumentCommand } from './document/documentCommands'
@@ -75,6 +76,20 @@ import {
   type ThemeMode,
 } from './document/canonicalDocument'
 import { browserDocumentStorage } from './document/documentStorage'
+import {
+  browserLibraryStorage,
+  groupLibraryEntries,
+  LibraryError,
+  loadFromLibrary,
+  readLibrary,
+  removeFromLibrary,
+  renameInLibrary,
+  saveToLibrary,
+  storedLibrarySource,
+  type LibraryEntry,
+  type LibraryRead,
+} from './document/documentLibrary'
+import { LibraryMenu } from './components/LibraryMenu'
 import { selectDroppedDocument } from './document/droppedDocument'
 import { createSceneLink, decodeSceneFragment, hasSceneFragment, SHARE_URL_WARNING_LENGTH } from './document/sceneLink'
 import {
@@ -1865,6 +1880,169 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     }
   }
 
+  // The local library of named graphs (#212). A temporary scene-link session
+  // reads it only when the user opens the library or saves, so it touches no
+  // storage before. Elsewhere it is read during the first render, before the
+  // first autosave, so that only a document saved by an earlier visit is
+  // migrated into it, once.
+  const [library, setLibrary] = useState<LibraryRead | null>(() =>
+    sharedSession || import.meta.env.MODE === 'test' ? null : readLibrary(browserLibraryStorage()))
+  const [libraryOpen, setLibraryOpen] = useState(false)
+  const [libraryNaming, setLibraryNaming] = useState<Readonly<{ initialName: string }> | null>(null)
+  const saveButtonRef = useRef<HTMLButtonElement | null>(null)
+  const libraryButtonRef = useRef<HTMLButtonElement | null>(null)
+  const libraryReturnFocusRef = useRef<HTMLButtonElement | null>(null)
+  const currentLibrary = (): LibraryRead => {
+    if (library) return library
+    const read = readLibrary(browserLibraryStorage())
+    setLibrary(read)
+    return read
+  }
+  const reportLibrary = (entries: readonly LibraryEntry[], diagnostic: string | null) =>
+    setLibrary({ entries, diagnostic })
+  const libraryFailure = (error: unknown, fallback: string) =>
+    error instanceof LibraryError ? error.diagnostic : fallback
+  const closeLibrary = useCallback(() => {
+    setLibraryOpen(false)
+    setLibraryNaming(null)
+  }, [])
+  const toggleLibrary = () => {
+    if (libraryOpen) {
+      closeLibrary()
+      return
+    }
+    currentLibrary()
+    libraryReturnFocusRef.current = libraryButtonRef.current
+    setLibraryNaming(null)
+    setLibraryOpen(true)
+  }
+  /** Whether switching graphs would lose changes that the library does not hold. */
+  const hasUnsavedLibraryChanges = () => {
+    if (ephemeral) return hasContent(expressionDoc)
+    const stored = storedLibrarySource(browserLibraryStorage(), expressionDoc.id)
+    if (stored === null) return hasContent(expressionDoc)
+    return stored !== serializeCanonicalDocument(
+      toCanonicalDocument(expressionDoc, theme, resolvedStyles, resolvedOrientation),
+    )
+  }
+  /**
+   * Stores the open graph under `name`. In a temporary scene-link session it
+   * is Save local copy: the graph takes a new identity and the session ends.
+   */
+  const commitLibrarySave = (name: string) => {
+    const current = currentLibrary()
+    const id = ephemeral ? crypto.randomUUID() : expressionDoc.id
+    try {
+      const entries = saveToLibrary(
+        browserLibraryStorage(),
+        current.entries,
+        toCanonicalDocument({ ...expressionDoc, id, title: name }, theme, resolvedStyles, resolvedOrientation),
+        name,
+      )
+      reportLibrary(entries, null)
+    } catch (error) {
+      reportLibrary(current.entries, libraryFailure(error, 'LIBRARY_WRITE_FAILED: The graph could not be saved to the library.'))
+      setLibraryOpen(true)
+      return
+    }
+    if (id !== expressionDoc.id) dispatchHistory({ type: 'update-identity', id })
+    if (name !== expressionDoc.title) dispatchHistory({ type: 'update-title', title: name })
+    if (ephemeral) {
+      // Reloading must reopen the saved copy, not the original shared scene.
+      window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search)
+      setEphemeral(false)
+      setDocumentDiagnostic(null)
+    }
+    setLibraryNaming(null)
+    setLibraryOpen(false)
+    setCopyNotice({ message: `Saved “${name}” to the library.`, durationMs: 2500 })
+  }
+  const saveToLibraryRequest = () => {
+    const current = currentLibrary()
+    const stored = current.entries.find((entry) => entry.id === expressionDoc.id)
+    if (stored && !ephemeral) {
+      commitLibrarySave(expressionDoc.title.trim() || stored.name)
+      return
+    }
+    // The first save asks for a name in the library menu.
+    libraryReturnFocusRef.current = saveButtonRef.current
+    setLibraryNaming({ initialName: expressionDoc.title.trim() || 'Untitled graph' })
+    setLibraryOpen(true)
+  }
+  /** Replaces the open graph, as opening a file does, and ends a temporary session. */
+  const openGraph = (document: ExpressionDocument, nextTheme: ThemeMode, diagnostic: string | null) => {
+    if (activePlaybacks.size > 0) stopAllPlaybacks()
+    dispatchHistory({ type: 'replace', document })
+    setTheme(nextTheme)
+    setAppearanceItemId(null)
+    setExpandedListIds(new Set())
+    viewportCreatedItemIds.current.clear()
+    nextId.current = document.items.length + 1
+    setDocumentDiagnostic(diagnostic)
+    if (ephemeral) {
+      window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search)
+      setEphemeral(false)
+    }
+    closeLibrary()
+  }
+  const openLibraryEntry = (entry: LibraryEntry) => {
+    const current = currentLibrary()
+    try {
+      const restored = fromCanonicalDocument(loadFromLibrary(browserLibraryStorage(), entry.id), restoreOptions)
+      requireAvailableAlgebra(algebraRegistry, restored.document.algebra)
+      openGraph(restored.document, restored.theme, restored.recoveryDiagnostic)
+    } catch (error) {
+      reportLibrary(current.entries, error instanceof LibraryError
+        ? error.diagnostic
+        : error instanceof DocumentFormatError
+          ? `LIBRARY_ENTRY_INVALID: “${entry.name}” could not be opened. ${error.code}: ${error.message}`
+          : `LIBRARY_ENTRY_INVALID: “${entry.name}” could not be opened.`)
+    }
+  }
+  /** A new empty graph in the current algebra and view. */
+  const newLibraryGraph = () => openGraph({
+    ...expressionDoc,
+    id: crypto.randomUUID(),
+    title: 'Untitled graph',
+    description: '',
+    items: [{ id: 'item-1', source: '' }],
+    appearance: {},
+  }, theme, null)
+  const renameLibraryEntry = (entry: LibraryEntry, name: string) => {
+    const current = currentLibrary()
+    try {
+      reportLibrary(renameInLibrary(browserLibraryStorage(), current.entries, entry.id, name), null)
+      if (entry.id === expressionDoc.id) dispatchHistory({ type: 'update-title', title: name })
+    } catch (error) {
+      reportLibrary(current.entries, libraryFailure(error, 'LIBRARY_WRITE_FAILED: The graph could not be renamed.'))
+    }
+  }
+  const duplicateLibraryEntry = (entry: LibraryEntry) => {
+    const current = currentLibrary()
+    try {
+      const storage = browserLibraryStorage()
+      const source = loadFromLibrary(storage, entry.id)
+      const name = `${entry.name} copy`
+      const copy = resolveCanonicalImport(source.id, source, 'duplicate')
+      reportLibrary(saveToLibrary(storage, current.entries, {
+        ...copy, metadata: { ...copy.metadata, title: name },
+      }, name), null)
+    } catch (error) {
+      reportLibrary(current.entries, libraryFailure(error, `LIBRARY_ENTRY_INVALID: “${entry.name}” could not be duplicated.`))
+    }
+  }
+  const deleteLibraryEntry = (entry: LibraryEntry) => {
+    const current = currentLibrary()
+    try {
+      reportLibrary(removeFromLibrary(browserLibraryStorage(), current.entries, entry.id), null)
+    } catch (error) {
+      reportLibrary(current.entries, libraryFailure(error, 'LIBRARY_WRITE_FAILED: The graph could not be deleted.'))
+    }
+  }
+  const algebraBadges = new Map(algebraRegistry.definitions().map((definition) => [definition.algebraId, definition.badge]))
+  const libraryGroups = groupLibraryEntries(library?.entries ?? [], [...algebraBadges.keys()])
+    .map((group) => ({ ...group, label: algebraBadges.get(group.algebraId) ?? (group.algebraId || 'Unknown algebra') }))
+
   const exportDocument = () => {
     try {
       const source = serializeCanonicalDocument(
@@ -2037,6 +2215,11 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
         />
         <div className="header-actions">
           <DocumentCommands
+            onSave={saveToLibraryRequest}
+            onLibrary={toggleLibrary}
+            libraryOpen={libraryOpen}
+            saveRef={saveButtonRef}
+            libraryRef={libraryButtonRef}
             onImport={() => importInputRef.current?.click()}
             onExport={exportDocument}
             onCopyLink={() => void copyScene()}
@@ -3099,6 +3282,26 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           </div>
         </section>}
       </main>
+      {libraryOpen && (
+        <LibraryMenu
+          // A save request asks for a name in a fresh menu.
+          key={libraryNaming ? 'naming' : 'browsing'}
+          anchorRef={libraryButtonRef}
+          returnFocusRef={libraryReturnFocusRef}
+          groups={libraryGroups}
+          openId={ephemeral ? '' : expressionDoc.id}
+          naming={libraryNaming}
+          diagnostic={library?.diagnostic ?? null}
+          hasUnsavedChanges={hasUnsavedLibraryChanges}
+          onSaveAs={commitLibrarySave}
+          onNew={newLibraryGraph}
+          onOpen={openLibraryEntry}
+          onRename={renameLibraryEntry}
+          onDuplicate={duplicateLibraryEntry}
+          onDelete={deleteLibraryEntry}
+          onClose={closeLibrary}
+        />
+      )}
       {infoDialog === 'algebra' && (
         <AlgebraInfoDialog
           info={algebraDefinition.info(algebraResolution.parameters)}

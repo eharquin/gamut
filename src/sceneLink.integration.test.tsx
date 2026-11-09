@@ -1,5 +1,5 @@
 /// <reference types="node" />
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { webcrypto } from 'node:crypto'
 import App from './App'
@@ -75,6 +75,21 @@ describe('scene sharing in the application', () => {
     expect(window.location.hash).toBe('')
     fireEvent.click(screen.getByRole('button', { name: /^Undo/ }))
     expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('Shared = vector(3, 4)')
+  })
+
+  it('saves a temporary session into the library as a local copy (#212)', async () => {
+    await openSharedScene()
+    fireEvent.click(screen.getByRole('button', { name: 'Save to library' }))
+    const menu = screen.getByRole('dialog', { name: 'Library' })
+    expect(within(menu).getByRole('textbox', { name: 'Graph name' })).toHaveValue('A shared scene')
+    fireEvent.click(within(menu).getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Save local copy' })).not.toBeInTheDocument())
+    expect(window.location.hash).toBe('')
+    const [entry] = JSON.parse(window.localStorage.getItem('gamut.library.v1')!).entries
+    expect(entry).toMatchObject({ name: 'A shared scene' })
+    expect(entry.id).not.toBe(shared.id)
+    await waitFor(() => expect(parseCanonicalDocument(window.localStorage.getItem(ACTIVE_DOCUMENT_KEY)!).id).toBe(entry.id))
   })
 
   // Opening a scene and then importing a dropped one evaluates two documents,

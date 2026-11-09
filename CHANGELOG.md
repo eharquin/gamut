@@ -106,6 +106,14 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Interface and accessibility
 
+- A local library keeps several named graphs in the browser. **Save** stores
+  the open graph under its title, asking for a name in the library menu the
+  first time; in a shared-link session it saves a local copy. **Library**
+  lists the graphs grouped by algebra with their last update, and offers New,
+  Open, Rename, Duplicate, and Delete, with confirmations inside the menu. The
+  previously saved document becomes the first graph of the library. Storage
+  that is unavailable or full is reported without stopping the editor, and a
+  damaged graph never hides the others (#212).
 - A document that stored `view.positionEnabled: false` drew every object at
   the origin while its position fields and base drags still updated. Positions
   now switch off only without a visualizer (NoViz, #55): a document drawn on a

@@ -409,6 +409,22 @@ requirement STORE-012, have **Milestone** commitment.
   figures shall inline their styles, contain no external references, reproduce
   the visible scene, and exclude interaction-only chrome. Figure export is not a
   document mutation and shall not change mathematical or viewport coordinates.
+- **STORE-013:** A local library shall keep several named graphs in the
+  browser (#212). A versioned index (`gamut.library.v1`) lists each graph's
+  identity, name, algebra, creation and last-update instants; each graph is
+  stored under its own key as canonical JSON, and its library identity is its
+  document identity. The open graph remains the autosaved active document;
+  **Save** stores it in the library under its title, asking for a name in the
+  library menu the first time, and in a temporary scene-link session acts as
+  Save local copy. **Library** lists the graphs grouped by algebra with their
+  name and last update, and offers New, Open, Rename, Duplicate, and Delete;
+  deleting, and discarding changes the library does not hold, are confirmed
+  inside the menu. The former active document becomes the first entry once,
+  without data loss. Every storage access tolerates unavailable storage and
+  full quotas, keeps the open graph working in memory, reports the problem in
+  text, and keeps the last valid revision of a graph; a corrupted graph is
+  reported when opened and never hides the others, and a corrupted index is
+  rebuilt from the stored graphs.
 
 ## 12. Diagnostics, limits, and security
 

@@ -39,6 +39,8 @@ export type HistoryAction =
   | Readonly<{ type: 'replace'; document: ExpressionDocument }>
   | Readonly<{ type: 'update-view'; view: ExpressionDocument['view'] }>
   | Readonly<{ type: 'update-identity'; id: string }>
+  /** Names the document, as the library does when it saves or renames it (#212). */
+  | Readonly<{ type: 'update-title'; title: string }>
 
 export function createDocumentHistory(document: ExpressionDocument): DocumentHistory {
   return {
@@ -52,11 +54,13 @@ function bounded(entries: readonly HistoryEntry[]): readonly HistoryEntry[] {
 }
 
 export function documentHistoryReducer(state: DocumentHistory, action: HistoryAction): DocumentHistory {
-  if (action.type === 'update-view' || action.type === 'update-identity') {
+  if (action.type === 'update-view' || action.type === 'update-identity' || action.type === 'update-title') {
     // Applied to every snapshot so that undo and redo never restore a
-    // previous view or document identity.
+    // previous view, document identity, or library name.
     const update = (document: ExpressionDocument): ExpressionDocument =>
-      action.type === 'update-view' ? { ...document, view: action.view } : { ...document, id: action.id }
+      action.type === 'update-view' ? { ...document, view: action.view }
+        : action.type === 'update-identity' ? { ...document, id: action.id }
+          : { ...document, title: action.title }
     return {
       ...state,
       past: state.past.map((entry) => ({ ...entry, document: update(entry.document) })),

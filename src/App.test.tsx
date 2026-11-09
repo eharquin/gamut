@@ -89,7 +89,7 @@ describe('VGA 2D vertical slice', () => {
     const header = document.querySelector('header.app-header') as HTMLElement
     const group = header.querySelector('.header-actions') as HTMLElement
     expect(within(group).getAllByRole('button').map((button) => button.getAttribute('aria-label')))
-      .toEqual(['Import document', 'Export document', 'Copy link', 'Switch to dark theme', 'Settings'])
+      .toEqual(['Save to library', 'Library', 'Import document', 'Export document', 'Copy link', 'Switch to dark theme', 'Settings'])
     for (const name of ['Import document', 'Export document', 'Copy link'])
       expect(within(group).getByRole('button', { name })).toHaveAttribute('title', name)
 
@@ -3611,5 +3611,158 @@ describe('normalization chosen from the expression row (#185)', () => {
     expect(screen.getByText(/zero Euclidean norm/)).toBeInTheDocument()
     expect(screen.queryByText('Unit ideal norm')).not.toBeInTheDocument()
     expect(screen.getByText('4e01 - 3e02', { selector: 'output' })).toBeInTheDocument()
+  })
+})
+
+describe('local library of named graphs (#212)', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    window.localStorage.clear()
+  })
+  const libraryMenu = () => screen.getByRole('dialog', { name: 'Library' })
+  const openLibrary = () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Library' }))
+    return libraryMenu()
+  }
+  const saveAs = (name: string) => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save to library' }))
+    const menu = libraryMenu()
+    fireEvent.change(within(menu).getByRole('textbox', { name: 'Graph name' }), { target: { value: name } })
+    fireEvent.click(within(menu).getByRole('button', { name: 'Save' }))
+  }
+  const source = () => screen.getByRole('textbox', { name: 'Expression 1' })
+
+  it('places Save and Library first in the header group', () => {
+    render(<App />)
+    const group = document.querySelector('.header-actions') as HTMLElement
+    expect(within(group).getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
+      'Save to library', 'Library', 'Import document', 'Export document', 'Copy link', 'Switch to dark theme', 'Settings',
+    ])
+  })
+
+  it('asks for a name in the library menu the first time, then saves under the title', () => {
+    const prompt = vi.spyOn(window, 'prompt')
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Save to library' }))
+    const menu = libraryMenu()
+    const name = within(menu).getByRole('textbox', { name: 'Graph name' })
+    expect(name).toHaveValue('Untitled document')
+    expect(name).toHaveFocus()
+    fireEvent.change(name, { target: { value: 'Rotation talk' } })
+    fireEvent.click(within(menu).getByRole('button', { name: 'Save' }))
+    expect(prompt).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog', { name: 'Library' })).not.toBeInTheDocument()
+    expect(screen.getByText('Saved “Rotation talk” to the library.')).toBeInTheDocument()
+
+    // The next save does not ask again, and stores the current revision.
+    fireEvent.change(source(), { target: { value: 'vector(5, 6)' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save to library' }))
+    expect(screen.queryByRole('dialog', { name: 'Library' })).not.toBeInTheDocument()
+    const stored = JSON.parse(window.localStorage.getItem('gamut.library.v1.document.local-document')!)
+    expect(stored.metadata.title).toBe('Rotation talk')
+    expect(stored.items[0].source).toBe('vector(5, 6)')
+
+    const group = within(openLibrary()).getByRole('region', { name: 'VGA · 2D' })
+    const open = within(group).getByRole('button', { name: 'Open Rotation talk' })
+    expect(open).toHaveAttribute('aria-current', 'true')
+    expect(open.closest('li')!.querySelector('time')).toHaveAttribute('dateTime', expect.stringMatching(/^\d{4}-\d\d-\d\dT/))
+  })
+
+  it('creates, opens, renames, duplicates, and deletes graphs, which survive a reload', () => {
+    const first = render(<App />)
+    fireEvent.change(source(), { target: { value: 'A = vector(1, 0)' } })
+    saveAs('First')
+
+    // New asks before discarding unsaved changes, inside the menu.
+    fireEvent.change(source(), { target: { value: 'A = vector(9, 9)' } })
+    fireEvent.click(within(openLibrary()).getByRole('button', { name: '+ New graph' }))
+    const confirm = within(libraryMenu()).getByRole('alertdialog', { name: 'Confirm' })
+    expect(confirm).toHaveTextContent('not saved in the library')
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Discard and create' }))
+    expect(source()).toHaveValue('')
+    fireEvent.change(source(), { target: { value: 'B = vector(0, 1)' } })
+    saveAs('Second')
+
+    let menu = openLibrary()
+    fireEvent.click(within(menu).getByRole('button', { name: 'Open First' }))
+    expect(source()).toHaveValue('A = vector(1, 0)')
+
+    menu = openLibrary()
+    fireEvent.click(within(menu).getByRole('button', { name: 'Rename Second' }))
+    fireEvent.change(within(menu).getByRole('textbox', { name: 'New name for Second' }), { target: { value: 'Second, renamed' } })
+    fireEvent.click(within(menu).getByRole('button', { name: 'Rename' }))
+    fireEvent.click(within(menu).getByRole('button', { name: 'Duplicate First' }))
+    expect(within(menu).getByRole('button', { name: 'Open First copy' })).toBeInTheDocument()
+
+    fireEvent.click(within(menu).getByRole('button', { name: 'Delete First copy' }))
+    const deletion = within(menu).getByRole('alertdialog', { name: 'Confirm' })
+    expect(deletion).toHaveTextContent('Delete “First copy” from the library?')
+    fireEvent.click(within(deletion).getByRole('button', { name: 'Cancel' }))
+    expect(within(menu).getByRole('button', { name: 'Open First copy' })).toBeInTheDocument()
+    fireEvent.click(within(menu).getByRole('button', { name: 'Delete First copy' }))
+    fireEvent.click(within(within(menu).getByRole('alertdialog', { name: 'Confirm' })).getByRole('button', { name: 'Delete' }))
+    expect(within(menu).queryByRole('button', { name: 'Open First copy' })).not.toBeInTheDocument()
+    first.unmount()
+
+    render(<App />)
+    menu = openLibrary()
+    expect(within(menu).getAllByRole('button', { name: /^Open / }).map((button) => button.getAttribute('aria-label')).sort())
+      .toEqual(['Open First', 'Open Second, renamed'])
+    // The reloaded test document is not the stored First, so opening asks first.
+    fireEvent.click(within(menu).getByRole('button', { name: 'Open Second, renamed' }))
+    fireEvent.click(within(within(menu).getByRole('alertdialog', { name: 'Confirm' }))
+      .getByRole('button', { name: 'Discard and open' }))
+    expect(source()).toHaveValue('B = vector(0, 1)')
+  })
+
+  it('migrates the former active document at launch and groups graphs by algebra', () => {
+    const active = toCanonicalDocument(expressionDocument(
+      [{ id: 'item-1', source: 'V = vector(2, 1)' }], {}, { id: 'former', title: 'Former scene' },
+    ), 'light')
+    const pga = toCanonicalDocument({
+      ...expressionDocument([{ id: 'item-1', source: 'P = point(1, 2)' }], {}, { id: 'pga-graph', title: 'Points' }),
+      algebra: { algebraId: 'org.multivector.pga', definitionVersion: 1, conventionVersion: 1, parameters: {} },
+      interpretation: { interpretationId: 'org.multivector.pga-2d', interpretationVersion: 1 },
+    }, 'light')
+    window.localStorage.setItem(ACTIVE_DOCUMENT_KEY, serializeCanonicalDocument(active))
+    window.localStorage.setItem('gamut.library.v1.document.pga-graph', serializeCanonicalDocument(pga))
+    vi.stubEnv('MODE', 'development')
+    render(<App />)
+    // The index is written at launch; the stray PGA graph is not listed until
+    // it is in the index, so add it by rebuilding from a corrupted index.
+    expect(JSON.parse(window.localStorage.getItem('gamut.library.v1')!).entries)
+      .toMatchObject([{ id: 'former', name: 'Former scene', algebraId: 'org.multivector.vga' }])
+    cleanup()
+    window.localStorage.setItem('gamut.library.v1', 'corrupted')
+    render(<App />)
+    const menu = openLibrary()
+    expect(menu).toHaveTextContent('LIBRARY_INDEX_REBUILT')
+    expect(within(within(menu).getByRole('region', { name: 'VGA · 2D' })).getByRole('button', { name: 'Open Former scene' }))
+      .toHaveAttribute('aria-current', 'true')
+    expect(within(within(menu).getByRole('region', { name: 'PGA · 2D' })).getByRole('button', { name: 'Open Points' }))
+      .toBeInTheDocument()
+  })
+
+  it('keeps editing and reports the problem when browser storage is unavailable', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new DOMException('denied', 'SecurityError') })
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('denied', 'SecurityError') })
+    render(<App />)
+    fireEvent.change(source(), { target: { value: 'vector(3, 4)' } })
+    saveAs('Blocked')
+    const menu = libraryMenu()
+    expect(within(menu).getByRole('alert')).toHaveTextContent(/^LIBRARY_UNAVAILABLE/)
+    expect(source()).toHaveValue('vector(3, 4)')
+  })
+
+  it('reports a full storage on save and keeps the open graph', () => {
+    render(<App />)
+    saveAs('Kept')
+    fireEvent.change(source(), { target: { value: 'vector(7, 7)' } })
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('Quota exceeded', 'QuotaExceededError') })
+    fireEvent.click(screen.getByRole('button', { name: 'Save to library' }))
+    expect(within(libraryMenu()).getByRole('alert')).toHaveTextContent(/^LIBRARY_WRITE_FAILED/)
+    vi.restoreAllMocks()
+    expect(JSON.parse(window.localStorage.getItem('gamut.library.v1.document.local-document')!).items[0].source)
+      .toBe('vector(2, 1)')
   })
 })

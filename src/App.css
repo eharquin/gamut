@@ -2785,3 +2785,179 @@ line.manipulation-focus-ring {
   box-shadow: var(--shadow-modal);
   font-size: 0.9rem;
 }
+
+/* Local library of named graphs (#212). */
+.library-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 10px 10px;
+  font-size: 0.78rem;
+}
+
+.library-new {
+  align-self: flex-start;
+  padding: 4px 8px;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font: 700 0.74rem var(--font-mono);
+  cursor: pointer;
+}
+
+.library-new:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.library-group h3 {
+  margin: 4px 0;
+  color: var(--muted);
+  font: 700 0.64rem var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.library-group ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+}
+
+/* The name takes the whole width; date and actions share the line below. */
+.library-group li {
+  display: grid;
+  border-radius: 6px;
+}
+
+.library-group li.is-open {
+  background: var(--accent-soft);
+}
+
+.library-open {
+  min-width: 0;
+  display: grid;
+  padding: 5px 6px 1px;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.library-open:hover {
+  background: var(--surface-hover);
+}
+
+.library-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px 3px 6px;
+}
+
+.library-meta time {
+  color: var(--muted);
+  font: 0.66rem var(--font-mono);
+  white-space: nowrap;
+}
+
+.library-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.library-actions button,
+.library-confirm-actions button {
+  padding: 3px 6px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font: 0.68rem var(--font-mono);
+  cursor: pointer;
+}
+
+.library-actions button:hover,
+.library-confirm-actions button:hover:not(:disabled) {
+  color: var(--accent);
+  background: var(--surface-hover);
+  border-color: var(--border);
+}
+
+.library-confirm {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  background: var(--surface-hover);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+}
+
+.library-confirm p {
+  margin: 0;
+}
+
+.library-confirm label {
+  display: grid;
+  gap: 4px;
+}
+
+.library-confirm input {
+  min-width: 0;
+  padding: 4px 6px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  font: 0.8rem var(--font-mono);
+}
+
+.library-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.library-confirm-actions button[type='submit'],
+.library-confirm-actions .is-destructive {
+  color: var(--text-strong);
+  border-color: var(--border-strong);
+}
+
+.library-confirm-actions .is-destructive {
+  color: var(--error);
+}
+
+.library-confirm-actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.library-body :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.library-diagnostic {
+  margin: 0;
+  color: var(--error);
+  font: 0.72rem/1.4 var(--font-mono);
+}
+
+.library-empty {
+  margin: 0;
+  color: var(--muted);
+}
