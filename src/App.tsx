@@ -119,6 +119,8 @@ const algebraRegistry = createBuiltinAlgebraRegistry()
 const restoreOptions = {
   visualizerAvailable: (visualizerId: string) => algebraRegistry.resolveVisualizer(visualizerId) !== null,
 }
+/** How far, in CSS pixels, a pressed handle must move before its drag starts. */
+const DRAG_DEAD_ZONE = 3
 const MIN_PANEL_WIDTH = 240
 /** Keeps the `.panel-resize` separator reachable at any panel width. */
 const PANEL_RESIZE_WIDTH = 6
@@ -157,6 +159,11 @@ function playbackParametersEqual(
 
 function declaredName(source: string): string | null {
   return /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/.exec(source)?.[1] ?? null
+}
+
+/** Whether a node is a manipulation handle of the canvas. */
+function isHandleElement(target: EventTarget | null): boolean {
+  return target instanceof Element && target.hasAttribute('data-handle-key')
 }
 
 function naturalList(values: readonly string[]): string {
@@ -345,6 +352,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     itemId: string
     kind: ManipulationKind
     pointerId: number
+    /** Where the press was, in client pixels, until the pointer has moved past the dead zone. */
+    press: Readonly<{ x: number; y: number }> | null
     /** Anchors a base drag started on, not taken until the pointer leaves them (#100). */
     disarmedAnchors: ReadonlySet<string>
   }> | null>(null)
@@ -361,15 +370,33 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   // Where handles coincide, those of the selected object are drawn on top and
   // take the press (#100): the object whose expression row has focus or the
   // pointer, otherwise the last object a pointer manipulated in the viewport.
-  // The drawing order is kept for the length of a drag, so that the dragged
-  // handle is never moved in the document while it holds pointer capture.
+  // The drawing order is kept for the length of a drag and while a handle has
+  // keyboard focus, so that a handle is never moved in the document while it
+  // holds pointer capture or focus, which moving it would release.
   const [rowFocusId, setRowFocusId] = useState<string | null>(null)
   const [rowHoverId, setRowHoverId] = useState<string | null>(null)
   const [lastManipulatedId, setLastManipulatedId] = useState<string | null>(null)
   const [dragSelection, setDragSelection] = useState<Readonly<{ itemId: string | null }> | null>(null)
-  const selectedObjectId = dragSelection
-    ? dragSelection.itemId
-    : rowFocusId ?? rowHoverId ?? lastManipulatedId
+  const [handleFocusSelection, setHandleFocusSelection] =
+    useState<Readonly<{ itemId: string | null }> | null>(null)
+  const frozenSelection = dragSelection ?? handleFocusSelection
+  // A deleted object's row fires neither blur nor pointer leave, so its id is
+  // ignored here and cleared once the document has changed.
+  const isPresentItem = (itemId: string | null): itemId is string =>
+    itemId !== null && expressionDoc.items.some((item) => item.id === itemId)
+  const selectedObjectId = frozenSelection
+    ? frozenSelection.itemId
+    : [rowFocusId, rowHoverId, lastManipulatedId].find(isPresentItem) ?? null
+  useEffect(() => {
+    const present = new Set(expressionDoc.items.map((item) => item.id))
+    const clearDeleted = (itemId: string | null) =>
+      itemId !== null && !present.has(itemId) ? null : itemId
+    setRowFocusId(clearDeleted)
+    setRowHoverId(clearDeleted)
+    setLastManipulatedId(clearDeleted)
+    // A focused handle removed with its object fires no blur either.
+    if (!isHandleElement(document.activeElement)) setHandleFocusSelection(null)
+  }, [expressionDoc.items])
   // Keyboard focus on a handle is drawn as an SVG ring rather than a CSS
   // outline, which WebKit fails to repaint when focus moves between SVG
   // elements. The ring follows the input modality at the moment of focus,
@@ -781,7 +808,11 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       ? new Set(nearbyAnchors(anchorProximity(itemId, screenPoint(event.clientX, event.clientY)))
           .map(anchorKey))
       : new Set<string>()
-    manipulationDrag.current = { itemId, kind, pointerId: event.pointerId, disarmedAnchors }
+    manipulationDrag.current = {
+      itemId, kind, pointerId: event.pointerId,
+      press: { x: event.clientX, y: event.clientY },
+      disarmedAnchors,
+    }
     setDragSelection({ itemId: selectedObjectId })
     setLastManipulatedId(itemId)
     anchorValidityCache.current.clear()
@@ -941,8 +972,16 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           formatViewportCoordinate(current.y + delta.y, viewport.pixelsPerUnit)}.`)
   }
   const moveViewportPan = (event: ReactPointerEvent<SVGSVGElement>) => {
-    const manipulation = manipulationDrag.current
-    if (manipulation?.pointerId === event.pointerId) {
+    const pressed = manipulationDrag.current
+    if (pressed?.pointerId === event.pointerId) {
+      // A press that has not yet moved past the dead zone is a click: it
+      // writes nothing, so it cannot unlink a base or nudge an object.
+      if (pressed.press && Math.hypot(
+        event.clientX - pressed.press.x,
+        event.clientY - pressed.press.y,
+      ) < DRAG_DEAD_ZONE) return
+      const manipulation = pressed.press ? { ...pressed, press: null } : pressed
+      manipulationDrag.current = manipulation
       const pointer = screenPoint(event.clientX, event.clientY)
       if (manipulation.kind === 'base') {
         const proximity = anchorProximity(manipulation.itemId, pointer)
@@ -2975,6 +3014,14 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
               onLostPointerCapture={loseViewportCapture}
               onKeyDown={navigateViewportWithKeyboard}
               onDoubleClick={createVectorFromViewport}
+              onFocus={(event) => {
+                if (isHandleElement(event.target))
+                  setHandleFocusSelection((current) => current ?? { itemId: selectedObjectId })
+              }}
+              onBlur={(event) => {
+                if (isHandleElement(event.target) && !isHandleElement(event.relatedTarget))
+                  setHandleFocusSelection(null)
+              }}
             >
               <desc id="canvas-description">{canvasDescription}</desc>
               {expressionDoc.view.display.gridVisible && <g aria-hidden="true">

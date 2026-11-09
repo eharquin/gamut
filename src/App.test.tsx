@@ -989,6 +989,110 @@ describe('VGA 2D vertical slice', () => {
     expect(onTop('V1', 'V2')).toBe(true)
   })
 
+  it('keeps a click on a linked base from unlinking it (#100)', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), {
+      target: { value: 'V = vector(2, 1)' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Add expression' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 2' }), {
+      target: { value: 'W = vector(1, 0)' },
+    })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Position 2' }), {
+      target: { value: 'V.head' },
+    })
+    const canvas = viewportCanvas()
+    sizeViewportCanvas(canvas)
+    const base = screen.getByRole('button', { name: 'Move base of W' })
+    const position = () => screen.getByRole('textbox', { name: 'Position 2' })
+
+    // Moving less than 3 px is a click: nothing is written, so the last
+    // history entry is still the link.
+    fireEvent.pointerDown(base, { button: 0, pointerId: 45, clientX: 464, clientY: 168 })
+    fireEvent.pointerMove(canvas, { pointerId: 45, clientX: 466, clientY: 170 })
+    fireEvent.pointerUp(canvas, { pointerId: 45 })
+    expect(position()).toHaveValue('V.head')
+    fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
+    expect(position()).toHaveValue('')
+    fireEvent.click(screen.getByRole('button', { name: 'Redo document change' }))
+    expect(position()).toHaveValue('V.head')
+
+    // From 3 px on, the drag starts and unlinks the base.
+    fireEvent.pointerDown(base, { button: 0, pointerId: 46, clientX: 464, clientY: 168 })
+    fireEvent.pointerMove(canvas, { pointerId: 46, clientX: 467, clientY: 168 })
+    fireEvent.pointerUp(canvas, { pointerId: 46 })
+    expect(position()).not.toHaveValue('V.head')
+  })
+
+  it('keeps the draw order while a handle has focus (#100)', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), {
+      target: { value: 'V1 = vector(1, 0)' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Add expression' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 2' }), {
+      target: { value: 'V2 = vector(0, 1)' },
+    })
+    act(() => (document.activeElement as HTMLElement | null)?.blur())
+    const base = (name: string) => screen.getByRole('button', { name: `Move base of ${name}` })
+    const onTop = (upper: string, lower: string) =>
+      (base(lower).compareDocumentPosition(base(upper)) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+    const row1 = screen.getByRole('textbox', { name: 'Expression 1' }).closest('article') as HTMLElement
+
+    // Hovering the row of the focused handle's object does not move it.
+    const handle = base('V1')
+    act(() => (handle as unknown as HTMLElement).focus())
+    expect(onTop('V2', 'V1')).toBe(true)
+    fireEvent.pointerEnter(row1)
+    expect(onTop('V2', 'V1')).toBe(true)
+    expect(document.activeElement).toBe(handle)
+
+    // Tab between handles keeps the order; leaving the canvas releases it.
+    act(() => (base('V2') as unknown as HTMLElement).focus())
+    expect(onTop('V2', 'V1')).toBe(true)
+    act(() => (base('V2') as unknown as HTMLElement).blur())
+    expect(onTop('V1', 'V2')).toBe(true)
+  })
+
+  it('forgets the hovered row of a deleted object (#100)', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), {
+      target: { value: 'V1 = vector(1, 0)' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Add expression' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 2' }), {
+      target: { value: 'V2 = vector(0, 1)' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Add expression' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 3' }), {
+      target: { value: 'V3 = vector(-1, 0)' },
+    })
+    act(() => (document.activeElement as HTMLElement | null)?.blur())
+    const base = (name: string) => screen.getByRole('button', { name: `Move base of ${name}` })
+    const onTop = (upper: string, lower: string) =>
+      (base(lower).compareDocumentPosition(base(upper)) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+    const canvas = viewportCanvas()
+    sizeViewportCanvas(canvas)
+    fireEvent.pointerDown(base('V1'), { button: 0, pointerId: 47, clientX: 320, clientY: 240 })
+    fireEvent.pointerUp(canvas, { pointerId: 47 })
+    expect(onTop('V1', 'V3')).toBe(true)
+
+    // The deleted row fires no pointer leave. Deleting focuses the previous
+    // row, so focus is moved away to observe the hovered row alone.
+    const row2 = screen.getByRole('textbox', { name: 'Expression 2' }).closest('article') as HTMLElement
+    fireEvent.pointerEnter(row2)
+    expect(onTop('V2', 'V1')).toBe(true)
+    fireEvent.click(within(row2).getByRole('button', { name: 'Delete expression 2' }))
+    act(() => (document.activeElement as HTMLElement | null)?.blur())
+    expect(screen.queryByRole('button', { name: 'Move base of V2' })).not.toBeInTheDocument()
+    expect(onTop('V1', 'V3')).toBe(true)
+
+    // Restoring the object does not select it again.
+    fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
+    act(() => (document.activeElement as HTMLElement | null)?.blur())
+    expect(onTop('V1', 'V2')).toBe(true)
+  })
+
   it('snaps a vector base to a named bivector position', () => {
     render(<App />)
     fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), {
