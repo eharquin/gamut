@@ -2561,8 +2561,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                       orientationVisible={expressionDoc.appearance[item.id]?.orientationVisible ?? true}
                       bivectorShape={expressionDoc.appearance[item.id]?.bivectorShape ?? 'from-vectors'}
                       idealPointDisplay={expressionDoc.appearance[item.id]?.idealPointDisplay ?? 'vector'}
-                      pointListDisplay={expressionDoc.appearance[item.id]?.pointListDisplay ?? 'none'}
-                      pointMarkersVisible={expressionDoc.appearance[item.id]?.pointMarkersVisible ?? true}
+                      pointListDisplay={expressionDoc.appearance[item.id]?.primitiveStyles?.points?.connection ?? 'none'}
+                      pointMarkersVisible={expressionDoc.appearance[item.id]?.primitiveStyles?.points?.visible ?? true}
                       pointListDisplayAvailable={evaluation?.status === 'valid' &&
                         evaluation.valueType === 'list' &&
                         pointListVertices(evaluation.elements) !== null}
@@ -2599,10 +2599,10 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                         kind: 'update-appearance', itemId: item.id, appearance: { idealPointDisplay },
                       })}
                       onPointListDisplayChange={(pointListDisplay) => executeCommand({
-                        kind: 'update-appearance', itemId: item.id, appearance: { pointListDisplay },
+                        kind: 'update-appearance', itemId: item.id, appearance: { primitiveStyles: { points: { connection: pointListDisplay } } },
                       })}
                       onPointMarkersVisibleChange={(pointMarkersVisible) => executeCommand({
-                        kind: 'update-appearance', itemId: item.id, appearance: { pointMarkersVisible },
+                        kind: 'update-appearance', itemId: item.id, appearance: { primitiveStyles: { points: { visible: pointMarkersVisible } } },
                       })}
                       onControlChange={(control) => {
                         if (isPlaying) stopPlayback(item.id)

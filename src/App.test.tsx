@@ -119,7 +119,13 @@ describe('VGA 2D vertical slice', () => {
       formatVersion: 4,
       appearance: Object.fromEntries(Object.entries(current.appearance).map(
         ([id, appearance]) => {
-          const { idealPointDisplay: _idealPointDisplay, pointListDisplay: _pointListDisplay, pointMarkersVisible: _pointMarkersVisible, ...versionFour } = appearance
+          const {
+            idealPointDisplay: _idealPointDisplay, strokeStyle: _strokeStyle, strokeWidthSource: _strokeWidthSource,
+            pointStyle: _pointStyle, pointSizeSource: _pointSizeSource, opacitySource: _opacitySource,
+            labelAngleSource: _labelAngleSource, labelSizeSource: _labelSizeSource,
+            labelDistanceSource: _labelDistanceSource, labelAnchor: _labelAnchor, primitiveStyles: _primitiveStyles,
+            ...versionFour
+          } = appearance
           return [id, versionFour]
         },
       )),

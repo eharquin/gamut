@@ -185,4 +185,21 @@ describe('semantic document commands', () => {
     const withPosition = expressionDocument([{ id: 'item-1', source: '', positionSource: '(1, 2)' }])
     expect(executeDocumentCommand(withPosition, selection).status).toBe('invalid')
   })
+
+  it('merges list primitive styles per block, keeping the settings it does not name', () => {
+    const document = expressionDocument([{ id: 'p', source: 'P = [e1, e2]' }], {
+      p: { style: 'teal-4', primitiveStyles: { points: { connection: 'closed-loop', pointStyle: 'ring' }, lines: { strokeStyle: 'dashed' } } },
+    })
+    const result = executeDocumentCommand(document, {
+      kind: 'update-appearance', itemId: 'p', appearance: { primitiveStyles: { points: { visible: false } } },
+    })
+    expect(result.status).toBe('applied')
+    expect(result.document.appearance.p).toEqual({
+      style: 'teal-4',
+      primitiveStyles: {
+        points: { connection: 'closed-loop', pointStyle: 'ring', visible: false },
+        lines: { strokeStyle: 'dashed' },
+      },
+    })
+  })
 })

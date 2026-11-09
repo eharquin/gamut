@@ -8,6 +8,7 @@ import {
   serializeCanonicalDocument,
   toCanonicalDocument,
   resolveCanonicalImport,
+  type CanonicalDocument,
 } from './canonicalDocument'
 
 function sample() {
@@ -19,6 +20,39 @@ function sample() {
     ),
     'dark',
   )
+}
+
+/** The canonical appearance of a new object with no stored setting. */
+const DEFAULT_V7_APPEARANCE = {
+  visible: true, labelVisible: false, label: '', style: 'blue-4', borderVisible: false,
+  orientationVisible: true, bivectorShape: 'from-vectors', idealPointDisplay: 'vector',
+  strokeStyle: 'solid', strokeWidthSource: '', pointStyle: 'dot', pointSizeSource: '',
+  opacitySource: '', labelAngleSource: '', labelSizeSource: '', labelDistanceSource: '',
+  labelAnchor: 'auto',
+  primitiveStyles: {
+    points: { visible: true, pointStyle: 'dot', pointSizeSource: '', connection: 'none', strokeStyle: 'solid', strokeWidthSource: '' },
+    lines: { visible: true, strokeStyle: 'solid', strokeWidthSource: '', orientationVisible: true },
+  },
+} as const
+
+/**
+ * The same document in format version 6, the input of the migration tests:
+ * no version 7 appearance fields, and the list settings at the top level.
+ */
+function version6(document: CanonicalDocument) {
+  return {
+    ...document,
+    formatVersion: 6,
+    appearance: Object.fromEntries(Object.entries(document.appearance).map(([id, entry]) => {
+      const {
+        strokeStyle: _strokeStyle, strokeWidthSource: _strokeWidthSource, pointStyle: _pointStyle,
+        pointSizeSource: _pointSizeSource, opacitySource: _opacitySource, labelAngleSource: _labelAngleSource,
+        labelSizeSource: _labelSizeSource, labelDistanceSource: _labelDistanceSource, labelAnchor: _labelAnchor,
+        primitiveStyles, ...rest
+      } = entry
+      return [id, { ...rest, pointListDisplay: primitiveStyles.points.connection, pointMarkersVisible: primitiveStyles.points.visible }]
+    })),
+  }
 }
 
 describe('canonical document format', () => {
@@ -42,7 +76,7 @@ describe('canonical document format', () => {
       title: 'Vectors',
       description: 'A test document',
       items: [{ id: 'v', source: 'V = vector(2, 1)', positionSource: '(1, 1)', normalization: 'natural' }],
-      appearance: { v: { visible: false, labelVisible: true, label: 'V', style: 'yellow-4', borderVisible: false, orientationVisible: true, bivectorShape: 'from-vectors', idealPointDisplay: 'vector', pointListDisplay: 'none', pointMarkersVisible: true } },
+      appearance: { v: { ...DEFAULT_V7_APPEARANCE, visible: false, labelVisible: true, label: 'V', style: 'yellow-4' } },
     }))
   })
 
@@ -55,7 +89,7 @@ describe('canonical document format', () => {
         positionSource: null, normalization: null, control: null,
       }],
       appearance: {
-        note: { visible: true, labelVisible: false, label: '', style: 'neutral-4', borderVisible: false, orientationVisible: true, bivectorShape: 'from-vectors' as const, idealPointDisplay: 'vector' as const, pointListDisplay: 'none' as const, pointMarkersVisible: true },
+        note: { ...DEFAULT_V7_APPEARANCE, style: 'neutral-4' },
       },
     }
     const encoded = serializeCanonicalDocument(annotation)
@@ -74,7 +108,7 @@ describe('canonical document format', () => {
   })
 
   it('migrates version one appearances to borderless version three records with orientation', () => {
-    const current = sample()
+    const current = version6(sample())
     const legacy = {
       ...current,
       formatVersion: 1,
@@ -93,14 +127,14 @@ describe('canonical document format', () => {
       )),
     }
     const migrated = parseCanonicalDocument(JSON.stringify(legacy))
-    expect(migrated.formatVersion).toBe(6)
+    expect(migrated.formatVersion).toBe(7)
     expect(migrated.appearance.v.borderVisible).toBe(false)
     expect(migrated.appearance.v.orientationVisible).toBe(true)
     expect(migrated.appearance.v.bivectorShape).toBe('from-vectors')
   })
 
   it('migrates version three documents to version four, defaulting to showing residue', () => {
-    const current = sample()
+    const current = version6(sample())
     const { showApproximatedResidue: _showApproximatedResidue, ...legacyDisplay } = current.view.display
     const legacy = {
       ...current,
@@ -108,14 +142,14 @@ describe('canonical document format', () => {
       view: { ...current.view, display: legacyDisplay },
     }
     const migrated = parseCanonicalDocument(JSON.stringify(legacy))
-    expect(migrated.formatVersion).toBe(6)
+    expect(migrated.formatVersion).toBe(7)
     // Preserves the pre-existing document's prior appearance: version 3 had
     // no toggle, so it always behaved as if residue were shown.
     expect(migrated.view.display.showApproximatedResidue).toBe(true)
   })
 
   it('migrates version four documents to version five, drawing ideal points as arrows', () => {
-    const current = sample()
+    const current = version6(sample())
     const legacy = {
       ...current,
       formatVersion: 4,
@@ -125,16 +159,16 @@ describe('canonical document format', () => {
       })),
     }
     const migrated = parseCanonicalDocument(JSON.stringify(legacy))
-    expect(migrated.formatVersion).toBe(6)
+    expect(migrated.formatVersion).toBe(7)
     expect(migrated.appearance.v.idealPointDisplay).toBe('vector')
-    expect(migrated.appearance.v.pointListDisplay).toBe('none')
+    expect(migrated.appearance.v.primitiveStyles.points.connection).toBe('none')
     expect(errorCode(() => parseCanonicalDocument(JSON.stringify({
       ...current, appearance: { v: { ...current.appearance.v, idealPointDisplay: 'arrow' } },
     })))).toBe('DOCUMENT_SCHEMA')
   })
 
   it('migrates version five documents to version six, drawing point lists as markers', () => {
-    const current = sample()
+    const current = version6(sample())
     const legacy = {
       ...current,
       formatVersion: 5,
@@ -144,9 +178,9 @@ describe('canonical document format', () => {
       })),
     }
     const migrated = parseCanonicalDocument(JSON.stringify(legacy))
-    expect(migrated.formatVersion).toBe(6)
-    expect(migrated.appearance.v.pointListDisplay).toBe('none')
-    expect(migrated.appearance.v.pointMarkersVisible).toBe(true)
+    expect(migrated.formatVersion).toBe(7)
+    expect(migrated.appearance.v.primitiveStyles.points.connection).toBe('none')
+    expect(migrated.appearance.v.primitiveStyles.points.visible).toBe(true)
     expect(errorCode(() => parseCanonicalDocument(JSON.stringify({
       ...current, appearance: { v: { ...current.appearance.v, pointListDisplay: 'polygon' } },
     })))).toBe('DOCUMENT_SCHEMA')
@@ -156,15 +190,15 @@ describe('canonical document format', () => {
   })
 
   it('round-trips every point-list display and marker visibility', () => {
-    for (const pointListDisplay of ['none', 'open-polyline', 'closed-loop'] as const) {
+    for (const connection of ['none', 'open-polyline', 'closed-loop'] as const) {
       const document = expressionDocument(
         [{ id: 'p', source: 'P = [e1, e2]' }],
-        { p: { visible: true, labelVisible: false, label: '', style: 'blue-4', pointListDisplay, pointMarkersVisible: false } },
+        { p: { visible: true, labelVisible: false, label: '', style: 'blue-4', primitiveStyles: { points: { connection, visible: false } } } },
       )
       const encoded = serializeCanonicalDocument(toCanonicalDocument(document, 'system'))
       const restored = fromCanonicalDocument(parseCanonicalDocument(encoded))
-      expect(restored.document.appearance.p.pointListDisplay).toBe(pointListDisplay)
-      expect(restored.document.appearance.p.pointMarkersVisible).toBe(false)
+      expect(restored.document.appearance.p.primitiveStyles?.points?.connection).toBe(connection)
+      expect(restored.document.appearance.p.primitiveStyles?.points?.visible).toBe(false)
     }
   })
 
@@ -184,7 +218,7 @@ describe('canonical document format', () => {
   })
 
   it('selects the version boundary before complete schema validation', () => {
-    expect(errorCode(() => parseCanonicalDocument('{"formatVersion":7,"future":true}'))).toBe('DOCUMENT_FORMAT_VERSION')
+    expect(errorCode(() => parseCanonicalDocument('{"formatVersion":8,"future":true}'))).toBe('DOCUMENT_FORMAT_VERSION')
   })
 
   it('rejects unknown fields and unregistered styles', () => {
@@ -323,5 +357,167 @@ describe('canonical document format', () => {
     expect(restored.document.view.visualizerId).toBe('org.multivector.pga-2d')
     expect(restored.document.items[0].source).toBe('P = point(1, 2)')
     expect(restored.recoveryDiagnostic).toBeNull()
+  })
+})
+
+describe('canonical document format version 7', () => {
+  const errorCode = (action: () => unknown) => {
+    try { action() } catch (error) { return (error as { code?: string }).code }
+    return undefined
+  }
+  /** A version 6 document with one record per point-list case. */
+  function legacyListDocument() {
+    const current = toCanonicalDocument(expressionDocument(
+      [
+        { id: 'plain', source: 'P = [e1, e2]', normalization: 'natural' },
+        { id: 'hidden-unconnected', source: 'Q = [e1, e2]' },
+        { id: 'connected', source: 'R = [e1, e2]' },
+        { id: 'loop', source: 'S = [e1, e2]' },
+      ],
+      {
+        plain: { label: 'p', labelVisible: true, orientationVisible: false },
+        'hidden-unconnected': { primitiveStyles: { points: { connection: 'none', visible: false } } },
+        connected: { primitiveStyles: { points: { connection: 'open-polyline', visible: false } } },
+        loop: { primitiveStyles: { points: { connection: 'closed-loop', visible: true } } },
+      },
+      { id: 'doc-6' },
+    ), 'light')
+    return version6(current)
+  }
+
+  it('migrates version 6 documents without changing what they draw', () => {
+    const legacy = legacyListDocument()
+    expect(legacy.appearance['hidden-unconnected']).toEqual(expect.objectContaining({ pointListDisplay: 'none', pointMarkersVisible: false }))
+    const migrated = parseCanonicalDocument(JSON.stringify(legacy))
+    expect(migrated.formatVersion).toBe(7)
+    expect(migrated.items[0].normalization).toBe('natural')
+    expect(migrated.appearance.plain).toEqual({
+      visible: true, labelVisible: true, label: 'p', style: 'blue-4', borderVisible: false,
+      orientationVisible: false, bivectorShape: 'from-vectors', idealPointDisplay: 'vector',
+      strokeStyle: 'solid', strokeWidthSource: '', pointStyle: 'dot', pointSizeSource: '',
+      opacitySource: '', labelAngleSource: '', labelSizeSource: '', labelDistanceSource: '',
+      // The fixed version 6 position, so existing labels do not move.
+      labelAnchor: 'top-right',
+      primitiveStyles: {
+        points: { visible: true, pointStyle: 'dot', pointSizeSource: '', connection: 'none', strokeStyle: 'solid', strokeWidthSource: '' },
+        // List lines used the item's orientation in version 6.
+        lines: { visible: true, strokeStyle: 'solid', strokeWidthSource: '', orientationVisible: false },
+      },
+    })
+    // Version 6 always drew the markers of an unconnected list.
+    expect(migrated.appearance['hidden-unconnected'].primitiveStyles.points).toEqual(expect.objectContaining({ connection: 'none', visible: true }))
+    expect(migrated.appearance.connected.primitiveStyles.points).toEqual(expect.objectContaining({ connection: 'open-polyline', visible: false }))
+    expect(migrated.appearance.loop.primitiveStyles.points).toEqual(expect.objectContaining({ connection: 'closed-loop', visible: true }))
+    expect(fromCanonicalDocument(migrated).document.appearance.plain.labelAnchor).toBe('top-right')
+  })
+
+  it('migrates byte-stably: a migrated document serializes and reparses unchanged', () => {
+    const encoded = serializeCanonicalDocument(parseCanonicalDocument(JSON.stringify(legacyListDocument())))
+    expect(encoded).toContain('"formatVersion":7')
+    expect(encoded).not.toContain('pointListDisplay')
+    expect(encoded).not.toContain('pointMarkersVisible')
+    expect(serializeCanonicalDocument(parseCanonicalDocument(encoded))).toBe(encoded)
+  })
+
+  it('places the label of a new object automatically', () => {
+    const canonical = toCanonicalDocument(expressionDocument([{ id: 'v', source: 'V = e1' }]), 'system')
+    expect(canonical.appearance.v.labelAnchor).toBe('auto')
+    expect(canonical.appearance.v).toEqual({ ...DEFAULT_V7_APPEARANCE })
+  })
+
+  it('round-trips every version 7 appearance field', () => {
+    const appearance = {
+      strokeStyle: 'dotted', strokeWidthSource: 'w', pointStyle: 'diamond', pointSizeSource: '7.5',
+      opacitySource: '40', labelAngleSource: '-45', labelSizeSource: 's * 2', labelDistanceSource: '12',
+      labelAnchor: 'bottom-left',
+      primitiveStyles: {
+        points: { visible: false, pointStyle: 'cross', pointSizeSource: 'size', connection: 'closed-loop', strokeStyle: 'dashed', strokeWidthSource: '0.25' },
+        lines: { visible: false, strokeStyle: 'dotted', strokeWidthSource: '10', orientationVisible: false },
+      },
+    } as const
+    const document = expressionDocument([{ id: 'v', source: 'V = e1' }], { v: appearance })
+    const encoded = serializeCanonicalDocument(toCanonicalDocument(document, 'system'))
+    const parsed = parseCanonicalDocument(encoded)
+    expect(parsed.appearance.v).toEqual(expect.objectContaining(appearance))
+    const restored = fromCanonicalDocument(parsed)
+    expect(restored.document.appearance.v).toEqual(expect.objectContaining(appearance))
+    expect(serializeCanonicalDocument(toCanonicalDocument(restored.document, restored.theme))).toBe(encoded)
+  })
+
+  it('round-trips each enumerated value', () => {
+    const roundTrip = (appearance: Parameters<typeof expressionDocument>[1]) => {
+      const document = expressionDocument([{ id: 'v', source: 'V = e1' }], appearance)
+      return parseCanonicalDocument(serializeCanonicalDocument(toCanonicalDocument(document, 'system'))).appearance.v
+    }
+    for (const strokeStyle of ['solid', 'dashed', 'dotted'] as const) {
+      expect(roundTrip({ v: { strokeStyle } }).strokeStyle).toBe(strokeStyle)
+      expect(roundTrip({ v: { primitiveStyles: { points: { strokeStyle } } } }).primitiveStyles.points.strokeStyle).toBe(strokeStyle)
+      expect(roundTrip({ v: { primitiveStyles: { lines: { strokeStyle } } } }).primitiveStyles.lines.strokeStyle).toBe(strokeStyle)
+    }
+    for (const pointStyle of ['dot', 'ring', 'cross', 'plus', 'square', 'diamond'] as const) {
+      expect(roundTrip({ v: { pointStyle } }).pointStyle).toBe(pointStyle)
+      expect(roundTrip({ v: { primitiveStyles: { points: { pointStyle } } } }).primitiveStyles.points.pointStyle).toBe(pointStyle)
+    }
+    for (const labelAnchor of ['auto', 'top-left', 'top', 'top-right', 'left', 'right', 'bottom-left', 'bottom', 'bottom-right'] as const) {
+      expect(roundTrip({ v: { labelAnchor } }).labelAnchor).toBe(labelAnchor)
+    }
+  })
+
+  it('round-trips every normalization mode', () => {
+    for (const normalization of ['natural', 'euclidean', 'ideal'] as const) {
+      const document = expressionDocument([{ id: 'v', source: 'V = e1', normalization }])
+      const restored = fromCanonicalDocument(parseCanonicalDocument(serializeCanonicalDocument(toCanonicalDocument(document, 'system'))))
+      expect(restored.document.items[0].normalization).toBe(normalization)
+    }
+    const current = sample()
+    expect(errorCode(() => serializeCanonicalDocument({
+      ...current, items: [{ ...current.items[0], normalization: 'inorm' as never }],
+    }))).toBe('DOCUMENT_SCHEMA')
+  })
+
+  it('rejects invalid version 7 appearance values', () => {
+    const current = sample()
+    const withAppearance = (patch: Record<string, unknown>) => () => serializeCanonicalDocument({
+      ...current, appearance: { v: { ...current.appearance.v, ...patch } },
+    } as never)
+    const withPrimitive = (kind: 'points' | 'lines', patch: Record<string, unknown>) => withAppearance({
+      primitiveStyles: { ...current.appearance.v.primitiveStyles, [kind]: { ...current.appearance.v.primitiveStyles[kind], ...patch } },
+    })
+    expect(errorCode(withAppearance({ strokeStyle: 'dash-dot' }))).toBe('DOCUMENT_SCHEMA')
+    expect(errorCode(withAppearance({ pointStyle: 'star' }))).toBe('DOCUMENT_SCHEMA')
+    expect(errorCode(withAppearance({ labelAnchor: 'center' }))).toBe('DOCUMENT_SCHEMA')
+    for (const field of ['strokeWidthSource', 'pointSizeSource', 'opacitySource', 'labelAngleSource', 'labelSizeSource', 'labelDistanceSource']) {
+      // Sources are text, like slider bounds: a bare number is not a source.
+      expect(errorCode(withAppearance({ [field]: 2 })), field).toBe('DOCUMENT_SCHEMA')
+      expect(errorCode(withAppearance({ [field]: null })), field).toBe('DOCUMENT_SCHEMA')
+      expect(errorCode(withAppearance({ [field]: 'x'.repeat(65_537) })), field).toBe('LIMIT_SOURCE_LENGTH')
+    }
+    expect(errorCode(withAppearance({ primitiveStyles: null }))).toBe('DOCUMENT_SCHEMA')
+    expect(errorCode(withAppearance({ primitiveStyles: { points: current.appearance.v.primitiveStyles.points } }))).toBe('DOCUMENT_UNKNOWN_FIELD')
+    expect(errorCode(withAppearance({ primitiveStyles: { ...current.appearance.v.primitiveStyles, areas: {} } }))).toBe('DOCUMENT_UNKNOWN_FIELD')
+    expect(errorCode(withPrimitive('points', { connection: 'polygon' }))).toBe('DOCUMENT_SCHEMA')
+    expect(errorCode(withPrimitive('points', { visible: 'yes' }))).toBe('DOCUMENT_SCHEMA')
+    expect(errorCode(withPrimitive('points', { pointStyle: 'star' }))).toBe('DOCUMENT_SCHEMA')
+    expect(errorCode(withPrimitive('points', { strokeStyle: 'wavy' }))).toBe('DOCUMENT_SCHEMA')
+    expect(errorCode(withPrimitive('points', { pointSizeSource: 3 }))).toBe('DOCUMENT_SCHEMA')
+    expect(errorCode(withPrimitive('points', { label: 'P' }))).toBe('DOCUMENT_UNKNOWN_FIELD')
+    expect(errorCode(withPrimitive('lines', { orientationVisible: 1 }))).toBe('DOCUMENT_SCHEMA')
+    expect(errorCode(withPrimitive('lines', { strokeWidthSource: 1 }))).toBe('DOCUMENT_SCHEMA')
+    expect(errorCode(withPrimitive('lines', { pointStyle: 'dot' }))).toBe('DOCUMENT_UNKNOWN_FIELD')
+    // The version 6 fields are no longer part of an appearance record.
+    expect(errorCode(withAppearance({ pointListDisplay: 'none' }))).toBe('DOCUMENT_UNKNOWN_FIELD')
+    const { labelAnchor: _labelAnchor, ...missing } = current.appearance.v
+    expect(errorCode(() => serializeCanonicalDocument({ ...current, appearance: { v: missing } } as never))).toBe('DOCUMENT_UNKNOWN_FIELD')
+  })
+
+  it('accepts the four new hues and still rejects unregistered shades', () => {
+    const current = sample()
+    for (const style of ['orange-1', 'teal-3', 'purple-4', 'pink-6']) {
+      const encoded = serializeCanonicalDocument({ ...current, appearance: { v: { ...current.appearance.v, style } } })
+      expect(parseCanonicalDocument(encoded).appearance.v.style).toBe(style)
+    }
+    for (const style of ['orange-7', 'teal-0', 'violet-4']) {
+      expect(errorCode(() => serializeCanonicalDocument({ ...current, appearance: { v: { ...current.appearance.v, style } } }))).toBe('DOCUMENT_STYLE')
+    }
   })
 })

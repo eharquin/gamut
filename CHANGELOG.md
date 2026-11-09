@@ -85,6 +85,22 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Canonical format version 6 adds `Appearance.pointListDisplay` (`none`,
   `open-polyline`, `closed-loop`) and `Appearance.pointMarkersVisible`;
   version 5 documents migrate with `none` and visible markers.
+- Canonical format version 7 prepares stroke, point, opacity, and label
+  placement settings (#221, #222, #226) and the normalization modes (#185).
+  Appearance adds `strokeStyle` (`solid`, `dashed`, `dotted`), `pointStyle`
+  (`dot`, `ring`, `cross`, `plus`, `square`, `diamond`), `labelAnchor`
+  (`auto` or one of eight positions), and numeric settings stored as source
+  text, a number or a scalar expression, where an empty source selects the
+  object kind's default: `strokeWidthSource`, `pointSizeSource`,
+  `opacitySource`, `labelAngleSource`, `labelSizeSource`, and
+  `labelDistanceSource`. Lists style their points and lines in separate
+  `primitiveStyles` blocks, which replace `pointListDisplay` (now
+  `points.connection`) and `pointMarkersVisible` (now `points.visible`).
+  `Item.normalization` accepts `euclidean` and `ideal` besides `natural`.
+  The style registry adds the `orange`, `teal`, `purple`, and `pink` ramps.
+  Version 6 documents migrate with empty sources and the label anchored
+  `top-right`, as before, and draw unchanged; new objects place their label
+  automatically. The new settings are not drawn or editable yet.
 
 ### Interface and accessibility
 
