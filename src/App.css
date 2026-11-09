@@ -500,15 +500,41 @@ body.reordering-items .reorder-handle {
   flex-shrink: 0;
 }
 
+/*
+ * A grey eye, shown while its row is hovered or holds focus. Opacity, not
+ * visibility, hides it so that it stays in the tab order: tabbing into the
+ * row reveals it. A hidden object keeps its crossed eye visible, and touch
+ * devices, which cannot hover, always show it.
+ */
 .visibility-toggle {
   color: var(--muted);
-  font-size: 1.05rem;
-  line-height: 1;
+  opacity: 0;
+  transition: color 120ms ease, background 120ms ease, opacity 120ms ease;
+}
+
+.expression-item:hover .visibility-toggle,
+.expression-item:focus-within .visibility-toggle,
+.expression-item.is-hidden .visibility-toggle {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .visibility-toggle {
+    opacity: 1;
+  }
 }
 
 .visibility-toggle:hover {
-  color: var(--accent);
+  color: var(--text);
   background: var(--surface-active);
+}
+
+.visibility-icon {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .appearance-swatch-fill {

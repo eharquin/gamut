@@ -7,6 +7,7 @@ import {
   waitFor,
   within,
 } from '@testing-library/react'
+import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import {
@@ -1943,6 +1944,38 @@ describe('VGA 2D vertical slice', () => {
     expect(screen.getByText('2e1 + e2', { selector: 'output' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Show Vector' })).toBeInTheDocument()
     expect(screen.getByRole('img')).toHaveTextContent('No spatial objects are visible')
+  })
+
+  it('shows the visibility eye on row hover or focus, and always for a hidden object', () => {
+    render(<App />)
+    const hide = screen.getByRole('button', { name: 'Hide Vector' })
+    expect(hide).toHaveAttribute('aria-pressed', 'true')
+    expect(hide.querySelector('svg.visibility-icon')).not.toBeNull()
+    expect(hide.querySelector('.visibility-icon-slash')).toBeNull()
+    hide.focus()
+    expect(hide).toHaveFocus()
+
+    fireEvent.click(hide)
+    const show = screen.getByRole('button', { name: 'Show Vector' })
+    expect(show).toHaveAttribute('aria-pressed', 'false')
+    expect(show.querySelector('.visibility-icon-slash')).not.toBeNull()
+    expect(show.closest('.expression-item')).toHaveClass('is-hidden')
+
+    // jsdom does not evaluate :hover, :focus-within, or media queries, so the
+    // reveal rules are checked in the stylesheet. Opacity, not visibility or
+    // display, hides the eye so that it stays in the tab order.
+    const appStyles = readFileSync(`${import.meta.dirname}/App.css`, 'utf8')
+    const rule = (selector: string) => [...appStyles.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .find(([, selectors]) => selectors.replace(/\/\*[\s\S]*?\*\//g, '').trim().split(/,\s*/).join(', ') === selector)
+      ?.[0] ?? ''
+    expect(rule('.visibility-toggle')).toMatch(/opacity: 0;/)
+    expect(rule('.visibility-toggle')).not.toMatch(/visibility:|display:/)
+    expect(rule([
+      '.expression-item:hover .visibility-toggle',
+      '.expression-item:focus-within .visibility-toggle',
+      '.expression-item.is-hidden .visibility-toggle',
+    ].join(', '))).toMatch(/opacity: 1;/)
+    expect(appStyles).toMatch(/@media \(hover: none\) \{\s*\.visibility-toggle \{\s*opacity: 1;/)
   })
 
   it('applies deterministic default styles per semantic object kind', () => {

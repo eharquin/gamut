@@ -88,6 +88,10 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Interface and accessibility
 
+- The visibility control is a grey eye that appears while its row is hovered
+  or holds keyboard focus. A hidden object keeps its crossed eye visible, and
+  touch screens always show the eye. The button keeps its accessible name and
+  pressed state.
 - A list of points can be connected as an open polyline or a closed loop
   from its appearance menu. Links join consecutive points in evaluated list
   order: a segment between two finite points, and the ray from a finite point
