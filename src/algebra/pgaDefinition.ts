@@ -54,6 +54,9 @@ export const PGA_DEFINITION: AlgebraDefinition = Object.freeze({
   },
   standardInterpretationId: 'org.multivector.pga-2d',
   standardVisualizerId: 'org.multivector.pga-2d',
+  showcaseTitle: 'PGA 2D Triangle Example',
+  showcaseDescription:
+    'A triangle of points and its joined sides, with distances, angles, height, area, a movable line, and a motor sweeping a vertex.',
   // A triangle whose sides are joins: distances are norms of joins, the
   // angle at A comes from the inner product and the meet of two sides, the
   // height from the outer product of a side and the opposite vertex, and the

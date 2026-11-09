@@ -2,8 +2,9 @@
 
 Scene links carry a complete [canonical document](document-format.md) in the
 URL fragment. They require no backend or stored document identifier. Use
-**Copy link** or **Copy iframe code** in the application header. Clipboard
-denial leaves selectable text available for manual copying.
+**Copy link** in the Document section of the settings menu, next to **Import**
+and **Export**. Clipboard denial leaves selectable text available for manual
+copying.
 
 ## Version 1 envelope
 
@@ -75,22 +76,15 @@ autosave after success. It keeps the undo history and removes the scene
 fragment from the address, so reloading opens the saved copy. A failed save retains the temporary session and JSON
 export. No separate local-library implementation is introduced here.
 
-## Iframe code and scope
+## Embedding and scope
 
-```html
-<iframe src="https://eharquin.github.io/gamut/#scene=1.…"
-        title="Interactive GAMUT scene" width="800" height="600"
-        allow="fullscreen"></iframe>
-```
-
-The generated snippet escapes its `src` attribute and includes a title and
-fullscreen permission. It currently opens the full editor. A focused viewport,
+The application generates no iframe snippet. Slides.com accepts a plain HTTPS
+URL in its iframe source field, so the scene link is enough to embed a scene;
+actual host integration and host-specific URL-length limits require a host
+test ([Slides.com iframe documentation](https://slides.com/docs/iframe-blocks)).
+An embedded link currently opens the full editor. A focused viewport,
 responsive embed controls, autoplay, the application fullscreen control, and
 “Open in GAMUT” belong to #215. Viewport scalar sliders belong to #190. Native
 slides, a `postMessage` API, and release-pinned hosting are outside #213.
-
-Slides.com accepts an HTTPS URL or iframe code in its iframe source field;
-actual host integration and host-specific URL-length limits require a host
-test ([Slides.com iframe documentation](https://slides.com/docs/iframe-blocks)).
 The browser compression format is specified by the
 [Compression Standard](https://compression.spec.whatwg.org/).

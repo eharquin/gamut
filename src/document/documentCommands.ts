@@ -20,11 +20,17 @@ export type DocumentCommand =
   | Readonly<{ kind: 'set-scalar-value'; itemId: string; value: number }>
   | Readonly<{ kind: 'update-algebra'; algebra: ExpressionDocument['algebra']; interpretation: ExpressionDocument['interpretation'] }>
   | Readonly<{
-      /** Selects an algebra with its standard interpretation and visualizer; only on a document without content. */
+      /**
+       * Selects an algebra with its standard interpretation and visualizer, and
+       * the title and description of the example it loads; only on a document
+       * without content.
+       */
       kind: 'select-algebra'
       algebra: ExpressionDocument['algebra']
       interpretation: ExpressionDocument['interpretation']
       visualizerId: string | null
+      title: string
+      description: string
     }>
   | Readonly<{
       kind: 'rewrite-source-literal'
@@ -119,6 +125,8 @@ export function executeDocumentCommand(
       status: 'applied',
       document: {
         ...document,
+        title: command.title,
+        description: command.description,
         algebra: command.algebra,
         interpretation: command.interpretation,
         view: { ...document.view, visualizerId: command.visualizerId },
