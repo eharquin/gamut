@@ -164,12 +164,10 @@
 <g style="color: rgb(65, 191, 130);">
 <line aria-label="U[0]" class="vector" stroke-width="6" x1="320" x2="379.14017885038834" y1="240" y2="299.14017885038834"></line>
 <polygon aria-hidden="true" class="vector-arrowhead" points="392,312 371.7155576479296,306.5648000528471 386.56480005284703,291.7155576479296"></polygon>
-<text class="object-label" x="400" y="304">U[0]</text>
 </g>
 <g style="color: rgb(65, 191, 130);">
 <line aria-label="U[1]" class="vector" stroke-width="6" x1="320" x2="192.26653005407115" y1="240" y2="303.8667349729644"></line>
 <polygon aria-hidden="true" class="vector-arrowhead" points="176,312 187.5707873013216,294.4752494674653 196.96227280682072,313.25822047846356"></polygon>
-<text class="object-label" x="184" y="304">U[1]</text>
 </g>
 <g style="color: rgb(195, 10, 58);">
 <path aria-label="B is an oriented parallelogram with signed value 5, area 5, counterclockwise orientation, positioned at the origin." class="bivector has-border" d="M 320 240 L 464 168 L 392 24 L 248 96 Z" pointer-events="none" stroke-width="4.5"></path>

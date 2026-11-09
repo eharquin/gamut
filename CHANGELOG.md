@@ -140,6 +140,16 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   expression. The **Points** section of a list has its own **Style**: marker
   style and size, then the stroke and width of the links while the points are
   connected. A dot of default size draws as before.
+- Labels are edited under their expression and placed from the menu (#226).
+  While a label is shown, its text field sits under the expression, with the
+  declared name as placeholder. **Label** keeps its switch in the title, then
+  **Angle** and **Size**, then **Distance** beside a 3 × 3 position grid whose
+  center is **Auto**: the label takes the first of the eight positions, from
+  the top right clockwise, where it overlaps no other label and no point or
+  handle of another object, and the top right when none is free. New objects
+  place their label automatically; saved documents keep the top-right label.
+  A list has no label any more: its Label section and the numbered labels of
+  its elements are removed, and the elements keep their accessible names.
 
 - The settings menu is named **Settings** for assistive technology, since it
   also holds the document commands (Import, Export, Copy link).

@@ -12,7 +12,6 @@ function open(props: Partial<Props> = {}) {
     onStyleChange: vi.fn(),
     onVisibleChange: vi.fn(),
     onLabelVisibleChange: vi.fn(),
-    onLabelChange: vi.fn(),
     onClose: vi.fn(),
   }
   render(<AppearancePopover
@@ -20,7 +19,6 @@ function open(props: Partial<Props> = {}) {
     styleId="yellow-4"
     visible
     labelVisible={false}
-    label=""
     anchorRef={createRef<HTMLButtonElement>()}
     {...handlers}
     {...props}
@@ -121,7 +119,7 @@ describe('appearance menu', () => {
       .toEqual(['As a vector', 'At infinity', 'Both'])
   })
 
-  it('switches the label from its title and edits its text below', () => {
+  it('switches the label from its title', () => {
     const { dialog, onLabelVisibleChange } = open()
     expect(within(dialog).queryByRole('textbox', { name: 'Text' })).not.toBeInTheDocument()
     fireEvent.click(within(dialog).getByRole('switch', { name: 'Show label' }))
@@ -345,5 +343,50 @@ describe('point style and size settings (#222)', () => {
     points = screen.getByRole('switch', { name: 'Show point markers' }).closest('section')!
     expect(within(points).getAllByRole('group').map((group) => group.getAttribute('aria-label')))
       .toEqual(['Point list display', 'Connection style'])
+  })
+})
+
+describe('label placement settings (#226)', () => {
+  it('shows Angle and Size, then Distance beside the anchor grid, and no text field', () => {
+    const onAppearanceChange = vi.fn()
+    const { dialog } = open({ labelVisible: true, onAppearanceChange, appearance: { labelAngleSource: 'a', labelAnchor: 'top-left' } })
+    const section = within(dialog).getByRole('switch', { name: 'Show label' }).closest('section')!
+    expect(section.querySelector('h3')).toContainElement(within(section).getByRole('switch', { name: 'Show label' }))
+    expect(within(section).queryByRole('textbox', { name: 'Text' })).not.toBeInTheDocument()
+    const angle = within(section).getByRole('textbox', { name: 'Angle' })
+    const size = within(section).getByRole('textbox', { name: 'Size' })
+    const distance = within(section).getByRole('textbox', { name: 'Distance' })
+    expect(angle).toHaveValue('a')
+    expect(angle.parentElement).toHaveTextContent('°')
+    expect([angle, size, distance].map((field) => field.getAttribute('placeholder'))).toEqual(['0', '13', '8'])
+    expect(angle.closest('.appearance-pair')).toContainElement(size)
+    const grid = within(section).getByRole('group', { name: 'Label position' })
+    expect(distance.closest('.appearance-pair')).toHaveClass('appearance-pair-anchor')
+    expect(distance.closest('.appearance-pair')).toContainElement(grid)
+    // Nine cells, Auto in the center, no caption and no anchor name shown.
+    expect(within(grid).getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
+      'Top left', 'Top', 'Top right', 'Left', 'Automatic position', 'Right', 'Bottom left', 'Bottom', 'Bottom right',
+    ])
+    expect(grid).toHaveTextContent(/^$/)
+    expect(within(grid).getByRole('button', { name: 'Top left' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(within(grid).getByRole('button', { name: 'Automatic position' }))
+    expect(onAppearanceChange).toHaveBeenLastCalledWith({ labelAnchor: 'auto' }, undefined)
+    fireEvent.change(distance, { target: { value: 'd' } })
+    expect(onAppearanceChange).toHaveBeenLastCalledWith({ labelDistanceSource: 'd' }, 'labelDistance')
+    fireEvent.change(size, { target: { value: '20' } })
+    expect(onAppearanceChange).toHaveBeenLastCalledWith({ labelSizeSource: '20' }, 'labelSize')
+  })
+
+  it('selects Auto when nothing is stored, and shows no setting while the label is off', () => {
+    open({ labelVisible: true, onAppearanceChange: vi.fn() })
+    expect(screen.getByRole('button', { name: 'Automatic position' })).toHaveAttribute('aria-pressed', 'true')
+    cleanup()
+    open({ labelVisible: false, onAppearanceChange: vi.fn() })
+    expect(screen.queryByRole('group', { name: 'Label position' })).not.toBeInTheDocument()
+  })
+
+  it('gives a list no Label section', () => {
+    open({ kind: 'List (2)', labelVisible: true, onAppearanceChange: vi.fn() })
+    expect(screen.queryByRole('switch', { name: 'Show label' })).not.toBeInTheDocument()
   })
 })

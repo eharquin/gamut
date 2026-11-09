@@ -116,7 +116,7 @@ describe('stroked glyphs', () => {
 
   it('fade the drawn marks only, never the handles or the keyboard focus ring', () => {
     const focused = { ...controller, focusRingKey: 'v:head' }
-    const markup = vector({ opacity: 0, headMovable: true, itemPresent: true, baseMovable: true, label: 'V', controller: focused })
+    const markup = vector({ opacity: 0, headMovable: true, itemPresent: true, baseMovable: true, label: { text: 'V', x: 108, y: -8 }, controller: focused })
     const faded = markup.split('<g opacity="0">').slice(1).map((part) => part.slice(0, part.indexOf('</g>'))).join('')
     expect(faded).toContain('class="vector"')
     expect(faded).toContain('class="object-label"')
@@ -222,5 +222,25 @@ describe('point glyphs', () => {
   it('grow the core of any style on hover, through the hovered class', () => {
     const host = point({ pointStyle: 'diamond', controller: { ...controller, hoveredKey: 'a:base' } })
     expect(host.querySelector('path.manipulation-base-point')).toHaveClass('is-hovered')
+  })
+})
+
+describe('label settings (#226)', () => {
+  it('carries the evaluated placement settings of an item', () => {
+    const { rendered: [point] } = rendered([['a', 'A = point(1, 1)']], { a: {
+      labelVisible: true, labelAnchor: 'left', labelAngleSource: '45', labelSizeSource: '18', labelDistanceSource: '99',
+    } })
+    expect(point.label).toBe('A')
+    expect(point.labelSettings).toEqual({ anchor: 'left', angle: 45, size: 18, distance: null })
+  })
+
+  it('places a new label automatically, and draws no label for the elements of a list', () => {
+    const { rendered: [point, ...elements] } = rendered(
+      [['a', 'A = point(1, 1)'], ['p', 'P = [point(0, 0), line(1, 0, 0)]']],
+      { a: { labelVisible: true }, p: { labelVisible: true } },
+    )
+    expect(point.labelSettings.anchor).toBe('auto')
+    expect(elements.map((element) => element.label)).toEqual([null, null])
+    expect(elements.map((element) => element.primitive.accessibleName)).toEqual(['P[0]', 'P[1]'])
   })
 })

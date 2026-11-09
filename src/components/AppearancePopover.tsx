@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type 
 import { createPortal } from 'react-dom'
 import { paletteEntry, RAMP_ORDER, STUDIO_COLORS } from './appearancePalette'
 import { popoverPosition } from './popoverPosition'
-import type { ExpressionAppearance, ExpressionControl, PointListDisplay, PointStyle, StrokeStyle } from '../document/expressionDocument'
+import type { ExpressionAppearance, ExpressionControl, LabelAnchor, PointListDisplay, PointStyle, StrokeStyle } from '../document/expressionDocument'
 import {
   APPEARANCE_SETTING_RANGES,
   DEFAULT_APPEARANCE_SOURCES,
@@ -11,6 +11,7 @@ import {
 } from '../application/evaluateAppearanceSources'
 import { DEFAULT_POINT_SIZE, DEFAULT_STROKE_WIDTHS, POINT_OUTER_SCALE } from '../visualization/stroke'
 import { PointShape } from '../visualization/PointShape'
+import { DEFAULT_LABEL_DISTANCE, DEFAULT_LABEL_SIZE } from '../visualization/labels'
 
 const POPOVER_WIDTH = 272
 /** Height assumed before the menu is measured, and where layout is unavailable. */
@@ -21,7 +22,6 @@ type AppearancePopoverProps = Readonly<{
   styleId: string
   visible: boolean
   labelVisible: boolean
-  label: string
   borderVisible?: boolean
   orientationVisible?: boolean
   bivectorShape?: 'from-vectors' | 'disk' | 'square'
@@ -47,7 +47,6 @@ type AppearancePopoverProps = Readonly<{
   onStyleChange(style: string): void
   onVisibleChange(visible: boolean): void
   onLabelVisibleChange(visible: boolean): void
-  onLabelChange(label: string): void
   onBorderVisibleChange?(visible: boolean): void
   onOrientationVisibleChange?(visible: boolean): void
   onBivectorShapeChange?(shape: 'from-vectors' | 'disk' | 'square'): void
@@ -66,7 +65,6 @@ export function AppearancePopover({
   styleId,
   visible,
   labelVisible,
-  label,
   borderVisible = false,
   orientationVisible = true,
   bivectorShape = 'from-vectors',
@@ -87,7 +85,6 @@ export function AppearancePopover({
   onStyleChange,
   onVisibleChange,
   onLabelVisibleChange,
-  onLabelChange,
   onBorderVisibleChange,
   onOrientationVisibleChange,
   onBivectorShapeChange,
@@ -408,12 +405,34 @@ export function AppearancePopover({
           ? { ...control, mode: 'slider', animation: control.animation ?? DEFAULT_ANIMATION }
           : { ...control, mode: 'number' }),
       })}
-      {!colorOnly && section('Label', labelVisible ? (
-        <label className="appearance-field">
-          <span>Text</span>
-          <input value={label} onChange={(event) => onLabelChange(event.target.value)} />
-        </label>
-      ) : null, { label: 'Show label', checked: labelVisible, onChange: onLabelVisibleChange })}
+      {/* A list has no label. The text is edited under the expression (#226). */}
+      {!colorOnly && !list && section('Label', labelVisible && onAppearanceChange ? <>
+        <SourceFields fields={[{
+          setting: 'labelAngle',
+          label: 'Angle',
+          source: appearance.labelAngleSource ?? '',
+          placeholder: 0,
+          error: sources.labelAngle.error,
+          onChange: (labelAngleSource) => change({ labelAngleSource }, 'labelAngle'),
+        }, {
+          setting: 'labelSize',
+          label: 'Size',
+          source: appearance.labelSizeSource ?? '',
+          placeholder: DEFAULT_LABEL_SIZE,
+          error: sources.labelSize.error,
+          onChange: (labelSizeSource) => change({ labelSizeSource }, 'labelSize'),
+        }]} />
+        <SourceFields className="appearance-pair-anchor" fields={[{
+          setting: 'labelDistance',
+          label: 'Distance',
+          source: appearance.labelDistanceSource ?? '',
+          placeholder: DEFAULT_LABEL_DISTANCE,
+          error: sources.labelDistance.error,
+          onChange: (labelDistanceSource) => change({ labelDistanceSource }, 'labelDistance'),
+        }]} trailing={
+          <AnchorGrid value={appearance.labelAnchor ?? 'auto'} onChange={(labelAnchor) => change({ labelAnchor })} />
+        } />
+      </> : null, { label: 'Show label', checked: labelVisible, onChange: onLabelVisibleChange })}
     </div>,
     document.body,
   )
@@ -500,9 +519,11 @@ type SourceFieldSpec = Readonly<{
  * same row (`leading`), or in two equal columns. A refused value shows one
  * red line under the row; a valid one shows nothing.
  */
-function SourceFields({ fields, leading, className }: Readonly<{
+function SourceFields({ fields, leading, trailing, className }: Readonly<{
   fields: readonly SourceFieldSpec[]
   leading?: ReactNode
+  /** A control in the column after the fields. */
+  trailing?: ReactNode
   className?: string
 }>) {
   const id = useId()
@@ -535,9 +556,30 @@ function SourceFields({ fields, leading, className }: Readonly<{
           </label>
         )
       })}
+      {trailing}
     </div>
     {errors.map((error) => <p key={error.id} id={error.id} className="appearance-error">{error.text}</p>)}
   </>
+}
+
+const ANCHOR_GRID: readonly LabelAnchor[] = [
+  'top-left', 'top', 'top-right',
+  'left', 'auto', 'right',
+  'bottom-left', 'bottom', 'bottom-right',
+]
+
+/** The label's position around its anchor: eight places, and Auto in the center. */
+function AnchorGrid({ value, onChange }: Readonly<{ value: LabelAnchor; onChange(anchor: LabelAnchor): void }>) {
+  return (
+    <div className="appearance-anchor-grid" role="group" aria-label="Label position">
+      {ANCHOR_GRID.map((anchor) => {
+        const name = anchor === 'auto' ? 'Automatic position' : capitalized(anchor.replace('-', ' '))
+        return <button key={anchor} type="button" className={anchor === 'auto' ? 'is-auto' : undefined}
+          aria-label={name} title={anchor === 'auto' ? 'Auto: first position without collision' : name}
+          aria-pressed={value === anchor} onClick={() => onChange(anchor)} />
+      })}
+    </div>
+  )
 }
 
 /** A switch laid out like a field: small caption above, switch below. */

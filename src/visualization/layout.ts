@@ -13,6 +13,7 @@ import {
   type VisualizationPrimitive,
 } from './primitives'
 import { toScreen, type Viewport2d } from './viewport'
+import type { LabelSettings } from './labels'
 
 /** One primitive selected for rendering, with its resolved appearance. */
 export type RenderedPrimitive = Readonly<{
@@ -35,6 +36,7 @@ export type RenderedPrimitive = Readonly<{
   pointStyle: PointStyle
   /** Point core radius in reference pixels, or `null` for the kind default. */
   pointSize: number | null
+  labelSettings: LabelSettings
 }>
 
 /**
@@ -215,7 +217,7 @@ export function collectRenderedPrimitives(
     const {
       visible, color, labelVisible, displayLabel, borderVisible, orientationVisible, bivectorShape,
       idealPointDisplay, pointListDisplay, pointMarkersVisible, linesVisible, strokeStyle,
-      lineStrokeStyle, linesOrientationVisible, pointStyle, listPointStyle, connectionStrokeStyle,
+      lineStrokeStyle, linesOrientationVisible, pointStyle, listPointStyle, connectionStrokeStyle, labelAnchor,
     } = resolveItemAppearance(
       appearance[evaluated.item.id],
       kind,
@@ -224,6 +226,12 @@ export function collectRenderedPrimitives(
     if (!visible) return []
     const sources = appearanceSources.get(evaluated.item.id) ?? DEFAULT_APPEARANCE_SOURCES
     const opacity = sources.opacity.value === null ? null : sources.opacity.value / 100
+    const labelSettings: LabelSettings = {
+      anchor: labelAnchor,
+      angle: sources.labelAngle.value,
+      size: sources.labelSize.value,
+      distance: sources.labelDistance.value,
+    }
     const baseLabel = displayLabel
     if (evaluated.evaluation.valueType === 'list') {
       const elements = limitRenderedListElements(
@@ -245,7 +253,7 @@ export function collectRenderedPrimitives(
       // Hidden lines are skipped in place, so the other elements keep their index.
       // Each primitive type has its own style: lines take the list's line
       // style, and no other element inherits the item's stroke.
-      return elements.flatMap((element, elementIndex) => {
+      return elements.flatMap((element) => {
         if (!element.primitive) return []
         const line = LINE_PRIMITIVES.has(element.primitive.kind)
         if (line && !linesVisible) return []
@@ -264,7 +272,9 @@ export function collectRenderedPrimitives(
             opacity,
             pointStyle: listPointStyle,
             pointSize: sources.points.pointSize.value,
-            label: labelVisible ? (baseLabel ? `${baseLabel}[${elementIndex}]` : element.primitive.accessibleName) : null,
+            labelSettings,
+            // A list has no label; its elements keep their accessible names.
+            label: null,
           }]
       })
     }
@@ -284,6 +294,7 @@ export function collectRenderedPrimitives(
           opacity,
           pointStyle,
           pointSize: sources.pointSize.value,
+          labelSettings,
           label: labelVisible ? (baseLabel ?? evaluated.evaluation.primitive.accessibleName) : null,
         }]
       : []
