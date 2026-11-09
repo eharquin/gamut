@@ -111,12 +111,14 @@ describe('scene sharing in the application', () => {
 
   it('warns from the menu when a copied link exceeds 8 KiB', async () => {
     vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } })
-    // Pseudo-random literals keep the payload above 8 KiB after compression.
+    // A pseudo-random description keeps the link above 8 KiB after compression
+    // while rendering a single item, so the test stays fast on CI.
     let seed = 7
     const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647
-    const large = toCanonicalDocument(expressionDocument(Array.from({ length: 300 }, (_, index) => ({
-      id: `v${index}`, source: `V${index} = vector(${random().toFixed(9)}, ${random().toFixed(9)})`,
-    })), {}, { id: 'large-document' }), 'dark')
+    const description = Array.from({ length: 12_000 }, () => Math.floor(random() * 36).toString(36)).join('')
+    const large = toCanonicalDocument(expressionDocument([
+      { id: 'v', source: 'V = vector(2, 1)' },
+    ], {}, { id: 'large-document', description }), 'dark')
     window.history.replaceState(null, '', '/' + await encodeSceneFragment(large))
     render(<App />)
     await waitFor(() => expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue(large.items[0].source))
@@ -125,7 +127,7 @@ describe('scene sharing in the application', () => {
     expect((screen.getByRole('textbox', { name: 'Scene link' }) as HTMLTextAreaElement).value.length).toBeGreaterThan(8 * 1024)
     expect(within(screen.getByRole('region', { name: 'Share scene' })).getByRole('status'))
       .toHaveTextContent('Copied. This link exceeds 8 KiB')
-  }, 20_000)
+  })
 
   it('offers selectable text when clipboard permission is unavailable', async () => {
     vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText: vi.fn().mockRejectedValue(new Error('Denied')) } })
