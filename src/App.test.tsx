@@ -3485,9 +3485,9 @@ describe('labels edited under the expression and placed from the menu (#226)', (
 })
 
 describe('documents whose positions are turned off', () => {
-  function openWithPositionsOff() {
+  function openWithPositionsOff(positionSource = '(1, 1)') {
     const document = expressionDocument([
-      { id: 'v', source: 'V = vector(2, 1)', positionSource: '(1, 1)' },
+      { id: 'v', source: 'V = vector(2, 1)', ...(positionSource ? { positionSource } : {}) },
     ], {}, { id: 'positions-off' })
     const stored = toCanonicalDocument({ ...document, view: { ...document.view, positionEnabled: false } }, 'light')
     window.localStorage.setItem(ACTIVE_DOCUMENT_KEY, serializeCanonicalDocument(stored))
@@ -3504,21 +3504,20 @@ describe('documents whose positions are turned off', () => {
     window.localStorage.clear()
   })
 
-  it('says so, draws at the origin, and turns positions back on from the notice', () => {
-    openWithPositionsOff()
+  it('applies the stored positions, since a canvas is shown', () => {
+    openWithPositionsOff('')
     const origin = base()
-    expect(screen.getByText(/Positions are turned off in this document/)).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Turn on positions' }))
-    expect(screen.queryByText(/Positions are turned off/)).not.toBeInTheDocument()
+    cleanup()
+    openWithPositionsOff()
     expect(base()).not.toEqual(origin)
+    expect(screen.queryByText(/Positions are turned off/)).not.toBeInTheDocument()
   })
 
-  it('turns positions on when a position is edited', () => {
+  it('moves the object when its position is edited', () => {
     openWithPositionsOff()
-    const origin = base()
+    const before = base()
     fireEvent.change(screen.getByRole('textbox', { name: 'Position 1' }), { target: { value: '(2, 2)' } })
-    expect(screen.queryByText(/Positions are turned off/)).not.toBeInTheDocument()
-    expect(base()).not.toEqual(origin)
+    expect(base()).not.toEqual(before)
   })
 })
 

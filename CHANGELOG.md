@@ -105,10 +105,10 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Interface and accessibility
 
-- A document whose positions are turned off (`view.positionEnabled: false`)
-  drew every object at the origin while its position fields and base drags
-  still updated. Writing a position now turns positions on, and such a
-  document shows a notice with a **Turn on positions** button.
+- A document that stored `view.positionEnabled: false` drew every object at
+  the origin while its position fields and base drags still updated. Positions
+  now switch off only without a visualizer (NoViz, #55): a document drawn on a
+  canvas always applies its positions, and writing a position turns them on.
 - The settings button shows a cogwheel. Beside it, a sun and moon button
   switches between the light and dark themes in one click; by default the
   application follows the system theme, which the settings menu still offers.

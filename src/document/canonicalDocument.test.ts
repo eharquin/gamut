@@ -67,6 +67,14 @@ describe('canonical document format', () => {
     expect(serializeCanonicalDocument(parseCanonicalDocument(encoded))).toBe(encoded)
   })
 
+  it('applies positions whenever a visualizer draws the document (NoViz alone turns them off)', () => {
+    const canonical = parseCanonicalDocument(serializeCanonicalDocument(sample()))
+    const off = { ...canonical, view: { ...canonical.view, positionEnabled: false } }
+    expect(fromCanonicalDocument(off).document.view.positionEnabled).toBe(true)
+    const noViz = { ...off, view: { ...off.view, visualizerId: null, viewport: { kind: 'none' as const } } }
+    expect(fromCanonicalDocument(noViz).document.view.positionEnabled).toBe(false)
+  })
+
   it('round-trips source, position, normalization, appearance, identity, and theme', () => {
     const canonical = parseCanonicalDocument(serializeCanonicalDocument(sample()))
     const restored = fromCanonicalDocument(canonical)
