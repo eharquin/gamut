@@ -1,5 +1,5 @@
 /// <reference types="node" />
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { webcrypto } from 'node:crypto'
 import App from './App'
@@ -124,11 +124,12 @@ describe('scene sharing in the application', () => {
     await openSharedScene()
     fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: 'Shared = vector(6, 7)' } })
     copyLink()
-    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Scene link' })).toBeInTheDocument())
+    // A successful copy is confirmed briefly, without opening the link panel.
+    await waitFor(() => expect(screen.getByText('Link copied.')).toBeInTheDocument())
+    expect(screen.queryByRole('textbox', { name: 'Scene link' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Share scene' })).not.toBeInTheDocument()
     expect(writeText).toHaveBeenCalledOnce()
     const url = writeText.mock.calls[0][0] as string
-    expect(screen.getByRole('textbox', { name: 'Scene link' })).toHaveValue(url)
-    expect(screen.getByText('Copied.')).toBeInTheDocument()
     expect((await decodeSceneFragment(new URL(url).hash)).items[0].source).toBe('Shared = vector(6, 7)')
     expect(screen.queryByRole('button', { name: 'Copy iframe code' })).not.toBeInTheDocument()
     expect(screen.queryByText(/<iframe/)).not.toBeInTheDocument()
@@ -147,11 +148,11 @@ describe('scene sharing in the application', () => {
     window.history.replaceState(null, '', '/' + await encodeSceneFragment(large))
     render(<App />)
     await waitFor(() => expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue(large.items[0].source))
+    const writeText = vi.mocked(navigator.clipboard.writeText)
     copyLink()
-    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Scene link' })).toBeInTheDocument())
-    expect((screen.getByRole('textbox', { name: 'Scene link' }) as HTMLTextAreaElement).value.length).toBeGreaterThan(8 * 1024)
-    expect(within(screen.getByRole('region', { name: 'Share scene' })).getByRole('status'))
-      .toHaveTextContent('Copied. This link exceeds 8 KiB')
+    await waitFor(() => expect(screen.getByText(/^Link copied\. This link exceeds 8 KiB/)).toBeInTheDocument())
+    expect((writeText.mock.calls[0][0] as string).length).toBeGreaterThan(8 * 1024)
+    expect(screen.queryByRole('textbox', { name: 'Scene link' })).not.toBeInTheDocument()
   })
 
   it('offers selectable text when clipboard permission is unavailable', async () => {
@@ -160,5 +161,20 @@ describe('scene sharing in the application', () => {
     copyLink()
     await waitFor(() => expect(screen.getByRole('textbox', { name: 'Scene link' })).toBeInTheDocument())
     expect(screen.getByText('Select and copy the text below.')).toBeInTheDocument()
+    expect(screen.queryByText(/^Link copied/)).not.toBeInTheDocument()
+  })
+
+  it('hides the copy confirmation after a moment', async () => {
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } })
+    await openSharedScene()
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      copyLink()
+      await waitFor(() => expect(screen.getByText('Link copied.')).toBeInTheDocument())
+      await act(async () => { vi.advanceTimersByTime(3000) })
+      expect(screen.queryByText('Link copied.')).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

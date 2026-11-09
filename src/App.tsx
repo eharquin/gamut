@@ -425,6 +425,14 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const [anchorPreview, setAnchorPreview] = useState<AnchorCandidate | null>(null)
   const [viewportLocked, setViewportLocked] = useState(() => sharedSession ? false : restoredViewportLock())
   const [shareResult, setShareResult] = useState<{ content: string; label: string; message: string } | null>(null)
+  // A copied link is confirmed briefly; the panel with the text only appears
+  // when the clipboard refuses the copy.
+  const [copyNotice, setCopyNotice] = useState<Readonly<{ message: string; durationMs: number }> | null>(null)
+  useEffect(() => {
+    if (!copyNotice) return
+    const timer = window.setTimeout(() => setCopyNotice(null), copyNotice.durationMs)
+    return () => window.clearTimeout(timer)
+  }, [copyNotice])
   const [sharing, setSharing] = useState(false)
   const [fileDragActive, setFileDragActive] = useState(false)
   const [activePlaybacks, setActivePlaybacks] = useState<
@@ -1832,16 +1840,18 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const copyScene = async () => {
     setSharing(true)
     setShareResult(null)
+    setCopyNotice(null)
     try {
       const url = await createSceneLink(toCanonicalDocument(expressionDoc, theme, resolvedStyles, resolvedOrientation), new URL(import.meta.env.BASE_URL, window.location.href).href)
       let copied = false
       try { await navigator.clipboard.writeText(url); copied = true } catch { /* The selectable text remains available when clipboard access is blocked. */ }
-      setShareResult({
-        content: url,
-        label: 'Scene link',
-        message: (copied ? 'Copied.' : 'Select and copy the text below.') + (url.length > SHARE_URL_WARNING_LENGTH
-          ? ' This link exceeds 8 KiB and some presentation tools may reject it. JSON export is also available.' : ''),
-      })
+      const warning = url.length > SHARE_URL_WARNING_LENGTH
+        ? ' This link exceeds 8 KiB and some presentation tools may reject it. JSON export is also available.' : ''
+      if (copied) {
+        setCopyNotice({ message: 'Link copied.' + warning, durationMs: warning ? 8000 : 2500 })
+      } else {
+        setShareResult({ content: url, label: 'Scene link', message: 'Select and copy the text below.' + warning })
+      }
     } catch (error) {
       setDocumentDiagnostic(error instanceof DocumentFormatError ? error.code + ': ' + error.message : 'SHARE_EXPORT_FAILED: The scene link could not be created. Use JSON export instead.')
     } finally { setSharing(false) }
@@ -2053,6 +2063,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           <button type="button" className="document-command" onClick={saveLocalCopy}>Save local copy</button>
         </div>
       )}
+      <p className="copy-notice" role="status" hidden={!copyNotice}>{copyNotice?.message}</p>
       {shareResult && (
         <section className="share-result" aria-label="Share scene">
           <p role="status">{shareResult.message}</p>
