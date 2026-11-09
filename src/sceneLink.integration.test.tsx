@@ -1,5 +1,5 @@
 /// <reference types="node" />
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { webcrypto } from 'node:crypto'
 import App from './App'
@@ -30,8 +30,7 @@ afterEach(() => {
 })
 
 function copyLink() {
-  fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
-  fireEvent.click(within(screen.getByRole('dialog', { name: 'Settings' })).getByRole('button', { name: 'Copy link' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
 }
 
 /** `timeout` widens the wait on slow CI runners; the default is Testing Library's 1 s. */

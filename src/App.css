@@ -130,13 +130,22 @@
   background: color-mix(in srgb, var(--accent-soft) 65%, var(--surface));
 }
 
-.app-header > .theme-toggle {
+/* Document commands, theme, and settings: one group of icon buttons, 6px
+   apart, at the right end of the header (#249). */
+.header-actions {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-/* The header gap is 14px; the two buttons sit 6px apart as one group. */
-.app-header > .theme-toggle + .settings-menu {
-  margin-left: -8px;
+.settings-menu-button:disabled,
+.settings-menu-button:disabled:hover {
+  color: var(--muted);
+  background: var(--surface);
+  border-color: var(--border-strong);
+  opacity: 0.45;
+  cursor: default;
 }
 
 .document-file-input {
@@ -1344,39 +1353,6 @@ body.reordering-items .reorder-handle {
   color: var(--muted);
   font: 600 0.72rem var(--font-mono);
   text-align: right;
-}
-
-.settings-commands {
-  display: grid;
-  gap: 2px;
-}
-
-.settings-command {
-  min-height: 30px;
-  padding: 0 8px;
-  color: var(--text);
-  background: transparent;
-  border: 0;
-  border-radius: 4px;
-  font: inherit;
-  font-size: 0.76rem;
-  text-align: left;
-  cursor: pointer;
-}
-
-.settings-command:hover:not(:disabled) {
-  color: var(--accent);
-  background: var(--surface-hover);
-}
-
-.settings-command:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-
-.settings-command:disabled {
-  color: var(--muted);
-  cursor: default;
 }
 
 @media (prefers-reduced-motion: reduce) {

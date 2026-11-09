@@ -2,8 +2,8 @@
 
 Scene links carry a complete [canonical document](document-format.md) in the
 URL fragment. They require no backend or stored document identifier. Use
-**Copy link** in the Document section of the settings menu, next to **Import**
-and **Export**. Clipboard denial leaves selectable text available for manual
+the **Copy link** icon button of the header, after **Import** and **Export**
+and before the theme and settings buttons. Clipboard denial leaves selectable text available for manual
 copying.
 
 ## Version 1 envelope

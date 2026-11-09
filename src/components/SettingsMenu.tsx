@@ -17,19 +17,9 @@ export type DisplaySettings = Readonly<{
 export const MIN_OBJECT_SCALE = 0.25
 export const MAX_OBJECT_SCALE = 4
 
-/** Document commands offered by the menu; the caller owns their effects. */
-export type DocumentMenuCommands = Readonly<{
-  onImport(): void
-  onExport(): void
-  onCopyLink(): void
-  /** True while a scene link is being created. */
-  sharing: boolean
-}>
-
 type SettingsMenuProps = Readonly<{
   display: DisplaySettings
   theme: ThemeMode
-  documentCommands: DocumentMenuCommands
   onDisplayChange(change: Partial<DisplaySettings>): void
   onThemeChange(theme: ThemeMode): void
 }>
@@ -62,15 +52,14 @@ function SwitchRow({ label, checked, inputRef, onChange }: SwitchRowProps) {
 }
 
 /**
- * Presentation-only display settings (APP-006) and the document commands,
- * gathered behind one header control. Every change is reported to the caller,
- * which owns the view command and the document commands; this component never
- * mutates a document.
+ * Presentation-only display settings (APP-006) and the theme, gathered behind
+ * one header control. Every change is reported to the caller, which owns the
+ * view command; this component never mutates a document. The document
+ * commands are header buttons of their own (#249).
  */
 export function SettingsMenu({
   display,
   theme,
-  documentCommands,
   onDisplayChange,
   onThemeChange,
 }: SettingsMenuProps) {
@@ -103,13 +92,6 @@ export function SettingsMenu({
       if (restoreFocusOnClose.current) returnFocusTarget?.focus()
     }
   }, [open])
-
-  /** Closes the menu, returning focus to its trigger, then runs the command. */
-  const runDocumentCommand = (command: () => void) => {
-    restoreFocusOnClose.current = true
-    setOpen(false)
-    command()
-  }
 
   return (
     <div className="settings-menu" ref={wrapperRef}>
@@ -234,25 +216,6 @@ export function SettingsMenu({
                 <option value="dark">Dark</option>
               </select>
             </label>
-          </section>
-          <section className="settings-section" aria-labelledby="settings-document-heading">
-            <h3 id="settings-document-heading">Document</h3>
-            <div className="settings-commands">
-              <button type="button" className="settings-command" onClick={() => runDocumentCommand(documentCommands.onImport)}>
-                Import
-              </button>
-              <button type="button" className="settings-command" onClick={() => runDocumentCommand(documentCommands.onExport)}>
-                Export
-              </button>
-              <button
-                type="button"
-                className="settings-command"
-                disabled={documentCommands.sharing}
-                onClick={() => runDocumentCommand(documentCommands.onCopyLink)}
-              >
-                Copy link
-              </button>
-            </div>
           </section>
         </div>
       )}
