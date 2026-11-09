@@ -60,7 +60,7 @@ import {
 import { describeViewport } from './visualization/viewportDescription'
 import { DirectionMarkerGlyph, LineAtInfinityGlyph, OrientedAreaGlyph, OrientedSegmentGlyph, PointListConnectionGlyph, PointMarkerGlyph, UnboundedLineGlyph, type HandleController } from './visualization/glyphs'
 import { findAnchorCandidates, selectAnchor, type AnchorCandidate } from './visualization/anchoring'
-import { collectRenderedPrimitives, layoutIdealArrow, layoutIdealMarker, layoutLineAtInfinity, layoutLineSelection, layoutOrientedArea, layoutOrientedSegment, layoutPointListConnection, layoutUnboundedLine, lineNormalLength, pointListVertices, lineOrientationTicks } from './visualization/layout'
+import { collectRenderedPrimitives, layoutIdealArrow, layoutIdealMarker, layoutLineAtInfinity, layoutLineSelection, layoutOrientedArea, layoutOrientedSegment, layoutPointListConnection, layoutUnboundedLine, lineNormalLength, listPrimitiveTypes, pointListVertices, lineOrientationTicks } from './visualization/layout'
 import { requireAvailableAlgebra } from './application/algebraAvailability'
 import {
   DocumentFormatError,
@@ -2566,6 +2566,10 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                       pointListDisplayAvailable={evaluation?.status === 'valid' &&
                         evaluation.valueType === 'list' &&
                         pointListVertices(evaluation.elements) !== null}
+                      listPrimitives={evaluation?.status === 'valid' && evaluation.valueType === 'list'
+                        ? listPrimitiveTypes(evaluation.elements)
+                        : undefined}
+                      linesVisible={expressionDoc.appearance[item.id]?.primitiveStyles?.lines?.visible ?? true}
                       parallelogramAvailable={evaluation?.status === 'valid' &&
                         evaluation.valueType === 'single' &&
                         evaluation.primitive?.kind === 'oriented-area' &&
@@ -2603,6 +2607,9 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                       })}
                       onPointMarkersVisibleChange={(pointMarkersVisible) => executeCommand({
                         kind: 'update-appearance', itemId: item.id, appearance: { primitiveStyles: { points: { visible: pointMarkersVisible } } },
+                      })}
+                      onLinesVisibleChange={(linesVisible) => executeCommand({
+                        kind: 'update-appearance', itemId: item.id, appearance: { primitiveStyles: { lines: { visible: linesVisible } } },
                       })}
                       onControlChange={(control) => {
                         if (isPlaying) stopPlayback(item.id)
