@@ -73,7 +73,12 @@ document when it can be restored, otherwise the normal initial example. This
 fallback session also disables automatic writes. **Save local copy** explicitly
 writes the current document with a new document identity and enables ordinary
 autosave after success; the header **Save** button does the same and also
-stores the copy in the local library under the name it asks for. It keeps the undo history and removes the scene
+stores the copy in the local library under the name it asks for. Before either
+writes, and before **Open** or **New** in the library menu end the session,
+the previously saved active document is stored in the local library if it is
+not there yet, so that it is never overwritten; if that fails, the session
+stays temporary. Opening the library menu reads storage but writes nothing.
+The header shows “Shared scene (temporary)” as the graph name until then. It keeps the undo history and removes the scene
 fragment from the address, so reloading opens the saved copy. A failed save retains the temporary session and JSON
 export. No separate local-library implementation is introduced here.
 

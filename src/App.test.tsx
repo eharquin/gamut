@@ -89,7 +89,7 @@ describe('VGA 2D vertical slice', () => {
     const header = document.querySelector('header.app-header') as HTMLElement
     const group = header.querySelector('.header-actions') as HTMLElement
     expect(within(group).getAllByRole('button').map((button) => button.getAttribute('aria-label')))
-      .toEqual(['Save to library', 'Library', 'Import document', 'Export document', 'Copy link', 'Switch to dark theme', 'Settings'])
+      .toEqual(['Save (unsaved changes)', 'Library', 'Import document', 'Export document', 'Copy link', 'Switch to dark theme', 'Settings'])
     for (const name of ['Import document', 'Export document', 'Copy link'])
       expect(within(group).getByRole('button', { name })).toHaveAttribute('title', name)
 
@@ -3624,26 +3624,94 @@ describe('local library of named graphs (#212)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Library' }))
     return libraryMenu()
   }
+  const saveButton = () => screen.getByRole('button', { name: /^Save( \(unsaved changes\))?$/ })
   const saveAs = (name: string) => {
-    fireEvent.click(screen.getByRole('button', { name: 'Save to library' }))
+    fireEvent.click(saveButton())
     const menu = libraryMenu()
     fireEvent.change(within(menu).getByRole('textbox', { name: 'Graph name' }), { target: { value: name } })
     fireEvent.click(within(menu).getByRole('button', { name: 'Save' }))
   }
   const source = () => screen.getByRole('textbox', { name: 'Expression 1' })
+  const nameField = () => screen.getByRole('textbox', { name: 'Open graph name' })
+  const index = () => JSON.parse(window.localStorage.getItem('gamut.library.v1')!).entries as { id: string; name: string }[]
+  const stored = (id: string) => JSON.parse(window.localStorage.getItem(`gamut.library.v1.document.${id}`)!)
 
-  it('places Save and Library first in the header group', () => {
+  it('groups the header: graph name, Save, and Library; the document file; the display', () => {
     render(<App />)
-    const group = document.querySelector('.header-actions') as HTMLElement
-    expect(within(group).getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
-      'Save to library', 'Library', 'Import document', 'Export document', 'Copy link', 'Switch to dark theme', 'Settings',
+    const groups = within(document.querySelector('.header-actions') as HTMLElement).getAllByRole('group')
+    expect(groups.map((group) => [
+      group.getAttribute('aria-label'),
+      within(group).queryAllByRole('textbox').map((field) => field.getAttribute('aria-label')),
+      within(group).getAllByRole('button').map((button) => button.getAttribute('aria-label')),
+    ])).toEqual([
+      ['Graph', ['Open graph name'], ['Save (unsaved changes)', 'Library']],
+      ['Document file', [], ['Import document', 'Export document', 'Copy link']],
+      ['Display', [], ['Switch to dark theme', 'Settings']],
     ])
+  })
+
+  it('names a graph never saved “Untitled” and marks unsaved changes on Save', () => {
+    render(<App />)
+    expect(nameField()).toHaveValue('')
+    expect(nameField()).toHaveAttribute('placeholder', 'Untitled')
+    expect(document.title).toBe('Untitled · GAMUT')
+    expect(saveButton()).toHaveAttribute('title', 'Save (unsaved changes)')
+    expect(saveButton().querySelector('.unsaved-dot')).not.toBeNull()
+
+    saveAs('Rotation talk')
+    expect(nameField()).toHaveValue('Rotation talk')
+    expect(document.title).toBe('Rotation talk · GAMUT')
+    expect(saveButton()).toHaveAccessibleName('Save')
+    expect(saveButton()).toHaveAttribute('title', 'Save')
+    expect(saveButton().querySelector('.unsaved-dot')).toBeNull()
+
+    // Zooming and panning are view settings, not changes to save.
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+    expect(saveButton()).toHaveAccessibleName('Save')
+    fireEvent.change(source(), { target: { value: 'vector(5, 6)' } })
+    expect(saveButton()).toHaveAccessibleName('Save (unsaved changes)')
+    fireEvent.click(saveButton())
+    expect(saveButton()).toHaveAccessibleName('Save')
+  })
+
+  it('renames the open graph from its name in the header', () => {
+    render(<App />)
+    saveAs('Draft')
+    fireEvent.focus(nameField())
+    fireEvent.change(nameField(), { target: { value: 'Final' } })
+    fireEvent.keyDown(nameField(), { key: 'Enter' })
+    fireEvent.blur(nameField())
+    expect(nameField()).toHaveValue('Final')
+    expect(document.title).toBe('Final · GAMUT')
+    expect(index()).toMatchObject([{ name: 'Final' }])
+    expect(stored(index()[0].id).metadata.title).toBe('Final')
+    expect(saveButton()).toHaveAccessibleName('Save')
+
+    // Escape abandons the draft; an empty name is not kept.
+    fireEvent.focus(nameField())
+    fireEvent.change(nameField(), { target: { value: 'Abandoned' } })
+    fireEvent.keyDown(nameField(), { key: 'Escape' })
+    expect(nameField()).toHaveValue('Final')
+    fireEvent.focus(nameField())
+    fireEvent.change(nameField(), { target: { value: '  ' } })
+    fireEvent.blur(nameField())
+    expect(nameField()).toHaveValue('Final')
+    expect(index()).toMatchObject([{ name: 'Final' }])
+  })
+
+  it('saves a graph never saved when it is named in the header', () => {
+    render(<App />)
+    fireEvent.focus(nameField())
+    fireEvent.change(nameField(), { target: { value: 'Named here' } })
+    fireEvent.blur(nameField())
+    expect(index()).toMatchObject([{ name: 'Named here' }])
+    expect(saveButton()).toHaveAccessibleName('Save')
   })
 
   it('asks for a name in the library menu the first time, then saves under the title', () => {
     const prompt = vi.spyOn(window, 'prompt')
     render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: 'Save to library' }))
+    fireEvent.click(saveButton())
     const menu = libraryMenu()
     const name = within(menu).getByRole('textbox', { name: 'Graph name' })
     expect(name).toHaveValue('Untitled document')
@@ -3656,11 +3724,10 @@ describe('local library of named graphs (#212)', () => {
 
     // The next save does not ask again, and stores the current revision.
     fireEvent.change(source(), { target: { value: 'vector(5, 6)' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save to library' }))
+    fireEvent.click(saveButton())
     expect(screen.queryByRole('dialog', { name: 'Library' })).not.toBeInTheDocument()
-    const stored = JSON.parse(window.localStorage.getItem('gamut.library.v1.document.local-document')!)
-    expect(stored.metadata.title).toBe('Rotation talk')
-    expect(stored.items[0].source).toBe('vector(5, 6)')
+    expect(stored('local-document').metadata.title).toBe('Rotation talk')
+    expect(stored('local-document').items[0].source).toBe('vector(5, 6)')
 
     const group = within(openLibrary()).getByRole('region', { name: 'VGA · 2D' })
     const open = within(group).getByRole('button', { name: 'Open Rotation talk' })
@@ -3680,20 +3747,27 @@ describe('local library of named graphs (#212)', () => {
     expect(confirm).toHaveTextContent('not saved in the library')
     fireEvent.click(within(confirm).getByRole('button', { name: 'Discard and create' }))
     expect(source()).toHaveValue('')
+    expect(nameField()).toHaveValue('')
     fireEvent.change(source(), { target: { value: 'B = vector(0, 1)' } })
     saveAs('Second')
 
     let menu = openLibrary()
     fireEvent.click(within(menu).getByRole('button', { name: 'Open First' }))
     expect(source()).toHaveValue('A = vector(1, 0)')
+    expect(nameField()).toHaveValue('First')
+    expect(saveButton()).toHaveAccessibleName('Save')
 
     menu = openLibrary()
     fireEvent.click(within(menu).getByRole('button', { name: 'Rename Second' }))
     fireEvent.change(within(menu).getByRole('textbox', { name: 'New name for Second' }), { target: { value: 'Second, renamed' } })
     fireEvent.click(within(menu).getByRole('button', { name: 'Rename' }))
     fireEvent.click(within(menu).getByRole('button', { name: 'Duplicate First' }))
+    fireEvent.click(within(menu).getByRole('button', { name: 'Duplicate First' }))
     expect(within(menu).getByRole('button', { name: 'Open First copy' })).toBeInTheDocument()
+    expect(within(menu).getByRole('button', { name: 'Open First copy 2' })).toBeInTheDocument()
 
+    fireEvent.click(within(menu).getByRole('button', { name: 'Delete First copy 2' }))
+    fireEvent.click(within(within(menu).getByRole('alertdialog', { name: 'Confirm' })).getByRole('button', { name: 'Delete' }))
     fireEvent.click(within(menu).getByRole('button', { name: 'Delete First copy' }))
     const deletion = within(menu).getByRole('alertdialog', { name: 'Confirm' })
     expect(deletion).toHaveTextContent('Delete “First copy” from the library?')
@@ -3708,14 +3782,51 @@ describe('local library of named graphs (#212)', () => {
     menu = openLibrary()
     expect(within(menu).getAllByRole('button', { name: /^Open / }).map((button) => button.getAttribute('aria-label')).sort())
       .toEqual(['Open First', 'Open Second, renamed'])
-    // The reloaded test document is not the stored First, so opening asks first.
+    // The reloaded test document is not a library graph, so opening asks first.
     fireEvent.click(within(menu).getByRole('button', { name: 'Open Second, renamed' }))
     fireEvent.click(within(within(menu).getByRole('alertdialog', { name: 'Confirm' }))
       .getByRole('button', { name: 'Discard and open' }))
     expect(source()).toHaveValue('B = vector(0, 1)')
   })
 
-  it('migrates the former active document at launch and groups graphs by algebra', () => {
+  it('never discards unsaved changes when the open graph is opened again', () => {
+    render(<App />)
+    saveAs('Kept')
+    fireEvent.change(source(), { target: { value: 'vector(8, 8)' } })
+    const menu = openLibrary()
+    expect(within(menu).getByRole('button', { name: 'Open Kept' })).toHaveAttribute('aria-current', 'true')
+    fireEvent.click(within(menu).getByRole('button', { name: 'Open Kept' }))
+    expect(source()).toHaveValue('vector(8, 8)')
+    expect(saveButton()).toHaveAccessibleName('Save (unsaved changes)')
+  })
+
+  it('never overwrites a library graph that only shares the identity of the open document', () => {
+    const saved = toCanonicalDocument(expressionDocument(
+      [{ id: 'item-1', source: 'Saved = vector(1, 1)' }], {}, { id: 'local-document', title: 'Saved default' },
+    ), 'light')
+    window.localStorage.setItem('gamut.library.v1', JSON.stringify({ version: 1, entries: [
+      { id: 'local-document', name: 'Saved default', algebraId: 'org.multivector.vga', createdAt: '2026-11-01T00:00:00.000Z', updatedAt: '2026-11-01T00:00:00.000Z' },
+    ] }))
+    window.localStorage.setItem('gamut.library.v1.document.local-document', serializeCanonicalDocument(saved))
+    // The default document of this visit has the same identity.
+    render(<App />)
+    expect(nameField()).toHaveValue('')
+    expect(within(openLibrary()).getByRole('button', { name: 'Open Saved default' })).not.toHaveAttribute('aria-current')
+    fireEvent.click(screen.getByRole('button', { name: 'Close Library menu' }))
+    saveAs('This visit')
+
+    expect(stored('local-document').items[0].source).toBe('Saved = vector(1, 1)')
+    const copy = index().find((entry) => entry.name === 'This visit')!
+    expect(copy.id).not.toBe('local-document')
+    expect(stored(copy.id).items[0].source).toBe('vector(2, 1)')
+    // The open graph took that identity, so the next save updates it.
+    fireEvent.change(source(), { target: { value: 'vector(4, 4)' } })
+    fireEvent.click(saveButton())
+    expect(index()).toHaveLength(2)
+    expect(stored(copy.id).items[0].source).toBe('vector(4, 4)')
+  })
+
+  it('lists the former active document without writing, and migrates it at the first write', () => {
     const active = toCanonicalDocument(expressionDocument(
       [{ id: 'item-1', source: 'V = vector(2, 1)' }], {}, { id: 'former', title: 'Former scene' },
     ), 'light')
@@ -3728,19 +3839,59 @@ describe('local library of named graphs (#212)', () => {
     window.localStorage.setItem('gamut.library.v1.document.pga-graph', serializeCanonicalDocument(pga))
     vi.stubEnv('MODE', 'development')
     render(<App />)
-    // The index is written at launch; the stray PGA graph is not listed until
-    // it is in the index, so add it by rebuilding from a corrupted index.
-    expect(JSON.parse(window.localStorage.getItem('gamut.library.v1')!).entries)
-      .toMatchObject([{ id: 'former', name: 'Former scene', algebraId: 'org.multivector.vga' }])
-    cleanup()
-    window.localStorage.setItem('gamut.library.v1', 'corrupted')
-    render(<App />)
-    const menu = openLibrary()
-    expect(menu).toHaveTextContent('LIBRARY_INDEX_REBUILT')
+    expect(nameField()).toHaveValue('Former scene')
+    expect(saveButton()).toHaveAccessibleName('Save')
+    let menu = openLibrary()
+    expect(window.localStorage.getItem('gamut.library.v1')).toBeNull()
     expect(within(within(menu).getByRole('region', { name: 'VGA · 2D' })).getByRole('button', { name: 'Open Former scene' }))
       .toHaveAttribute('aria-current', 'true')
     expect(within(within(menu).getByRole('region', { name: 'PGA · 2D' })).getByRole('button', { name: 'Open Points' }))
       .toBeInTheDocument()
+
+    // Opening another graph stores the former document first.
+    fireEvent.click(within(menu).getByRole('button', { name: 'Open Points' }))
+    expect(index().map((entry) => entry.id).sort()).toEqual(['former', 'pga-graph'])
+    expect(stored('former').items[0].source).toBe('V = vector(2, 1)')
+    cleanup()
+
+    window.localStorage.setItem('gamut.library.v1', 'corrupted')
+    render(<App />)
+    menu = openLibrary()
+    expect(menu).toHaveTextContent('LIBRARY_INDEX_REBUILT')
+    expect(window.localStorage.getItem('gamut.library.v1')).toBe('corrupted')
+    expect(within(menu).getByRole('button', { name: 'Open Former scene' })).toBeInTheDocument()
+  })
+
+  it('follows a library changed in another tab, and keeps its graphs when saving', () => {
+    render(<App />)
+    saveAs('Mine')
+    const menu = openLibrary()
+    const other = toCanonicalDocument(expressionDocument([{ id: 'item-1', source: 'vector(0, 3)' }], {}, { id: 'other-tab', title: 'Other tab' }), 'light')
+    window.localStorage.setItem('gamut.library.v1.document.other-tab', serializeCanonicalDocument(other))
+    window.localStorage.setItem('gamut.library.v1', JSON.stringify({ version: 1, entries: [
+      ...index(),
+      { id: 'other-tab', name: 'Other tab', algebraId: 'org.multivector.vga', createdAt: '2026-11-09T00:00:00.000Z', updatedAt: '2026-11-09T00:00:00.000Z' },
+    ] }))
+    act(() => { window.dispatchEvent(new StorageEvent('storage', { key: 'gamut.library.v1' })) })
+    expect(within(menu).getByRole('button', { name: 'Open Other tab' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Close Library menu' }))
+
+    fireEvent.change(source(), { target: { value: 'vector(1, 1)' } })
+    fireEvent.click(saveButton())
+    expect(index().map((entry) => entry.name)).toEqual(['Mine', 'Other tab'])
+  })
+
+  it('closes a confirmation with Escape and keeps the menu open', () => {
+    render(<App />)
+    saveAs('Escaped')
+    const menu = openLibrary()
+    fireEvent.click(within(menu).getByRole('button', { name: 'Delete Escaped' }))
+    expect(within(menu).getByRole('alertdialog', { name: 'Confirm' })).toBeInTheDocument()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(within(libraryMenu()).queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(menu).toContainElement(document.activeElement as HTMLElement)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('dialog', { name: 'Library' })).not.toBeInTheDocument()
   })
 
   it('keeps editing and reports the problem when browser storage is unavailable', () => {
@@ -3759,10 +3910,19 @@ describe('local library of named graphs (#212)', () => {
     saveAs('Kept')
     fireEvent.change(source(), { target: { value: 'vector(7, 7)' } })
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('Quota exceeded', 'QuotaExceededError') })
-    fireEvent.click(screen.getByRole('button', { name: 'Save to library' }))
+    fireEvent.click(saveButton())
     expect(within(libraryMenu()).getByRole('alert')).toHaveTextContent(/^LIBRARY_WRITE_FAILED/)
     vi.restoreAllMocks()
-    expect(JSON.parse(window.localStorage.getItem('gamut.library.v1.document.local-document')!).items[0].source)
-      .toBe('vector(2, 1)')
+    expect(stored('local-document').items[0].source).toBe('vector(2, 1)')
+    expect(saveButton()).toHaveAccessibleName('Save (unsaved changes)')
+  })
+
+  it('reports a corrupted graph as unreadable, not as unavailable storage', () => {
+    render(<App />)
+    saveAs('Broken')
+    window.localStorage.setItem('gamut.library.v1.document.local-document', '{"broken"')
+    const menu = openLibrary()
+    fireEvent.click(within(menu).getByRole('button', { name: 'Duplicate Broken' }))
+    expect(within(menu).getByRole('alert')).toHaveTextContent(/^LIBRARY_ENTRY_INVALID/)
   })
 })

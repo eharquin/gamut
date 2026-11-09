@@ -413,18 +413,37 @@ requirement STORE-012, have **Milestone** commitment.
   browser (#212). A versioned index (`gamut.library.v1`) lists each graph's
   identity, name, algebra, creation and last-update instants; each graph is
   stored under its own key as canonical JSON, and its library identity is its
-  document identity. The open graph remains the autosaved active document;
-  **Save** stores it in the library under its title, asking for a name in the
+  document identity. The open graph remains the autosaved active document,
+  and `gamut.library.v1.open` records which library graph it is, if any.
+  **Save** stores it in the library under its name, asking for a name in the
   library menu the first time, and in a temporary scene-link session acts as
-  Save local copy. **Library** lists the graphs grouped by algebra with their
-  name and last update, and offers New, Open, Rename, Duplicate, and Delete;
-  deleting, and discarding changes the library does not hold, are confirmed
-  inside the menu. The former active document becomes the first entry once,
-  without data loss. Every storage access tolerates unavailable storage and
-  full quotas, keeps the open graph working in memory, reports the problem in
-  text, and keeps the last valid revision of a graph; a corrupted graph is
-  reported when opened and never hides the others, and a corrupted index is
-  rebuilt from the stored graphs.
+  Save local copy. Save shall never overwrite another graph: a document that
+  is not the library graph of its identity (a default, imported, or recovery
+  document) takes a fresh identity when the library already holds its own.
+  The header shows the open graph's name left of **Save**, editable in place
+  (Enter or leaving the field confirms it; naming a graph never saved saves
+  it), “Untitled” for a graph never saved and “Shared scene (temporary)” in a
+  temporary session; the browser tab reads `<name> · GAMUT`. A dot on **Save**,
+  and the accessible name “Save (unsaved changes)”, show that the document
+  differs from its last saved revision; the viewport centre and zoom and the
+  viewport lock do not count. The same state decides whether **New** and
+  **Open** ask before discarding changes; opening the graph that is already
+  open discards nothing. **Library** lists the graphs grouped by algebra with
+  their name and last update, follows changes made in other tabs, and offers
+  New, Open, Rename, Duplicate (“X copy”, “X copy 2”, …), and Delete;
+  deleting and discarding are confirmed inside the menu, and Escape dismisses
+  a confirmation before the menu. Reading the library, including opening its
+  menu, writes nothing. Each write reads the index again first; the former
+  active document becomes the first entry at the first write, before any
+  action replaces it, also in a temporary session, and an index that could
+  not be read is rewritten then. Every storage access tolerates unavailable
+  storage and full quotas, keeps the open graph working in memory, and
+  reports the problem in text. A graph is written before the index, and is
+  put back as it was if the index cannot be written, so that no graph loses
+  its entry and the last valid revision is kept; an invalid index entry or a
+  graph missing from the index is listed again from the stored graph; a
+  corrupted graph is reported as unreadable when opened, renamed, or
+  duplicated, and never hides the others.
 
 ## 12. Diagnostics, limits, and security
 

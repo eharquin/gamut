@@ -25,8 +25,8 @@ type LibraryMenuProps = Readonly<{
   naming: Readonly<{ initialName: string }> | null
   /** A library or storage problem to report in text. */
   diagnostic: string | null
-  /** Whether the open graph differs from its stored revision, or is unsaved content. */
-  hasUnsavedChanges(): boolean
+  /** Whether the open graph differs from its last saved revision, or is unsaved content. */
+  unsavedChanges: boolean
   onSaveAs(name: string): void
   onNew(): void
   onOpen(entry: LibraryEntry): void
@@ -59,11 +59,14 @@ function formatDate(iso: string): string {
  * inside the menu.
  */
 export function LibraryMenu({
-  anchorRef, returnFocusRef, groups, openId, naming, diagnostic, hasUnsavedChanges,
+  anchorRef, returnFocusRef, groups, openId, naming, diagnostic, unsavedChanges,
   onSaveAs, onNew, onOpen, onRename, onDuplicate, onDelete, onClose,
 }: LibraryMenuProps) {
   const ref = useRef<HTMLDivElement>(null)
   const [pending, setPending] = useState<Pending | null>(null)
+  // Escape answers a confirmation first, and closes the menu only without one.
+  const pendingRef = useRef<Pending | null>(null)
+  pendingRef.current = pending
   const [nameDraft, setNameDraft] = useState(naming?.initialName ?? '')
   const [placement, setPlacement] = useState(() =>
     popoverPosition(anchorRef.current, POPOVER_WIDTH, ESTIMATED_POPOVER_HEIGHT))
@@ -94,7 +97,9 @@ export function LibraryMenu({
       onClose()
     }
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key !== 'Escape') return
+      if (pendingRef.current) setPending(null)
+      else onClose()
     }
     document.addEventListener('mousedown', onPointerDown)
     document.addEventListener('keydown', onKeyDown)
@@ -105,17 +110,23 @@ export function LibraryMenu({
     }
   }, [anchorRef, returnFocusRef, onClose])
 
-  // A confirmation takes focus, so that the keyboard lands on its question.
+  // A confirmation takes focus, so that the keyboard lands on its question;
+  // once it is answered or dismissed, focus stays in the menu.
+  const hadPending = useRef(false)
   useEffect(() => {
     if (pending) ref.current?.querySelector<HTMLElement>('.library-confirm input, .library-confirm button')?.focus()
+    else if (hadPending.current && !ref.current?.contains(document.activeElement)) {
+      ref.current?.querySelector<HTMLElement>('.library-new')?.focus()
+    }
+    hadPending.current = pending !== null
   }, [pending])
 
   const requestOpen = (entry: LibraryEntry) => {
-    if (entry.id !== openId && hasUnsavedChanges()) setPending({ kind: 'discard', then: 'open', entry })
+    if (entry.id !== openId && unsavedChanges) setPending({ kind: 'discard', then: 'open', entry })
     else onOpen(entry)
   }
   const requestNew = () => {
-    if (hasUnsavedChanges()) setPending({ kind: 'discard', then: 'new' })
+    if (unsavedChanges) setPending({ kind: 'discard', then: 'new' })
     else onNew()
   }
   const submitName = (event: FormEvent) => {
