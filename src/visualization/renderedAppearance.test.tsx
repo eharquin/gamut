@@ -111,7 +111,18 @@ describe('stroked glyphs', () => {
   it('draw a set width scaled by the object scale, with dashes scaled by the drawn width', () => {
     const markup = vector({ strokeStyle: 'dashed', strokeWidth: 2, opacity: 0.25 })
     expect(markup).toContain('style="stroke-width:3;stroke-dasharray:12 9"')
-    expect(markup).toContain('<g style="color:#E8A000;opacity:0.25">')
+    expect(markup).toContain('<g style="color:#E8A000"><g opacity="0.25">')
+  })
+
+  it('fade the drawn marks only, never the handles or the keyboard focus ring', () => {
+    const focused = { ...controller, focusRingKey: 'v:head' }
+    const markup = vector({ opacity: 0, headMovable: true, itemPresent: true, baseMovable: true, label: 'V', controller: focused })
+    const faded = markup.slice(markup.indexOf('<g opacity="0">'), markup.indexOf('</g>', markup.indexOf('<g opacity="0">')))
+    expect(faded).toContain('class="vector"')
+    expect(faded).toContain('class="object-label"')
+    for (const handle of ['manipulation-focus-ring', 'vector-head-target', 'manipulation-base-contour'])
+      expect(faded).not.toContain(handle)
+    expect(markup).toContain('manipulation-focus-ring')
   })
 
   it('dot the default shaft without changing its width', () => {
