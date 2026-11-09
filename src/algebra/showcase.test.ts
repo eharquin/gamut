@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { evaluateDocument } from '../application/evaluateDocument'
-import { expressionDocument, showcaseItems } from '../document/expressionDocument'
+import { expressionDocument, showcaseItems, vga2FoundationExampleDocument } from '../document/expressionDocument'
 import { executeDocumentCommand } from '../document/documentCommands'
+import { showcaseMetadata } from './algebraDefinition'
 import { createBuiltinAlgebraRegistry } from './builtinAlgebras'
 import { OPAQUE_INTERPRETATION } from '../geometry/interpretation'
 
@@ -22,6 +23,7 @@ describe('definition showcases', () => {
         },
         interpretation: { interpretationId: definition.standardInterpretationId, interpretationVersion: 1 },
         visualizerId: definition.standardVisualizerId,
+        ...showcaseMetadata(definition),
       })
       const document = { ...selected.document, items: showcaseItems(definition.showcase) }
       const resolution = registry.resolve(document.algebra)
@@ -34,6 +36,15 @@ describe('definition showcases', () => {
       expect(drawn.length).toBeGreaterThanOrEqual(2)
     })
   }
+
+  it('titles each showcase, and falls back to a neutral title naming the algebra', () => {
+    const titles = Object.fromEntries(registry.definitions().map((definition) =>
+      [definition.algebraId, showcaseMetadata(definition)]))
+    const firstRun = vga2FoundationExampleDocument()
+    expect(titles['org.multivector.vga']).toEqual({ title: firstRun.title, description: firstRun.description })
+    expect(titles['org.multivector.pga'].title).toBe('PGA 2D Triangle Example')
+    expect(showcaseMetadata({ badge: 'PGA · 2D' })).toEqual({ title: 'PGA · 2D example', description: '' })
+  })
 
   it('PGA showcase classifies its rows as the documented kinds', () => {
     const definition = registry.definitions().find((candidate) => candidate.algebraId === 'org.multivector.pga')!
