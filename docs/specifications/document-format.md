@@ -377,6 +377,15 @@ Format version 1 supports these closed `viewport` variants:
 - `{ "kind": "two-dimensional", "centerX": number, "centerY": number,
   "zoom": number }`, where all numbers are finite and `zoom` is positive.
 
+A document that pairs `visualizerId: null` with a two-dimensional viewport, a
+visualizer with the `none` viewport, or names a visualizer or interpretation
+this runtime does not provide, is preserved as stored and opens with its
+diagnostic. The application shows it like the NoViz calculator, whose
+**Show canvas** button rewrites the view to the algebra's standard visualizer
+(keeping a stored two-dimensional viewport) and, when the interpretation is
+unavailable, selects the algebra's standard interpretation in an undoable
+step.
+
 `DisplaySettings` has exactly `decimalPlaces`, `axisLabelsVisible`,
 `graduationsVisible`, `gridVisible`, `objectScale`, and `theme`.
 `decimalPlaces` is an integer from 0 through 15 and defaults to 4 for new

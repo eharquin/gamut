@@ -3673,8 +3673,9 @@ describe('collapsing the expression panel (#234)', () => {
     await waitFor(() => expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('Calc = vector(5, 6)'))
     expect(panel()).not.toHaveClass('is-collapsed')
     expect(panel()).not.toHaveAttribute('inert')
-    // The focused expand button went away with the canvas; focus lands on the panel.
-    expect(panel()).toHaveFocus()
+    // The focused expand button went away with the canvas; focus lands on
+    // the button that brings the canvas back (#55).
+    expect(screen.getByRole('button', { name: 'Show canvas' })).toHaveFocus()
     expect(window.localStorage.getItem('gamut.expressionPanelCollapsed')).toBe('false')
 
     // A document with a canvas afterwards does not collapse the panel again.
@@ -3775,6 +3776,58 @@ describe('NoViz calculator mode (#55)', () => {
     expect(document.getElementById('expression-panel')).not.toHaveClass('is-collapsed')
     fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
     expect(document.getElementById('expression-panel')).not.toHaveClass('is-collapsed')
+  })
+
+  it.each([
+    ['no visualizer but a two-dimensional viewport', { visualizerId: null, viewport: { kind: 'two-dimensional', centerX: 1, centerY: 2, zoom: 144 } }, {}],
+    ['a visualizer but no viewport', { viewport: { kind: 'none' } }, {}],
+    ['an unknown visualizer', { visualizerId: 'org.example.unknown-2d' }, {}],
+    ['an unavailable interpretation', {}, { interpretation: { interpretationId: 'org.example.unknown', interpretationVersion: 1 } }],
+  ])('offers Show canvas for a stored document with %s', (_case, view, document) => {
+    const stored = toCanonicalDocument(expressionDocument([
+      { id: 'v', source: 'V = vector(2, 1)' },
+    ], {}, { id: 'undisplayable' }), 'light')
+    window.localStorage.setItem(ACTIVE_DOCUMENT_KEY, serializeCanonicalDocument({
+      ...stored, ...document, view: { ...stored.view, ...view } as typeof stored.view,
+    }))
+    vi.stubEnv('MODE', 'development')
+    render(<App />)
+    expect(canvas()).not.toBeInTheDocument()
+    expect(screen.getByText('NoViz calculator')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+    expect(canvas()).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Hide canvas (NoViz calculator)' })).toHaveFocus()
+    expect(screen.queryByText(/INT_UNKNOWN_INTERPRETATION/)).not.toBeInTheDocument()
+    expect(storedView()).toMatchObject({
+      visualizerId: 'org.multivector.vga-2d', positionEnabled: true, viewport: { kind: 'two-dimensional' },
+    })
+  })
+
+  it('keeps the stored centre and zoom of a document that only lacks its visualizer', () => {
+    const stored = toCanonicalDocument(expressionDocument([{ id: 'v', source: 'V = vector(2, 1)' }], {}, { id: 'zoomed' }), 'light')
+    window.localStorage.setItem(ACTIVE_DOCUMENT_KEY, serializeCanonicalDocument({
+      ...stored, view: { ...stored.view, visualizerId: null, viewport: { kind: 'two-dimensional', centerX: 1, centerY: 2, zoom: 144 } },
+    }))
+    vi.stubEnv('MODE', 'development')
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+    expect(screen.getByRole('textbox', { name: 'Zoom level' })).toHaveValue('200%')
+  })
+
+  it('takes the standard interpretation in an undoable step when the stored one is unavailable', () => {
+    const stored = toCanonicalDocument(expressionDocument([{ id: 'v', source: 'V = vector(2, 1)' }], {}, { id: 'unknown-interpretation' }), 'light')
+    window.localStorage.setItem(ACTIVE_DOCUMENT_KEY, serializeCanonicalDocument({
+      ...stored, interpretation: { interpretationId: 'org.example.unknown', interpretationVersion: 1 },
+    }))
+    vi.stubEnv('MODE', 'development')
+    render(<App />)
+    expect(screen.getByRole('alert')).toHaveTextContent(/INT_UNKNOWN_INTERPRETATION/)
+    fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+    expect(canvas()).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
+    expect(canvas()).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Show canvas' })).toBeInTheDocument()
   })
 
   it('forgets the view kept for the return when another document opens', async () => {

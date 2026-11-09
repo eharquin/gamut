@@ -523,9 +523,13 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const panelHidden = panelCollapsed && visualizerActive
   /**
    * The NoViz calculator (#55): the document has no visualizer, so nothing is
-   * drawn, positions are off, and the panel takes the whole width.
+   * drawn, positions are off, and the panel takes the whole width. Any
+   * document without a canvas is shown this way, so that **Show canvas** is
+   * always offered: besides the NoViz state itself (`visualizerId: null` and
+   * viewport `none`), a document with only one of the two markers, an unknown
+   * visualizer, or an unavailable interpretation.
    */
-  const noViz = expressionDoc.view.visualizerId === null && expressionDoc.view.viewport.kind === 'none'
+  const noViz = !visualizerActive
   /** The button that receives focus after the user enters or leaves NoViz. */
   const workspaceModeFocus = useRef<'show-canvas' | 'hide-canvas' | null>(null)
   const showCanvasButtonRef = useRef<HTMLButtonElement | null>(null)
@@ -1139,7 +1143,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   // A document without a canvas (imported, dropped, restored or linked)
   // reopens a collapsed panel: nothing would be left on screen to expand it
   // from, and it must not collapse again when a canvas comes back. Focus left
-  // in the removed canvas moves to the panel instead of the page.
+  // in the removed canvas moves to Show canvas (or the panel) instead of the page.
   const hadCanvas = useRef(visualizerActive)
   useEffect(() => {
     const lostCanvas = hadCanvas.current && !visualizerActive
@@ -1151,7 +1155,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     }
     const focused = document.activeElement
     if (lostCanvas && (focused === null || focused === document.body || !focused.isConnected)) {
-      expressionPanelRef.current?.focus()
+      const target = showCanvasButtonRef.current ?? expressionPanelRef.current
+      target?.focus()
     }
   }, [visualizerActive, panelCollapsed, ephemeral])
 
@@ -1166,30 +1171,40 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     setSelectedLine(null)
     setAnchorPreview(null)
     setAppearanceItemId(null)
-    // The panel takes the whole width; a collapsed panel would otherwise
-    // vanish again when the canvas comes back.
-    if (panelCollapsed) {
-      setPanelCollapsed(false)
-      if (!ephemeral) persistPanelCollapsed(false)
-    }
+    // A collapsed panel reopens with every loss of the canvas (#234).
     workspaceModeFocus.current = 'show-canvas'
     // NoViz is the only state in which positions are off (#248).
     updateView({ ...expressionDoc.view, visualizerId: null, positionEnabled: false, viewport: { kind: 'none' } })
   }
-  /** Brings the canvas back with the visualizer and viewport NoViz left. */
+  /**
+   * Brings the canvas back with the visualizer and viewport NoViz left, or
+   * the algebra's standard visualizer at the stored or default view. It also
+   * repairs a document that cannot be displayed (one NoViz marker only, an
+   * unknown visualizer, or an unavailable interpretation, which takes the
+   * algebra's standard interpretation in an undoable step).
+   */
   const leaveNoViz = () => {
     const retained = retainedVisualView.current?.algebraId === expressionDoc.algebra.algebraId
       ? retainedVisualView.current
       : null
+    const storedViewport = expressionDoc.view.viewport.kind === 'two-dimensional' ? expressionDoc.view.viewport : null
     workspaceModeFocus.current = 'hide-canvas'
     updateView({
       ...expressionDoc.view,
       visualizerId: retained?.visualizerId ?? algebraDefinition.standardVisualizerId,
       positionEnabled: true,
-      viewport: retained?.viewport ?? {
+      viewport: retained?.viewport ?? storedViewport ?? {
         kind: 'two-dimensional', centerX: 0, centerY: 0, zoom: DEFAULT_PIXELS_PER_UNIT,
       },
     })
+    if (interpretationResolution.status !== 'resolved') {
+      dispatchHistory({ type: 'boundary' })
+      executeCommand({
+        kind: 'update-algebra',
+        algebra: expressionDoc.algebra,
+        interpretation: { interpretationId: algebraDefinition.standardInterpretationId, interpretationVersion: 1 },
+      })
+    }
   }
 
   const toggleViewportLock = () => {
