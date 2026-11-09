@@ -3776,4 +3776,56 @@ describe('NoViz calculator mode (#55)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
     expect(document.getElementById('expression-panel')).not.toHaveClass('is-collapsed')
   })
+
+  describe('undo and redo across an algebra change', () => {
+    const switchTo = (current: string, index: number) => {
+      fireEvent.click(screen.getByRole('button', { name: `${current}. Change algebra` }))
+      fireEvent.click(within(screen.getByRole('menu')).getAllByRole('menuitemradio')[index])
+    }
+    const undo = () => fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
+    const redo = () => fireEvent.click(screen.getByRole('button', { name: 'Redo document change' }))
+    const expectCanvasOf = (algebra: 'VGA' | 'PGA') => {
+      expect(screen.getByRole('button', { name: `${algebra} · 2D. Change algebra` })).toBeInTheDocument()
+      expect(screen.getByRole('img', { name: `Two-dimensional ${algebra} viewport` })).toBeInTheDocument()
+    }
+
+    it('keeps the visualizer of each algebra after a view change on the canvas', () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+      render(<App />)
+      switchTo('VGA · 2D', 1)
+      fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+      expectCanvasOf('PGA')
+      undo()
+      expectCanvasOf('VGA')
+      redo()
+      expectCanvasOf('PGA')
+    })
+
+    it('shows the canvas of the algebra undo or redo lands on after NoViz', () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+      render(<App />)
+      switchTo('VGA · 2D', 1)
+      fireEvent.click(screen.getByRole('button', { name: 'Hide canvas (NoViz calculator)' }))
+      undo()
+      // NoViz is a view state: undo keeps it.
+      expect(canvas()).not.toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+      expectCanvasOf('VGA')
+      redo()
+      expectCanvasOf('PGA')
+    })
+
+    it('does not bring back the visualizer kept for another algebra', () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+      render(<App />)
+      fireEvent.click(screen.getByRole('button', { name: 'Hide canvas (NoViz calculator)' }))
+      switchTo('VGA · 2D', 1)
+      fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+      expectCanvasOf('PGA')
+      undo()
+      expectCanvasOf('VGA')
+      redo()
+      expectCanvasOf('PGA')
+    })
+  })
 })

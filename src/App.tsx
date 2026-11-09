@@ -111,6 +111,11 @@ const algebraRegistry = createBuiltinAlgebraRegistry()
 const restoreOptions = {
   visualizerAvailable: (visualizerId: string) => algebraRegistry.resolveVisualizer(visualizerId) !== null,
 }
+/** The standard visualizer of an algebra, so that undo and redo keep each algebra's own visualizer. */
+function standardVisualizerId(algebra: ExpressionDocument['algebra']): string | null {
+  const resolution = algebraRegistry.resolve(algebra)
+  return resolution.status === 'resolved' ? resolution.definition.standardVisualizerId : null
+}
 const MIN_PANEL_WIDTH = 240
 /** Keeps the `.panel-resize` separator reachable at any panel width. */
 const PANEL_RESIZE_WIDTH = 6
@@ -523,7 +528,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   }, [noViz])
   const grid = adaptiveGrid(viewport)
   const updateView = useCallback((view: typeof expressionDoc.view) => {
-    dispatchHistory({ type: 'update-view', view })
+    dispatchHistory({ type: 'update-view', view, standardVisualizerId })
   }, [])
   const updateDisplay = useCallback((change: Partial<DisplaySettings>) => {
     updateView({
