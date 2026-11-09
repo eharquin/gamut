@@ -44,6 +44,8 @@ export type HistoryAction =
       standardVisualizerId?: (algebra: ExpressionDocument['algebra']) => string | null
     }>
   | Readonly<{ type: 'update-identity'; id: string }>
+  /** Names the document, as the library does when it saves or renames it (#212). */
+  | Readonly<{ type: 'update-title'; title: string }>
 
 export function createDocumentHistory(document: ExpressionDocument): DocumentHistory {
   return {
@@ -77,13 +79,14 @@ function viewForSnapshot(
 }
 
 export function documentHistoryReducer(state: DocumentHistory, action: HistoryAction): DocumentHistory {
-  if (action.type === 'update-view' || action.type === 'update-identity') {
+  if (action.type === 'update-view' || action.type === 'update-identity' || action.type === 'update-title') {
     // Applied to every snapshot so that undo and redo never restore a
-    // previous view or document identity.
+    // previous view, document identity, or library name.
     const update = (document: ExpressionDocument): ExpressionDocument =>
       action.type === 'update-view'
         ? { ...document, view: viewForSnapshot(document, state.present, action) }
-        : { ...document, id: action.id }
+        : action.type === 'update-identity' ? { ...document, id: action.id }
+          : { ...document, title: action.title }
     return {
       ...state,
       past: state.past.map((entry) => ({ ...entry, document: update(entry.document) })),

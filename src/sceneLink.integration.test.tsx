@@ -1,5 +1,5 @@
 /// <reference types="node" />
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { webcrypto } from 'node:crypto'
 import App from './App'
@@ -75,6 +75,82 @@ describe('scene sharing in the application', () => {
     expect(window.location.hash).toBe('')
     fireEvent.click(screen.getByRole('button', { name: /^Undo/ }))
     expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('Shared = vector(3, 4)')
+  })
+
+  it('saves a temporary session into the library as a local copy (#212)', async () => {
+    await openSharedScene()
+    expect(screen.getByRole('textbox', { name: 'Open graph name' })).toHaveValue('Shared scene (temporary)')
+    expect(document.title).toBe('Shared scene (temporary) · GAMUT')
+    fireEvent.click(screen.getByRole('button', { name: 'Save (unsaved changes)' }))
+    const menu = screen.getByRole('dialog', { name: 'Library' })
+    expect(within(menu).getByRole('textbox', { name: 'Graph name' })).toHaveValue('A shared scene')
+    fireEvent.click(within(menu).getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Save local copy' })).not.toBeInTheDocument())
+    expect(window.location.hash).toBe('')
+    const [entry] = JSON.parse(window.localStorage.getItem('gamut.library.v1')!).entries
+    expect(entry).toMatchObject({ name: 'A shared scene' })
+    expect(entry.id).not.toBe(shared.id)
+    expect(screen.getByRole('textbox', { name: 'Open graph name' })).toHaveValue('A shared scene')
+    await waitFor(() => expect(parseCanonicalDocument(window.localStorage.getItem(ACTIVE_DOCUMENT_KEY)!).id).toBe(entry.id))
+  })
+
+  it('writes nothing when the library menu opens in a temporary session (#212)', async () => {
+    const source = serializeCanonicalDocument(saved)
+    window.localStorage.setItem(ACTIVE_DOCUMENT_KEY, source)
+    window.localStorage.setItem('gamut.library.v1', 'corrupted')
+    const writes = vi.spyOn(Storage.prototype, 'setItem')
+    const removals = vi.spyOn(Storage.prototype, 'removeItem')
+    await openSharedScene()
+    const menu = (() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Library' }))
+      return screen.getByRole('dialog', { name: 'Library' })
+    })()
+    expect(menu).toHaveTextContent('LIBRARY_INDEX_REBUILT')
+    fireEvent.click(within(menu).getByRole('button', { name: 'Close Library menu' }))
+    expect(writes).not.toHaveBeenCalled()
+    expect(removals).not.toHaveBeenCalled()
+    expect(window.localStorage.getItem('gamut.library.v1')).toBe('corrupted')
+  })
+
+  for (const action of ['Save local copy', 'Save', 'New', 'Open'] as const) {
+    it(`keeps the former active document in the library before ${action} replaces it (#212)`, async () => {
+      const source = serializeCanonicalDocument(saved)
+      window.localStorage.setItem(ACTIVE_DOCUMENT_KEY, source)
+      const other = toCanonicalDocument(expressionDocument([{ id: 'item-1', source: 'Other = vector(0, 2)' }], {}, { id: 'other', title: 'Other' }), 'light')
+      if (action === 'Open') window.localStorage.setItem('gamut.library.v1.document.other', serializeCanonicalDocument(other))
+      await openSharedScene()
+      const menu = () => screen.getByRole('dialog', { name: 'Library' })
+      if (action === 'Save local copy') {
+        fireEvent.click(screen.getByRole('button', { name: 'Save local copy' }))
+      } else if (action === 'Save') {
+        fireEvent.click(screen.getByRole('button', { name: 'Save (unsaved changes)' }))
+        fireEvent.click(within(menu()).getByRole('button', { name: 'Save' }))
+      } else {
+        fireEvent.click(screen.getByRole('button', { name: 'Library' }))
+        fireEvent.click(within(menu()).getByRole('button', { name: action === 'New' ? '+ New graph' : 'Open Other' }))
+        fireEvent.click(within(within(menu()).getByRole('alertdialog')).getByRole('button', { name: /^Discard/ }))
+      }
+      await waitFor(() => expect(screen.queryByRole('button', { name: 'Save local copy' })).not.toBeInTheDocument())
+      expect(window.localStorage.getItem('gamut.library.v1.document.saved-document')).toBe(source)
+      expect(JSON.parse(window.localStorage.getItem('gamut.library.v1')!).entries.map((entry: { id: string }) => entry.id))
+        .toContain('saved-document')
+    })
+  }
+
+  it('keeps a temporary session and the former active document when the library cannot take it (#212)', async () => {
+    const source = serializeCanonicalDocument(saved)
+    window.localStorage.setItem(ACTIVE_DOCUMENT_KEY, source)
+    await openSharedScene()
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation((key) => {
+      if (key === 'gamut.library.v1') throw new DOMException('Quota exceeded', 'QuotaExceededError')
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save local copy' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('STORE_WRITE_FAILED')
+    expect(screen.getByRole('button', { name: 'Save local copy' })).toBeInTheDocument()
+    vi.restoreAllMocks()
+    expect(window.localStorage.getItem(ACTIVE_DOCUMENT_KEY)).toBe(source)
+    expect(window.localStorage.getItem('gamut.library.v1.document.saved-document')).toBeNull()
   })
 
   // Opening a scene and then importing a dropped one evaluates two documents,

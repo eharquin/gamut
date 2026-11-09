@@ -124,6 +124,20 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   this browser, like the viewport lock, but is not part of the document,
   its export, or scene links. Opening a document without a canvas reopens a
   collapsed panel and moves focus left in the canvas to **Show canvas** (#234).
+- A local library keeps several named graphs in the browser. **Save** stores
+  the open graph under its name, asking for a name in the library menu the
+  first time; in a shared-link session it saves a local copy. **Library**
+  lists the graphs grouped by algebra with their last update, and offers New,
+  Open, Rename, Duplicate, and Delete, with confirmations inside the menu. The
+  header shows the open graph's name, editable in place, and a dot on Save
+  while the graph has unsaved changes; the browser tab shows the name too.
+  Its buttons form three groups: the graph, the document file, the display.
+  The previously saved document becomes the first graph of the library,
+  without being overwritten first, even from a shared-link session. Save never
+  overwrites another graph, reopening the open graph keeps its changes, and the
+  list follows other tabs. Storage that is unavailable or full is reported
+  without stopping the editor, and a damaged graph never hides the others
+  (#212).
 - A document that stored `view.positionEnabled: false` drew every object at
   the origin while its position fields and base drags still updated. Positions
   now switch off only without a visualizer (NoViz, #55): a document drawn on a
