@@ -1,3 +1,4 @@
+import { type ReferenceSection } from '../language/expressionReference'
 import { type AlgebraEngine } from './algebraEngine'
 
 /** Presentation-neutral description of a definition for the algebra dialog. */
@@ -58,6 +59,8 @@ export type AlgebraDefinition = Readonly<{
   standardInterpretationId: string
   standardVisualizerId: string
   showcase: readonly ShowcaseItem[]
+  /** The expression reference shown for documents of this algebra: shared sections plus its own syntax. */
+  expressionReference: readonly ReferenceSection[]
   /** Title of the showcase document; `showcaseMetadata` supplies a neutral one when absent. */
   showcaseTitle?: string
   /** Description of the showcase document. */

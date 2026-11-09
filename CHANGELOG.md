@@ -88,6 +88,12 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Interface and accessibility
 
+- The expression reference follows the document's algebra and names it. A
+  PGA(2) document lists `point(x, y)`, `point(x, y, w)`, `ipoint(x, y)`,
+  `line(a, b, c)`, the blades `e0` to `e012` with the null `e0`, `A.inorm`,
+  every coefficient extraction, `log(M)` and `sqrt(M)` for unit motors, and
+  ideal-point positions and heads, and no longer shows VGA tuples, `vector`,
+  or VGA norms. Every documented entry is evaluated by a test in its algebra.
 - The visibility control is a grey eye that appears while its row is hovered
   or holds keyboard focus. A hidden object keeps its crossed eye visible, and
   touch screens always show the eye. The button keeps its accessible name and

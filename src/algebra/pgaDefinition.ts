@@ -1,5 +1,6 @@
 import { type AlgebraDefinition } from './algebraDefinition'
 import { PGA_2_INFO } from './pga2Info'
+import { PGA_2_REFERENCE } from './pgaReference'
 import { createPga2Engine } from './pgaEngine'
 
 /**
@@ -62,6 +63,7 @@ export const PGA_DEFINITION: AlgebraDefinition = Object.freeze({
   // area from the triple join. N is a literal line, movable from the viewport.
   // R, the square root of the product of the two unit sides through A, turns
   // L onto M about A; S interpolates it with exp(t log R) and sweeps B onto M.
+  expressionReference: PGA_2_REFERENCE,
   showcase: [
     { source: 'A = point(-2, 1)' },
     { source: 'B = point(2, 2)' },

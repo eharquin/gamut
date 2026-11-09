@@ -2916,6 +2916,9 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       </div>
       {infoDialog === 'expressions' && (
         <ExpressionReferenceDialog
+          algebraName={algebraDefinition.info(algebraResolution.parameters).name}
+          algebraBadge={algebraDefinition.badge}
+          sections={algebraDefinition.expressionReference}
           returnFocusRef={expressionReferenceButtonRef}
           onClose={closeInfoDialog}
         />
