@@ -441,6 +441,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const [panelCollapsed, setPanelCollapsed] = useState(() => sharedSession ? false : restoredPanelCollapsed())
   const collapsePanelButtonRef = useRef<HTMLButtonElement | null>(null)
   const expandPanelButtonRef = useRef<HTMLButtonElement | null>(null)
+  const expressionPanelRef = useRef<HTMLElement | null>(null)
   /** The button that receives focus after the user collapses or expands the panel. */
   const panelToggleFocus = useRef<'collapse' | 'expand' | null>(null)
   const [shareResult, setShareResult] = useState<{ content: string; label: string; message: string } | null>(null)
@@ -1098,6 +1099,24 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     if (target === 'expand') expandPanelButtonRef.current?.focus()
     else if (target === 'collapse') collapsePanelButtonRef.current?.focus()
   }, [panelCollapsed])
+  // A document without a canvas (imported, dropped, restored or linked)
+  // reopens a collapsed panel: nothing would be left on screen to expand it
+  // from, and it must not collapse again when a canvas comes back. Focus left
+  // in the removed canvas moves to the panel instead of the page.
+  const hadCanvas = useRef(visualizerActive)
+  useEffect(() => {
+    const lostCanvas = hadCanvas.current && !visualizerActive
+    hadCanvas.current = visualizerActive
+    if (visualizerActive) return
+    if (panelCollapsed) {
+      setPanelCollapsed(false)
+      if (!ephemeral) persistPanelCollapsed(false)
+    }
+    const focused = document.activeElement
+    if (lostCanvas && (focused === null || focused === document.body || !focused.isConnected)) {
+      expressionPanelRef.current?.focus()
+    }
+  }, [visualizerActive, panelCollapsed, ephemeral])
 
   const toggleViewportLock = () => {
     const locked = !viewportLocked
@@ -2119,7 +2138,9 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
 
       <main className="workspace" ref={workspaceRef}>
         <aside
+          ref={expressionPanelRef}
           id="expression-panel"
+          tabIndex={-1}
           className={`expression-panel${panelHidden ? ' is-collapsed' : ''}`}
           aria-label="Expressions"
           style={{ width: panelWidth, '--panel-width': `${panelWidth}px` } as CSSProperties}

@@ -192,6 +192,12 @@
   transition: margin-left 180ms ease, visibility 0s linear 0s;
 }
 
+/* The panel only takes focus programmatically, when the canvas holding the
+   focus disappears; it is not a tab stop. */
+.expression-panel:focus {
+  outline: none;
+}
+
 /* Collapsed to the left: it slides out, then leaves the accessibility tree
    and the focus order once the slide ends (#234). */
 .expression-panel.is-collapsed {
