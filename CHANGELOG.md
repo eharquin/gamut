@@ -9,8 +9,12 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Scene sharing
 
-- Added self-contained scene links and iframe snippets carrying the canonical
-  document, including sources, appearance, algebra, theme, and viewport.
+- Added self-contained scene links carrying the canonical document, including
+  sources, appearance, algebra, theme, and viewport.
+- **Import**, **Export**, and **Copy link** moved from the header to a
+  Document section of the settings menu. **Copy iframe code** and its iframe
+  snippet were removed: Slides.com accepts the plain HTTPS link in its iframe
+  source field.
 - Shared scenes open as temporary sessions without reading or writing browser
   storage. An explicit **Save local copy** creates a new document identity;
   JSON export remains available when storage is blocked or a link is too large.

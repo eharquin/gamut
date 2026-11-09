@@ -72,7 +72,7 @@ import {
   type ThemeMode,
 } from './document/canonicalDocument'
 import { browserDocumentStorage } from './document/documentStorage'
-import { createSceneLink, decodeSceneFragment, hasSceneFragment, sceneIframeCode, SHARE_URL_WARNING_LENGTH } from './document/sceneLink'
+import { createSceneLink, decodeSceneFragment, hasSceneFragment, SHARE_URL_WARNING_LENGTH } from './document/sceneLink'
 import {
   formatDisplayMultivector,
   formatDisplayNumber,
@@ -1672,17 +1672,16 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     }
   }
 
-  const copyScene = async (iframe: boolean) => {
+  const copyScene = async () => {
     setSharing(true)
     setShareResult(null)
     try {
       const url = await createSceneLink(toCanonicalDocument(expressionDoc, theme, resolvedStyles), new URL(import.meta.env.BASE_URL, window.location.href).href)
-      const content = iframe ? sceneIframeCode(url) : url
       let copied = false
-      try { await navigator.clipboard.writeText(content); copied = true } catch { /* The selectable text remains available when clipboard access is blocked. */ }
+      try { await navigator.clipboard.writeText(url); copied = true } catch { /* The selectable text remains available when clipboard access is blocked. */ }
       setShareResult({
-        content,
-        label: iframe ? 'Scene iframe code' : 'Scene link',
+        content: url,
+        label: 'Scene link',
         message: (copied ? 'Copied.' : 'Select and copy the text below.') + (url.length > SHARE_URL_WARNING_LENGTH
           ? ' This link exceeds 8 KiB and some presentation tools may reject it. JSON export is also available.' : ''),
       })
@@ -1875,17 +1874,15 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           aria-label="Import document file"
           onChange={importDocument}
         />
-        <button type="button" className="document-command document-import-command" onClick={() => importInputRef.current?.click()}>
-          Import
-        </button>
-        <button type="button" className="document-command" onClick={exportDocument}>
-          Export
-        </button>
-        <button type="button" className="document-command" disabled={sharing} onClick={() => void copyScene(false)}>Copy link</button>
-        <button type="button" className="document-command" disabled={sharing} onClick={() => void copyScene(true)}>Copy iframe code</button>
         <DisplaySettingsMenu
           display={expressionDoc.view.display}
           theme={theme}
+          documentCommands={{
+            onImport: () => importInputRef.current?.click(),
+            onExport: exportDocument,
+            onCopyLink: () => void copyScene(),
+            sharing,
+          }}
           onDisplayChange={updateDisplay}
           onThemeChange={setTheme}
         />
