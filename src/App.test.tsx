@@ -1,6 +1,7 @@
 import {
   act,
   cleanup,
+  createEvent,
   fireEvent,
   render,
   screen,
@@ -26,16 +27,16 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-function openDisplaySettings(): HTMLElement {
-  const trigger = screen.getByRole('button', { name: 'Display settings' })
+function openSettings(): HTMLElement {
+  const trigger = screen.getByRole('button', { name: 'Settings' })
   fireEvent.click(trigger)
   return trigger
 }
 
 /** Runs a document command from the settings menu, as a user would. */
 function runDocumentCommand(name: 'Import' | 'Export' | 'Copy link'): void {
-  openDisplaySettings()
-  fireEvent.click(within(screen.getByRole('dialog', { name: 'Display settings' })).getByRole('button', { name }))
+  openSettings()
+  fireEvent.click(within(screen.getByRole('dialog', { name: 'Settings' })).getByRole('button', { name }))
 }
 
 function viewportCanvas(): SVGSVGElement {
@@ -89,8 +90,8 @@ describe('VGA 2D vertical slice', () => {
     for (const name of ['Import', 'Export', 'Copy link', 'Copy iframe code'])
       expect(within(header).queryByRole('button', { name })).not.toBeInTheDocument()
 
-    const trigger = openDisplaySettings()
-    const menu = screen.getByRole('dialog', { name: 'Display settings' })
+    const trigger = openSettings()
+    const menu = screen.getByRole('dialog', { name: 'Settings' })
     const section = within(menu).getByRole('region', { name: 'Document' })
     expect(within(section).getAllByRole('button').map((button) => button.textContent?.trim()))
       .toEqual(['Import', 'Export', 'Copy link'])
@@ -103,7 +104,7 @@ describe('VGA 2D vertical slice', () => {
     fireEvent.click(importButton)
     expect(fileDialogs).toHaveBeenCalledOnce()
     expect(fileDialogs.mock.contexts[0]).toBe(screen.getByLabelText('Import document file'))
-    expect(screen.queryByRole('dialog', { name: 'Display settings' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Settings' })).not.toBeInTheDocument()
     expect(trigger).toHaveFocus()
   })
 
@@ -493,7 +494,7 @@ describe('VGA 2D vertical slice', () => {
     expect(vector).toHaveAttribute('x1', '320')
     expect(screen.getByText('100%', { selector: 'output' })).toBeInTheDocument()
 
-    openDisplaySettings()
+    openSettings()
     const grid = screen.getByRole('switch', { name: 'Grid' })
     expect(grid).toBeChecked()
     expect(container.querySelectorAll('.grid-line').length).toBeGreaterThan(0)
@@ -1048,7 +1049,7 @@ describe('VGA 2D vertical slice', () => {
     const { container } = render(<App />)
     expect(container.querySelectorAll('.axis')).toHaveLength(2)
     expect(container.querySelectorAll('.graduation').length).toBeGreaterThan(0)
-    openDisplaySettings()
+    openSettings()
     expect(screen.getByText('1.00×')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('switch', { name: 'Axes and labels' }))
@@ -1682,7 +1683,7 @@ describe('VGA 2D vertical slice', () => {
     const undo = screen.getByRole('button', { name: 'Undo document change' })
     expect(screen.queryByRole('switch', { name: 'Grid' })).not.toBeInTheDocument()
 
-    const trigger = openDisplaySettings()
+    const trigger = openSettings()
     expect(trigger).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByRole('switch', { name: 'Grid' })).toHaveFocus()
     expect(screen.getByRole('spinbutton', { name: 'Decimal places' }))
@@ -1696,7 +1697,7 @@ describe('VGA 2D vertical slice', () => {
     expect(trigger).toHaveAttribute('aria-expanded', 'false')
     expect(trigger).toHaveFocus()
 
-    openDisplaySettings()
+    openSettings()
     const outsideControl = screen.getByRole('button', { name: 'Add expression' })
     fireEvent.pointerDown(outsideControl)
     expect(screen.queryByRole('switch', { name: 'Grid' })).not.toBeInTheDocument()
@@ -1705,9 +1706,9 @@ describe('VGA 2D vertical slice', () => {
 
   it('changes numeric presentation without changing source, value kind, or history', () => {
     render(<App />)
-    openDisplaySettings()
+    openSettings()
     fireEvent.click(screen.getByRole('switch', { name: 'Show approximated residue' }))
-    openDisplaySettings()
+    openSettings()
     const source = screen.getByRole('textbox', { name: 'Expression 1' })
     fireEvent.change(source, {
       target: { value: 'R = -1 + 0.0000000035897930298416118e12' },
@@ -1721,7 +1722,7 @@ describe('VGA 2D vertical slice', () => {
     fireEvent.change(source, {
       target: { value: 'R = -1 + 0.0000000035897930298416118e12' },
     })
-    openDisplaySettings()
+    openSettings()
     fireEvent.change(screen.getByRole('spinbutton', { name: 'Decimal places' }), {
       target: { value: '2' },
     })
@@ -1744,7 +1745,7 @@ describe('VGA 2D vertical slice', () => {
     expect(within(item).getByText('-1')).toBeInTheDocument()
     expect(within(item).queryByText('-1 + 3.5898E-9e12')).not.toBeInTheDocument()
 
-    openDisplaySettings()
+    openSettings()
     fireEvent.click(screen.getByRole('switch', { name: 'Show approximated residue' }))
     expect(within(item).getByText('Scalar')).toBeInTheDocument()
     expect(within(item).getByText('-1 + 3.5898E-9e12')).toBeInTheDocument()
@@ -2139,7 +2140,7 @@ describe('VGA 2D vertical slice', () => {
 
   it('offers system, light, and dark application themes', () => {
     render(<App />)
-    openDisplaySettings()
+    openSettings()
     const theme = screen.getByRole('combobox', { name: 'Theme' })
 
     fireEvent.change(theme, { target: { value: 'dark' } })
@@ -2660,6 +2661,20 @@ describe('opening a document by dropping a file onto the window', () => {
     fireEvent.dragLeave(target, { dataTransfer: fileTransfer([]) })
     expect(overlay()).toBeInTheDocument()
     fireEvent.dragLeave(document.body, { dataTransfer: fileTransfer([]) })
+    expect(overlay()).not.toBeInTheDocument()
+  })
+
+  it('hides the overlay when the drag leaves the window even if a nested leave was missed', () => {
+    render(<App />)
+    const target = screen.getByRole('textbox', { name: 'Expression 1' })
+    fireEvent.dragEnter(document.body, { dataTransfer: fileTransfer([]) })
+    fireEvent.dragEnter(target, { dataTransfer: fileTransfer([]) })
+    expect(overlay()).toBeInTheDocument()
+    // The browser skipped the dragleave of the expression field; the next
+    // leave has no related target because the pointer left the window.
+    const leaveWindow = createEvent.dragLeave(document.body, { dataTransfer: fileTransfer([]) })
+    Object.defineProperty(leaveWindow, 'relatedTarget', { value: null })
+    fireEvent(document.body, leaveWindow)
     expect(overlay()).not.toBeInTheDocument()
   })
 
