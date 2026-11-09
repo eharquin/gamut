@@ -3,20 +3,47 @@ import type {
   ExpressionControl,
   ExpressionDocument,
   ExpressionItem,
-  PointListDisplay,
+  ItemNormalization,
+  LabelAnchor,
+  LinePrimitiveStyle,
+  PointPrimitiveStyle,
+  PointStyle,
+  StrokeStyle,
 } from './expressionDocument'
 
 export const MAX_DOCUMENT_BYTES = 4 * 1024 * 1024
 export const MAX_SOURCE_LENGTH = 65_536
 export const MAX_MIGRATION_STEPS = 32
 export type ThemeMode = 'system' | 'light' | 'dark'
-type Appearance = Readonly<{ visible: boolean; labelVisible: boolean; label: string; style: string; borderVisible: boolean; orientationVisible: boolean; bivectorShape: 'from-vectors' | 'disk' | 'square'; idealPointDisplay: 'vector' | 'ideal' | 'both'; pointListDisplay: PointListDisplay; pointMarkersVisible: boolean }>
-type Item = Readonly<{ id: string; kind: 'expression' | 'annotation'; source: string; positionSource: string | null; normalization: 'natural' | null; control: ExpressionControl | null }>
+export const CURRENT_FORMAT_VERSION = 7
+export type CanonicalPrimitiveStyles = Readonly<{ points: PointPrimitiveStyle; lines: LinePrimitiveStyle }>
+export type CanonicalAppearance = Readonly<{
+  visible: boolean
+  labelVisible: boolean
+  label: string
+  style: string
+  borderVisible: boolean
+  orientationVisible: boolean
+  bivectorShape: 'from-vectors' | 'disk' | 'square'
+  idealPointDisplay: 'vector' | 'ideal' | 'both'
+  strokeStyle: StrokeStyle
+  strokeWidthSource: string
+  pointStyle: PointStyle
+  pointSizeSource: string
+  opacitySource: string
+  labelAngleSource: string
+  labelSizeSource: string
+  labelDistanceSource: string
+  labelAnchor: LabelAnchor
+  primitiveStyles: CanonicalPrimitiveStyles
+}>
+type Appearance = CanonicalAppearance
+type Item = Readonly<{ id: string; kind: 'expression' | 'annotation'; source: string; positionSource: string | null; normalization: ItemNormalization | null; control: ExpressionControl | null }>
 export type CanonicalViewport = Readonly<{ kind: 'none' }> | Readonly<{ kind: 'two-dimensional'; centerX: number; centerY: number; zoom: number }>
 
 export type CanonicalDocument = Readonly<{
   id: string
-  formatVersion: 6
+  formatVersion: typeof CURRENT_FORMAT_VERSION
   languageVersion: number
   algebra: Readonly<{ algebraId: string; definitionVersion: number; conventionVersion: number; parameters: Readonly<Record<string, unknown>> }>
   interpretation: Readonly<{ interpretationId: string; interpretationVersion: number }> | null
@@ -41,6 +68,14 @@ export class DocumentFormatError extends Error {
 }
 
 const registeredStyles = new Set(STUDIO_COLORS.map(({ id }) => id))
+export const STROKE_STYLES: readonly StrokeStyle[] = ['solid', 'dashed', 'dotted']
+export const POINT_STYLES: readonly PointStyle[] = ['dot', 'ring', 'cross', 'plus', 'square', 'diamond']
+export const LABEL_ANCHORS: readonly LabelAnchor[] = ['auto', 'top-left', 'top', 'top-right', 'left', 'right', 'bottom-left', 'bottom', 'bottom-right']
+const POINT_LIST_DISPLAYS = ['none', 'open-polyline', 'closed-loop'] as const
+const NORMALIZATIONS: readonly ItemNormalization[] = ['natural', 'euclidean', 'ideal']
+/** Appearance sources: numeric settings stored as source text; empty selects the kind default. */
+export const APPEARANCE_SOURCE_FIELDS = ['strokeWidthSource', 'pointSizeSource', 'opacitySource', 'labelAngleSource', 'labelSizeSource', 'labelDistanceSource'] as const
+const APPEARANCE_FIELDS = ['visible', 'labelVisible', 'label', 'style', 'borderVisible', 'orientationVisible', 'bivectorShape', 'idealPointDisplay', 'strokeStyle', 'pointStyle', 'labelAnchor', 'primitiveStyles', ...APPEARANCE_SOURCE_FIELDS]
 const requiredRoot = ['id', 'formatVersion', 'languageVersion', 'algebra', 'interpretation', 'metadata', 'items', 'appearance', 'view']
 
 function fail(code: string, message: string): never {
@@ -185,7 +220,7 @@ export function migrateDocument(value: unknown): unknown {
       fail('DOCUMENT_SCHEMA', 'document must be an object.')
     const document = current as Record<string, unknown>
     const version = document.formatVersion
-    if (version === 6) return current
+    if (version === CURRENT_FORMAT_VERSION) return current
     if (version === 1) {
       const appearance = document.appearance as Record<string, Record<string, unknown>>
       current = {
@@ -246,9 +281,117 @@ export function migrateDocument(value: unknown): unknown {
       }
       continue
     }
+    if (version === 6) {
+      current = { ...document, formatVersion: 7, appearance: migrateVersion6Appearance(document.appearance) }
+      continue
+    }
     fail('DOCUMENT_FORMAT_VERSION', 'Unsupported format version ' + String(version) + '.')
   }
   fail('DOCUMENT_FORMAT_VERSION', 'Migration exceeded the maximum number of steps.')
+}
+
+/**
+ * Version 6 to 7. Every new appearance source is empty (the kind default), so
+ * drawings are unchanged. The fixed label position of version 6 becomes the
+ * explicit `top-right` anchor. The list fields move into the points block:
+ * `pointListDisplay` becomes `points.connection` and `pointMarkersVisible`
+ * becomes `points.visible`; an unconnected list always drew its markers, so it
+ * keeps them visible. The lines block copies the item's orientation, which
+ * list lines used in version 6. Item normalization is unchanged.
+ */
+function migrateVersion6Appearance(value: unknown): unknown {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return value
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([id, entry]) => {
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) return [id, entry]
+    const { pointListDisplay, pointMarkersVisible, ...rest } = entry as Record<string, unknown>
+    return [id, {
+      ...rest,
+      strokeStyle: 'solid',
+      strokeWidthSource: '',
+      pointStyle: 'dot',
+      pointSizeSource: '',
+      opacitySource: '',
+      labelAngleSource: '',
+      labelSizeSource: '',
+      labelDistanceSource: '',
+      labelAnchor: 'top-right',
+      primitiveStyles: {
+        points: {
+          visible: pointListDisplay === 'none' && typeof pointMarkersVisible === 'boolean' ? true : pointMarkersVisible,
+          pointStyle: 'dot',
+          pointSizeSource: '',
+          connection: pointListDisplay,
+          strokeStyle: 'solid',
+          strokeWidthSource: '',
+        },
+        lines: {
+          visible: true,
+          strokeStyle: 'solid',
+          strokeWidthSource: '',
+          orientationVisible: rest.orientationVisible,
+        },
+      },
+    }]
+  }))
+}
+
+function oneOf<T extends string>(value: unknown, allowed: readonly T[], path: string): T {
+  if (!allowed.includes(value as T)) fail('DOCUMENT_SCHEMA', path + ' is invalid.')
+  return value as T
+}
+
+function appearanceSource(value: unknown, path: string): string {
+  const source = text(value, path)
+  if (source.length > MAX_SOURCE_LENGTH) fail('LIMIT_SOURCE_LENGTH', path + ' exceeds the source limit.')
+  return source
+}
+
+function primitiveStyles(value: unknown, path: string): CanonicalPrimitiveStyles {
+  const styles = record(value, path, ['points', 'lines'])
+  const points = record(styles.points, path + '.points', ['visible', 'pointStyle', 'pointSizeSource', 'connection', 'strokeStyle', 'strokeWidthSource'])
+  const lines = record(styles.lines, path + '.lines', ['visible', 'strokeStyle', 'strokeWidthSource', 'orientationVisible'])
+  return {
+    points: {
+      visible: truth(points.visible, path + '.points.visible'),
+      pointStyle: oneOf(points.pointStyle, POINT_STYLES, path + '.points.pointStyle'),
+      pointSizeSource: appearanceSource(points.pointSizeSource, path + '.points.pointSizeSource'),
+      connection: oneOf(points.connection, POINT_LIST_DISPLAYS, path + '.points.connection'),
+      strokeStyle: oneOf(points.strokeStyle, STROKE_STYLES, path + '.points.strokeStyle'),
+      strokeWidthSource: appearanceSource(points.strokeWidthSource, path + '.points.strokeWidthSource'),
+    },
+    lines: {
+      visible: truth(lines.visible, path + '.lines.visible'),
+      strokeStyle: oneOf(lines.strokeStyle, STROKE_STYLES, path + '.lines.strokeStyle'),
+      strokeWidthSource: appearanceSource(lines.strokeWidthSource, path + '.lines.strokeWidthSource'),
+      orientationVisible: truth(lines.orientationVisible, path + '.lines.orientationVisible'),
+    },
+  }
+}
+
+function appearanceRecord(value: unknown, path: string): Appearance {
+  const item = record(value, path, APPEARANCE_FIELDS)
+  const style = text(item.style, path + '.style', true)
+  if (!registeredStyles.has(style)) fail('DOCUMENT_STYLE', 'Unknown style “' + style + '”.')
+  return {
+    visible: truth(item.visible, path + '.visible'),
+    labelVisible: truth(item.labelVisible, path + '.labelVisible'),
+    label: text(item.label, path + '.label'),
+    style,
+    borderVisible: truth(item.borderVisible, path + '.borderVisible'),
+    orientationVisible: truth(item.orientationVisible, path + '.orientationVisible'),
+    bivectorShape: oneOf(item.bivectorShape, ['from-vectors', 'disk', 'square'] as const, path + '.bivectorShape'),
+    idealPointDisplay: oneOf(item.idealPointDisplay, ['vector', 'ideal', 'both'] as const, path + '.idealPointDisplay'),
+    strokeStyle: oneOf(item.strokeStyle, STROKE_STYLES, path + '.strokeStyle'),
+    strokeWidthSource: appearanceSource(item.strokeWidthSource, path + '.strokeWidthSource'),
+    pointStyle: oneOf(item.pointStyle, POINT_STYLES, path + '.pointStyle'),
+    pointSizeSource: appearanceSource(item.pointSizeSource, path + '.pointSizeSource'),
+    opacitySource: appearanceSource(item.opacitySource, path + '.opacitySource'),
+    labelAngleSource: appearanceSource(item.labelAngleSource, path + '.labelAngleSource'),
+    labelSizeSource: appearanceSource(item.labelSizeSource, path + '.labelSizeSource'),
+    labelDistanceSource: appearanceSource(item.labelDistanceSource, path + '.labelDistanceSource'),
+    labelAnchor: oneOf(item.labelAnchor, LABEL_ANCHORS, path + '.labelAnchor'),
+    primitiveStyles: primitiveStyles(item.primitiveStyles, path + '.primitiveStyles'),
+  }
 }
 
 export function parseCanonicalDocumentBytes(bytes: Uint8Array): CanonicalDocument {
@@ -267,7 +410,7 @@ export function parseCanonicalDocumentBytes(bytes: Uint8Array): CanonicalDocumen
 
 export function validateCanonicalDocument(value: unknown): CanonicalDocument {
   const root = record(value, 'document', requiredRoot)
-  if (root.formatVersion !== 6) fail('DOCUMENT_FORMAT_VERSION', 'Unsupported format version ' + String(root.formatVersion) + '.')
+  if (root.formatVersion !== CURRENT_FORMAT_VERSION) fail('DOCUMENT_FORMAT_VERSION', 'Unsupported format version ' + String(root.formatVersion) + '.')
   const algebra = record(root.algebra, 'algebra', ['algebraId', 'definitionVersion', 'conventionVersion', 'parameters'])
   if (algebra.parameters === null || typeof algebra.parameters !== 'object' || Array.isArray(algebra.parameters))
     fail('DOCUMENT_SCHEMA', 'algebra.parameters must be an object.')
@@ -287,27 +430,18 @@ export function validateCanonicalDocument(value: unknown): CanonicalDocument {
     if (source.length > MAX_SOURCE_LENGTH) fail('LIMIT_SOURCE_LENGTH', path + '.source exceeds the source limit.')
     const positionSource = item.positionSource === null ? null : text(item.positionSource, path + '.positionSource')
     if (positionSource !== null && positionSource.length > MAX_SOURCE_LENGTH) fail('LIMIT_SOURCE_LENGTH', path + '.positionSource exceeds the source limit.')
-    if (item.normalization !== null && item.normalization !== 'natural') fail('DOCUMENT_SCHEMA', path + '.normalization is invalid.')
+    if (item.normalization !== null && !NORMALIZATIONS.includes(item.normalization as ItemNormalization)) fail('DOCUMENT_SCHEMA', path + '.normalization is invalid.')
     const parsedControl = control(item.control, path + '.control')
     if (item.kind === 'annotation' && (positionSource !== null || item.normalization !== null || parsedControl !== null))
       fail('DOCUMENT_SCHEMA', 'Annotations cannot have position, normalization, or controls.')
-    return { id, kind: item.kind, source, positionSource, normalization: item.normalization as 'natural' | null, control: parsedControl }
+    return { id, kind: item.kind, source, positionSource, normalization: item.normalization as ItemNormalization | null, control: parsedControl }
   })
   if (root.appearance === null || typeof root.appearance !== 'object' || Array.isArray(root.appearance))
     fail('DOCUMENT_SCHEMA', 'appearance must be an object.')
   const appearance: Record<string, Appearance> = {}
   for (const [id, entry] of Object.entries(root.appearance as Record<string, unknown>)) {
     if (!ids.has(id)) fail('DOCUMENT_ORPHAN_APPEARANCE', 'Appearance refers to unknown item “' + id + '”.')
-    const item = record(entry, 'appearance.' + id, ['visible', 'labelVisible', 'label', 'style', 'borderVisible', 'orientationVisible', 'bivectorShape', 'idealPointDisplay', 'pointListDisplay', 'pointMarkersVisible'])
-    const style = text(item.style, 'appearance.' + id + '.style', true)
-    if (!registeredStyles.has(style)) fail('DOCUMENT_STYLE', 'Unknown style “' + style + '”.')
-    if (!['from-vectors', 'disk', 'square'].includes(item.bivectorShape as string))
-      fail('DOCUMENT_SCHEMA', 'appearance.' + id + '.bivectorShape is invalid.')
-    if (!['vector', 'ideal', 'both'].includes(item.idealPointDisplay as string))
-      fail('DOCUMENT_SCHEMA', 'appearance.' + id + '.idealPointDisplay is invalid.')
-    if (!['none', 'open-polyline', 'closed-loop'].includes(item.pointListDisplay as string))
-      fail('DOCUMENT_SCHEMA', 'appearance.' + id + '.pointListDisplay is invalid.')
-    appearance[id] = { visible: truth(item.visible, 'appearance.' + id + '.visible'), labelVisible: truth(item.labelVisible, 'appearance.' + id + '.labelVisible'), label: text(item.label, 'appearance.' + id + '.label'), style, borderVisible: truth(item.borderVisible, 'appearance.' + id + '.borderVisible'), orientationVisible: truth(item.orientationVisible, 'appearance.' + id + '.orientationVisible'), bivectorShape: item.bivectorShape as Appearance['bivectorShape'], idealPointDisplay: item.idealPointDisplay as Appearance['idealPointDisplay'], pointListDisplay: item.pointListDisplay as Appearance['pointListDisplay'], pointMarkersVisible: truth(item.pointMarkersVisible, 'appearance.' + id + '.pointMarkersVisible') }
+    appearance[id] = appearanceRecord(entry, 'appearance.' + id)
   }
   if (Object.keys(appearance).length !== items.length) fail('DOCUMENT_SCHEMA', 'Every item requires one appearance record.')
   const interpretation = root.interpretation === null ? null : record(root.interpretation, 'interpretation', ['interpretationId', 'interpretationVersion'])
@@ -337,7 +471,7 @@ export function validateCanonicalDocument(value: unknown): CanonicalDocument {
   if (!['light', 'dark', 'system'].includes(display.theme as string))
     fail('DOCUMENT_SCHEMA', 'view.display.theme is invalid.')
   return {
-    id: text(root.id, 'document.id', true), formatVersion: 6,
+    id: text(root.id, 'document.id', true), formatVersion: CURRENT_FORMAT_VERSION,
     languageVersion: positiveInteger(root.languageVersion, 'languageVersion'),
     algebra: { algebraId: text(algebra.algebraId, 'algebra.algebraId', true), definitionVersion: positiveInteger(algebra.definitionVersion, 'algebra.definitionVersion'), conventionVersion: positiveInteger(algebra.conventionVersion, 'algebra.conventionVersion'), parameters },
     interpretation: interpretation && { interpretationId: text(interpretation.interpretationId, 'interpretation.interpretationId', true), interpretationVersion: positiveInteger(interpretation.interpretationVersion, 'interpretation.interpretationVersion') },
@@ -388,10 +522,50 @@ export function toCanonicalDocument(
 ): CanonicalDocument {
   const appearance = Object.fromEntries(document.items.map((item) => {
     const stored = document.appearance[item.id]
-    return [item.id, { visible: stored?.visible ?? true, labelVisible: stored?.labelVisible ?? false, label: stored?.label ?? '', style: stored?.style ?? resolvedStyles[item.id] ?? defaultStyleForKind('Object'), borderVisible: stored?.borderVisible ?? false, orientationVisible: stored?.orientationVisible ?? true, bivectorShape: stored?.bivectorShape ?? 'from-vectors', idealPointDisplay: stored?.idealPointDisplay ?? 'vector', pointListDisplay: stored?.pointListDisplay ?? 'none', pointMarkersVisible: stored?.pointMarkersVisible ?? true }]
+    const orientationVisible = stored?.orientationVisible ?? true
+    const points = stored?.primitiveStyles?.points
+    const lines = stored?.primitiveStyles?.lines
+    const canonical: Appearance = {
+      visible: stored?.visible ?? true,
+      labelVisible: stored?.labelVisible ?? false,
+      label: stored?.label ?? '',
+      style: stored?.style ?? resolvedStyles[item.id] ?? defaultStyleForKind('Object'),
+      borderVisible: stored?.borderVisible ?? false,
+      orientationVisible,
+      bivectorShape: stored?.bivectorShape ?? 'from-vectors',
+      idealPointDisplay: stored?.idealPointDisplay ?? 'vector',
+      strokeStyle: stored?.strokeStyle ?? 'solid',
+      strokeWidthSource: stored?.strokeWidthSource ?? '',
+      pointStyle: stored?.pointStyle ?? 'dot',
+      pointSizeSource: stored?.pointSizeSource ?? '',
+      opacitySource: stored?.opacitySource ?? '',
+      labelAngleSource: stored?.labelAngleSource ?? '',
+      labelSizeSource: stored?.labelSizeSource ?? '',
+      labelDistanceSource: stored?.labelDistanceSource ?? '',
+      // New objects place their label automatically; migrated documents
+      // store the version 6 position explicitly.
+      labelAnchor: stored?.labelAnchor ?? 'auto',
+      primitiveStyles: {
+        points: {
+          visible: points?.visible ?? true,
+          pointStyle: points?.pointStyle ?? 'dot',
+          pointSizeSource: points?.pointSizeSource ?? '',
+          connection: points?.connection ?? 'none',
+          strokeStyle: points?.strokeStyle ?? 'solid',
+          strokeWidthSource: points?.strokeWidthSource ?? '',
+        },
+        lines: {
+          visible: lines?.visible ?? true,
+          strokeStyle: lines?.strokeStyle ?? 'solid',
+          strokeWidthSource: lines?.strokeWidthSource ?? '',
+          orientationVisible: lines?.orientationVisible ?? orientationVisible,
+        },
+      },
+    }
+    return [item.id, canonical]
   }))
   return validateCanonicalDocument({
-    id: document.id, formatVersion: 6, languageVersion: document.languageVersion,
+    id: document.id, formatVersion: CURRENT_FORMAT_VERSION, languageVersion: document.languageVersion,
     algebra: document.algebra,
     interpretation: document.interpretation,
     metadata: { title: document.title, description: document.description },

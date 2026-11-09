@@ -10,16 +10,61 @@ export type ExpressionAppearance = Readonly<{
   bivectorShape?: 'from-vectors' | 'disk' | 'square'
   /** How an ideal point is drawn: as a positioned arrow, as an edge marker, or both. */
   idealPointDisplay?: 'vector' | 'ideal' | 'both'
+  /** Stroke of lines, vectors, bivector outlines and ideal-point arrows. */
+  strokeStyle?: StrokeStyle
   /**
-   * How a list of finite points is drawn: independent markers, or markers
-   * joined in evaluated list order as an open polyline or a closed loop.
+   * Numeric appearance settings are stored as source text, like slider
+   * bounds: a number or a scalar expression. An empty source selects the
+   * default of the object kind.
    */
-  pointListDisplay?: PointListDisplay
-  /** Whether a connected point list keeps its markers or shows its segments alone. */
-  pointMarkersVisible?: boolean
+  strokeWidthSource?: string
+  pointStyle?: PointStyle
+  pointSizeSource?: string
+  opacitySource?: string
+  labelAngleSource?: string
+  labelSizeSource?: string
+  labelDistanceSource?: string
+  labelAnchor?: LabelAnchor
+  /** Styles of the primitives a list holds, one block per primitive type. */
+  primitiveStyles?: ExpressionPrimitiveStyles
 }>
 
+export type StrokeStyle = 'solid' | 'dashed' | 'dotted'
+export type PointStyle = 'dot' | 'ring' | 'cross' | 'plus' | 'square' | 'diamond'
+export type LabelAnchor =
+  | 'auto'
+  | 'top-left' | 'top' | 'top-right'
+  | 'left' | 'right'
+  | 'bottom-left' | 'bottom' | 'bottom-right'
 export type PointListDisplay = 'none' | 'open-polyline' | 'closed-loop'
+export type ItemNormalization = 'natural' | 'euclidean' | 'ideal'
+
+/**
+ * Points of a list: whether their markers are drawn, the marker style and
+ * size, and how they are connected in evaluated list order.
+ */
+export type PointPrimitiveStyle = Readonly<{
+  visible: boolean
+  pointStyle: PointStyle
+  pointSizeSource: string
+  connection: PointListDisplay
+  strokeStyle: StrokeStyle
+  strokeWidthSource: string
+}>
+
+/** Lines of a list. */
+export type LinePrimitiveStyle = Readonly<{
+  visible: boolean
+  strokeStyle: StrokeStyle
+  strokeWidthSource: string
+  orientationVisible: boolean
+}>
+
+/** Sparse in memory, like the rest of an appearance record. */
+export type ExpressionPrimitiveStyles = Readonly<{
+  points?: Readonly<Partial<PointPrimitiveStyle>>
+  lines?: Readonly<Partial<LinePrimitiveStyle>>
+}>
 
 export type ExpressionControl = Readonly<{
   mode: 'number' | 'slider'
@@ -38,7 +83,7 @@ export type ExpressionItem = Readonly<{
   kind?: 'expression' | 'annotation'
   source: string
   positionSource?: string
-  normalization?: 'natural'
+  normalization?: ItemNormalization
   control?: ExpressionControl
 }>
 
@@ -192,13 +237,36 @@ export function vga2FoundationExampleDocument(): ExpressionDocument {
 export function updateExpressionNormalization(
   document: ExpressionDocument,
   id: string,
-  normalization: 'natural' | undefined,
+  normalization: ItemNormalization | undefined,
 ): ExpressionDocument {
   return {
     ...document,
     items: document.items.map((item) =>
       item.id === id ? { ...item, normalization } : item,
     ),
+  }
+}
+
+/**
+ * Merges a partial appearance into a stored record. Primitive styles merge per
+ * primitive type, so one list setting never resets the others.
+ */
+export function mergeAppearance(
+  stored: ExpressionAppearance | undefined,
+  update: ExpressionAppearance,
+): ExpressionAppearance {
+  const merged = { ...stored, ...update }
+  if (update.primitiveStyles === undefined) return merged
+  const previous = stored?.primitiveStyles
+  const next = update.primitiveStyles
+  return {
+    ...merged,
+    primitiveStyles: {
+      ...previous,
+      ...next,
+      ...(next.points ? { points: { ...previous?.points, ...next.points } } : {}),
+      ...(next.lines ? { lines: { ...previous?.lines, ...next.lines } } : {}),
+    },
   }
 }
 
@@ -212,7 +280,7 @@ export function updateExpressionAppearance(
     ...document,
     appearance: {
       ...document.appearance,
-      [id]: { ...document.appearance[id], ...appearance },
+      [id]: mergeAppearance(document.appearance[id], appearance),
     },
   }
 }

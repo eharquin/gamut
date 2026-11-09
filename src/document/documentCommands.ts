@@ -4,6 +4,8 @@ import {
   type ExpressionControl,
   type ExpressionDocument,
   type ExpressionItem,
+  type ItemNormalization,
+  mergeAppearance,
 } from './expressionDocument'
 import { directScalarEdit, formatScalarSource } from '../language/directScalarEdit'
 
@@ -14,7 +16,7 @@ export type DocumentCommand =
   | Readonly<{ kind: 'clear-items' }>
   | Readonly<{ kind: 'update-source'; itemId: string; source: string }>
   | Readonly<{ kind: 'update-position'; itemId: string; positionSource: string }>
-  | Readonly<{ kind: 'update-normalization'; itemId: string; normalization?: 'natural' }>
+  | Readonly<{ kind: 'update-normalization'; itemId: string; normalization?: ItemNormalization }>
   | Readonly<{ kind: 'update-appearance'; itemId: string; appearance: ExpressionAppearance }>
   | Readonly<{ kind: 'update-control'; itemId: string; control?: ExpressionControl }>
   | Readonly<{ kind: 'set-scalar-value'; itemId: string; value: number }>
@@ -214,7 +216,7 @@ export function executeDocumentCommand(
         ...document,
         appearance: {
           ...document.appearance,
-          [command.itemId]: { ...document.appearance[command.itemId], ...command.appearance },
+          [command.itemId]: mergeAppearance(document.appearance[command.itemId], command.appearance),
         },
       },
     }

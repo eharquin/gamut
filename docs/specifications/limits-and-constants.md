@@ -33,8 +33,8 @@ The encoded fragment limit counts characters after `#`. The decoded limit
 counts UTF-8 bytes before JSON parsing. JSON export remains available when a
 valid document exceeds the sharing limit.
 
-Every item source, position source, and control-bound source is a separate source
-property for the source-length limit. The decoded document limit also bounds
+Every item source, position source, control-bound source, and appearance source
+is a separate source property for the source-length limit. The decoded document limit also bounds
 metadata, appearance, parameters, and view state.
 
 ## 3. Parsing and dependency analysis
@@ -88,6 +88,25 @@ Rendering may omit elements beyond these limits because omission does not alter
 the evaluated mathematical result. The visualizer shall preserve the prefix
 order, report the exact omitted count, and keep the complete value available for
 textual inspection and export.
+
+### 5.1 Appearance settings
+
+The numeric appearance settings of the
+[document format](document-format.md) accept a value in these inclusive
+ranges. A source whose value falls outside its range, or is not a finite real
+scalar, uses the default of the object kind and reports a diagnostic on the
+setting; the document stays valid.
+
+| Setting | Unit | Range | Default |
+| --- | --- | ---: | --- |
+| Stroke width | reference px | 0.25 to 10 | object kind |
+| Point size | reference px | 1 to 20 | object kind |
+| Opacity | % | 0 to 100 | 100 |
+| Label angle | degrees | −180 to 180 | 0 |
+| Label size | reference px | 6 to 36 | 13 |
+| Label distance | reference px | 0 to 40 | object kind |
+
+Pixel values are multiplied by the document's object scale.
 
 ## 6. Interaction constants
 

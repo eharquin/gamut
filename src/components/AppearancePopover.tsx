@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { RAMP_ORDER, STUDIO_COLORS } from './appearancePalette'
+
+// The registry holds nine hues since format version 7; this menu keeps offering
+// the original five until its rework (#216) lays the hues out in one row.
+const MENU_RAMPS = RAMP_ORDER.filter((ramp) => ['red', 'blue', 'green', 'yellow', 'neutral'].includes(ramp))
 import { popoverPosition } from './popoverPosition'
 import type { ExpressionControl, PointListDisplay } from '../document/expressionDocument'
 
@@ -157,7 +161,7 @@ export function AppearancePopover({
       <section className="appearance-section">
         <h3>Color</h3>
         <div className="appearance-colors">
-          {RAMP_ORDER.map((ramp) => (
+          {MENU_RAMPS.map((ramp) => (
             <div className="appearance-ramp" key={ramp}>
               {STUDIO_COLORS.filter((candidate) => candidate.ramp === ramp).map(
                 (candidate) => (

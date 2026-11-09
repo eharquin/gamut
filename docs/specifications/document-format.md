@@ -71,7 +71,13 @@ viewport variants restore deterministically: `none` disables the visualizer,
 while the supported two-dimensional record restores center and zoom. An
 unsupported visualizer/viewport combination remains in the document and
 produces an explicit recovery diagnostic. Viewport display controls and
-annotations do not yet have dedicated editing interfaces. This note records
+annotations do not yet have dedicated editing interfaces. The format version
+7 appearance fields and list primitive styles are validated, migrated, and
+preserved, but only `primitiveStyles.points.connection` and
+`primitiveStyles.points.visible` (the former `pointListDisplay` and
+`pointMarkersVisible`) affect the drawing yet; appearance sources are not yet
+dependency nodes, and the `euclidean` and `ideal` normalization modes are
+preserved but evaluated without normalization. This note records
 implementation evidence and does not change the normative serialized structure
 below.
 
@@ -108,7 +114,7 @@ classDiagram
       +expression|annotation kind
       +string source
       +string|null positionSource
-      +natural|null normalization
+      +natural|euclidean|ideal|null normalization
       +Control|null control
     }
     class Control {
@@ -128,6 +134,38 @@ classDiagram
       +boolean labelVisible
       +string label
       +string style
+      +boolean borderVisible
+      +boolean orientationVisible
+      +from-vectors|disk|square bivectorShape
+      +vector|ideal|both idealPointDisplay
+      +StrokeStyle strokeStyle
+      +string strokeWidthSource
+      +PointStyle pointStyle
+      +string pointSizeSource
+      +string opacitySource
+      +string labelAngleSource
+      +string labelSizeSource
+      +string labelDistanceSource
+      +LabelAnchor labelAnchor
+      +PrimitiveStyles primitiveStyles
+    }
+    class PrimitiveStyles {
+      +PointPrimitiveStyle points
+      +LinePrimitiveStyle lines
+    }
+    class PointPrimitiveStyle {
+      +boolean visible
+      +PointStyle pointStyle
+      +string pointSizeSource
+      +none|open-polyline|closed-loop connection
+      +StrokeStyle strokeStyle
+      +string strokeWidthSource
+    }
+    class LinePrimitiveStyle {
+      +boolean visible
+      +StrokeStyle strokeStyle
+      +string strokeWidthSource
+      +boolean orientationVisible
     }
     class ViewState {
       +string|null visualizerId
@@ -140,6 +178,9 @@ classDiagram
     Document *-- Metadata
     Document *-- Item
     Document *-- Appearance
+    Appearance *-- PrimitiveStyles
+    PrimitiveStyles *-- PointPrimitiveStyle
+    PrimitiveStyles *-- LinePrimitiveStyle
     Document *-- ViewState
     Item *-- Control
     Control *-- Animation
@@ -158,7 +199,7 @@ unknown field as an implicit extension.
 | Field | Type | Rule |
 | --- | --- | --- |
 | `id` | string | Non-empty opaque immutable document identity. |
-| `formatVersion` | positive integer | Exactly `1` after migration. |
+| `formatVersion` | positive integer | Exactly the current version (`7`) after migration. |
 | `languageVersion` | positive integer | Selects source syntax and semantics. |
 | `algebra` | `AlgebraReference` | Selects one validated algebra configuration. |
 | `interpretation` | `InterpretationReference \| null` | At most one active interpretation. |
@@ -190,11 +231,16 @@ requires `positionSource`, `normalization`, and `control` to be `null`.
 when position support is disabled. When enabled, it participates in the
 dependency graph described below.
 
-`normalization` is `null` or `natural`. `natural` requests the active algebra's
-versioned natural-normalization service after evaluating the item's source and
-before dependent expressions resolve it. When normalization is unavailable, the
-service returns the unchanged value according to the algebra convention. The
-field does not rewrite source and is independent of appearance and `control`.
+`normalization` is `null`, `natural`, `euclidean`, or `ideal`. `natural`
+requests the active algebra's versioned natural-normalization service after
+evaluating the item's source and before dependent expressions resolve it; in
+PGA it divides a value classified Euclidean by `norm` and a value classified
+ideal by `inorm`. `euclidean` and `ideal` force the Euclidean norm `norm` or
+the ideal norm `inorm` (PGA convention §7). When normalization is unavailable,
+the service returns the unchanged value according to the algebra convention.
+The field does not rewrite source and is independent of appearance and
+`control`; it is chosen from the item's expression row, not from the
+appearance menu.
 
 `control` is `null` or an object with exactly `mode`, `minimumSource`,
 `maximumSource`, `stepSource`, and `animation`. `mode` is `number` or `slider`.
@@ -208,19 +254,61 @@ source declares a numeric literal; otherwise it is preserved but dormant, like
 `positionSource` when position support is disabled, and becomes active again
 when the source returns to a literal.
 
-An `Appearance` has exactly `visible`, `labelVisible`, `label`, and `style`. The
-first two fields are booleans. `label` is stored plain text; an empty value uses
-the deterministic semantic default. `style` is a registered non-empty,
-palette-independent style identifier. Appearance is item-level in format
-version 1; list elements do not have independent stored appearance.
+An `Appearance` has exactly the fields of the diagram above. `visible`,
+`labelVisible`, `borderVisible`, and `orientationVisible` are booleans.
+`label` is stored plain text; an empty value uses the deterministic semantic
+default. `style` is a registered non-empty, palette-independent style
+identifier. `bivectorShape` and `idealPointDisplay` take the values of the
+diagram. Appearance is item-level; list elements do not have independent
+stored appearance, and the primitives of a list are styled per primitive type
+(section 2.2.2).
+
+`strokeStyle` is `solid`, `dashed`, or `dotted`, and applies to every stroked
+drawing of the item: lines, vectors, bivector outlines, and ideal-point
+arrows. `pointStyle` is `dot`, `ring`, `cross`, `plus`, `square`, or
+`diamond`. `labelAnchor` is `auto` or one of the eight positions `top-left`,
+`top`, `top-right`, `left`, `right`, `bottom-left`, `bottom`, and
+`bottom-right` around the label's anchor point; `auto` places the label at the
+first of those positions where it overlaps nothing.
+
+The fields whose names end in `Source` are **appearance sources**: numeric
+settings stored verbatim as source text, like the bounds of a numeric control.
+A source is a number (`2.4`) or a scalar expression (`w`) of the common
+language. **An empty source selects the default of the object kind.** A
+non-empty source is evaluated as a dependency node (section 5); a value that
+is not a finite real scalar, or lies outside the range below, falls back to
+the kind default with a diagnostic and never makes the document invalid.
+
+| Field | Unit | Range | Empty source |
+| --- | --- | --- | --- |
+| `strokeWidthSource` | reference px | 0.25 to 10 | kind default |
+| `pointSizeSource` | reference px | 1 to 20 | kind default |
+| `opacitySource` | % | 0 to 100 | 100 |
+| `labelAngleSource` | degrees | −180 to 180 | 0 |
+| `labelSizeSource` | reference px | 6 to 36 | 13 |
+| `labelDistanceSource` | reference px | 0 to 40 | kind default |
+
+Ranges are inclusive and owned by the
+[limits and interaction constants](limits-and-constants.md). Pixel values are
+reference screen pixels multiplied by the document's `objectScale`, like the
+fixed sizes they replace. A kind default is the value drawn before format
+version 7 (for example a point radius of 4.5 reference pixels, and a label
+offset of 8 pixels right and 8 pixels up), so an empty source never changes a
+drawing. Opacity applies to fill and stroke together. A list has no label: its
+label fields are stored and ignored.
+
+New objects default to `strokeStyle: solid`, `pointStyle: dot`, empty sources,
+and `labelAnchor: auto`.
 
 #### 2.2.1 Initial style registry
 
-The initial registry contains six ordered shades in each semantic ramp:
-`red-1` through `red-6`, `blue-1` through `blue-6`, `green-1` through
-`green-6`, `yellow-1` through `yellow-6`, and `neutral-1` through `neutral-6`.
-These identifiers are canonical document data. Their concrete color values are
-renderer-owned and are not serialized.
+The registry contains six ordered shades in each of nine semantic ramps, in
+this order: `red`, `orange`, `yellow`, `green`, `teal`, `blue`, `purple`,
+`pink`, and `neutral`, from `red-1` through `neutral-6`. Format versions 1
+through 6 registered `red`, `blue`, `green`, `yellow`, and `neutral`; format
+version 7 adds `orange`, `teal`, `purple`, and `pink`. These identifiers are
+canonical document data. Their concrete color values are renderer-owned and
+are not serialized.
 
 When an item has no stored style, the current VGA interface applies these
 deterministic defaults:
@@ -240,6 +328,27 @@ use `blue-4` as a defensive display fallback for invalid or pre-validation
 in-memory data, but that fallback never makes the record canonically valid.
 For a scalar or another non-spatial value, style affects its expression-panel
 presentation only; visibility and visualizer-label controls are unavailable.
+
+#### 2.2.2 List primitive styles
+
+`primitiveStyles` has exactly `points` and `lines`, one block per primitive
+type a list can contain. It applies only when the item evaluates to a list,
+and is stored, with its defaults, on every record so that a source edit that
+turns a value into a list never needs a migration. A list's `style` colors
+every primitive it holds; there is no list-wide stroke or point setting and no
+inheritance between the item fields and the blocks. An interface shows a block
+only for a primitive type the evaluated list contains.
+
+- `points`: `visible` (whether the point markers are drawn), `pointStyle`,
+  `pointSizeSource`, `connection` (`none`, `open-polyline`, or `closed-loop`:
+  the markers joined in evaluated list order), and the `strokeStyle` and
+  `strokeWidthSource` of the connection.
+- `lines`: `visible`, `strokeStyle`, `strokeWidthSource`, and
+  `orientationVisible`.
+
+Their sources follow the rules of the item's appearance sources. Defaults are
+`visible: true`, `pointStyle: dot`, `connection: none`, `strokeStyle: solid`,
+empty sources, and, for lines, the item's `orientationVisible`.
 
 ### 2.3 View state
 
@@ -331,6 +440,7 @@ previous one; the implementation records the migrations in
 | 4 | `ViewState.display.showApproximatedResidue`; earlier documents always showed residue. |
 | 5 | `Appearance.idealPointDisplay` (`vector`, `ideal`, `both`): how an ideal PGA point is drawn; earlier documents default to `vector`. |
 | 6 | `Appearance.pointListDisplay` (`none`, `open-polyline`, `closed-loop`) and `Appearance.pointMarkersVisible`: how the elements of a list of finite and ideal points are connected, and whether a connected one keeps its point markers; earlier documents default to `none` with markers. |
+| 7 | Appearance sources (`strokeWidthSource`, `pointSizeSource`, `opacitySource`, `labelAngleSource`, `labelSizeSource`, `labelDistanceSource`), `strokeStyle`, `pointStyle`, `labelAnchor`, and `primitiveStyles`; `Item.normalization` adds `euclidean` and `ideal`; the style registry adds `orange`, `teal`, `purple`, and `pink`. The migration fills empty sources, `solid`, `dot`, and `labelAnchor: top-right` (the fixed position of earlier versions), and moves `pointListDisplay` to `primitiveStyles.points.connection` and `pointMarkersVisible` to `primitiveStyles.points.visible`, kept `true` for an unconnected list, which always drew its markers; `primitiveStyles.lines.orientationVisible` copies the item's orientation. Normalization is unchanged. |
 
 All bounds used by these steps are owned by the
 [limits and interaction constants](limits-and-constants.md).
@@ -356,13 +466,28 @@ flowchart LR
     A --> MIN["item B: slider minimum"]
     A --> MAX["item B: slider maximum"]
     A --> STEP["item B: slider step"]
+    A --> W["item B: appearance.strokeWidth"]
+    A --> PW["item B: appearance.points.strokeWidth"]
 ```
 
 Each enabled source property is a separate graph node identified by item
 identity and property: `value`, `position`, `control.minimum`,
-`control.maximum`, or `control.step`. A name reference to `V` targets the value
+`control.maximum`, `control.step`, or an appearance source:
+`appearance.strokeWidth`, `appearance.pointSize`, `appearance.opacity`,
+`appearance.labelAngle`, `appearance.labelSize`, `appearance.labelDistance`,
+`appearance.points.pointSize`, `appearance.points.strokeWidth`, and
+`appearance.lines.strokeWidth`. A name reference to `V` targets the value
 node of the uniquely named item `V`; `V.position` targets its position node; and
 `V.head` is a read-only derived node depending on both.
+
+An appearance-source node is enabled when its source is non-empty. It may
+reference value nodes like a control bound does, its result must be a finite
+real scalar, and no source can reference it: appearance never changes a
+mathematical value. An item's appearance source may reference the item's own
+value node, since that is not a cycle. An appearance-source diagnostic
+(unknown name, non-scalar result, cycle, or out-of-range value) is reported on
+the setting, and the drawing uses the kind default. The item's value and its
+dependants are unaffected.
 
 Cycles are detected over all enabled nodes. Every node in a cycle receives the
 common cycle diagnostic, and its dependants receive upstream diagnostics.

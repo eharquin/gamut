@@ -1,10 +1,16 @@
 import type { ExpressionAppearance, PointListDisplay } from '../document/expressionDocument'
 
+// Hue order of the palette: the registry, the swatches, and the reference
+// tables all follow it.
 const ramps = {
   red: ['#FADADF', '#F5A9B8', '#E8637F', '#C30A3A', '#92072B', '#60041C'],
-  blue: ['#D4EBFA', '#A0D0F4', '#55ABDF', '#1482C8', '#0D5F94', '#073D60'],
-  green: ['#C8F0DC', '#8DDCB4', '#41BF82', '#0F9D57', '#0A7540', '#064D2A'],
+  orange: ['#FDE3CF', '#F9C08E', '#F2914A', '#E06A12', '#A84E0D', '#6E3308'],
   yellow: ['#FDF0CB', '#FAD880', '#F0B833', '#E8A000', '#AA7500', '#6E4C00'],
+  green: ['#C8F0DC', '#8DDCB4', '#41BF82', '#0F9D57', '#0A7540', '#064D2A'],
+  teal: ['#CDF1F0', '#93DEDB', '#45C0BB', '#0E9E99', '#0A7470', '#064A48'],
+  blue: ['#D4EBFA', '#A0D0F4', '#55ABDF', '#1482C8', '#0D5F94', '#073D60'],
+  purple: ['#E9DDFA', '#CDB3F3', '#A47FE6', '#7B4BD0', '#5A339C', '#3A2066'],
+  pink: ['#FBDCEF', '#F5ABD7', '#E86AB5', '#CC2E8E', '#9A1F6A', '#651345'],
   neutral: ['#F7F8FA', '#E1E4EA', '#C0C6D2', '#8B93A4', '#4E5668', '#1E2433'],
 } as const
 
@@ -26,13 +32,7 @@ export const STUDIO_COLORS: readonly PaletteEntry[] = Object.freeze(
   ),
 )
 
-export const RAMP_ORDER: readonly string[] = Object.freeze([
-  'red',
-  'blue',
-  'green',
-  'yellow',
-  'neutral',
-])
+export const RAMP_ORDER: readonly string[] = Object.freeze(Object.keys(ramps))
 
 const DEFAULT_STYLE = 'blue-4'
 const DEFAULT_COLOR = '#1482C8'
@@ -117,7 +117,7 @@ export function resolveItemAppearance(
     orientationVisible: appearance?.orientationVisible ?? true,
     bivectorShape: appearance?.bivectorShape ?? 'from-vectors',
     idealPointDisplay: appearance?.idealPointDisplay ?? 'vector',
-    pointListDisplay: appearance?.pointListDisplay ?? 'none',
-    pointMarkersVisible: appearance?.pointMarkersVisible ?? true,
+    pointListDisplay: appearance?.primitiveStyles?.points?.connection ?? 'none',
+    pointMarkersVisible: appearance?.primitiveStyles?.points?.visible ?? true,
   }
 }
