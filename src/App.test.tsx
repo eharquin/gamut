@@ -31,6 +31,12 @@ function openDisplaySettings(): HTMLElement {
   return trigger
 }
 
+/** Runs a document command from the settings menu, as a user would. */
+function runDocumentCommand(name: 'Import' | 'Export' | 'Copy link'): void {
+  openDisplaySettings()
+  fireEvent.click(within(screen.getByRole('dialog', { name: 'Display settings' })).getByRole('button', { name }))
+}
+
 function viewportCanvas(): SVGSVGElement {
   return screen.getByRole('img', {
     name: /Two-dimensional [VP]GA viewport/,
@@ -69,10 +75,35 @@ describe('VGA 2D vertical slice', () => {
     })
     render(<App />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+    runDocumentCommand('Export')
 
     expect(clickedLinks).toHaveLength(1)
     expect(clickedLinks[0].download).toBe('Untitled-document.gamut.json')
+  })
+
+  it('offers Import, Export, and Copy link in the settings menu instead of the header', () => {
+    const fileDialogs = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => undefined)
+    render(<App />)
+    const header = document.querySelector('header.app-header') as HTMLElement
+    for (const name of ['Import', 'Export', 'Copy link', 'Copy iframe code'])
+      expect(within(header).queryByRole('button', { name })).not.toBeInTheDocument()
+
+    const trigger = openDisplaySettings()
+    const menu = screen.getByRole('dialog', { name: 'Display settings' })
+    const section = within(menu).getByRole('region', { name: 'Document' })
+    expect(within(section).getAllByRole('button').map((button) => button.textContent?.trim()))
+      .toEqual(['Import', 'Export', 'Copy link'])
+    expect(within(menu).queryByRole('button', { name: 'Copy iframe code' })).not.toBeInTheDocument()
+
+    // Import opens the existing file input, closes the menu, and returns focus.
+    const importButton = within(section).getByRole('button', { name: 'Import' })
+    importButton.focus()
+    expect(importButton).toHaveFocus()
+    fireEvent.click(importButton)
+    expect(fileDialogs).toHaveBeenCalledOnce()
+    expect(fileDialogs.mock.contexts[0]).toBe(screen.getByLabelText('Import document file'))
+    expect(screen.queryByRole('dialog', { name: 'Display settings' })).not.toBeInTheDocument()
+    expect(trigger).toHaveFocus()
   })
 
   it('imports a version 0.1 document with the historical filename suffix', async () => {
@@ -2546,6 +2577,81 @@ describe('VGA 2D vertical slice', () => {
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(trigger).toHaveFocus()
+  })
+})
+
+describe('opening a document by dropping a file onto the window', () => {
+  const documentFile = (name: string, contents: string, type = 'application/json') => {
+    const bytes = new TextEncoder().encode(contents)
+    return { name, type, arrayBuffer: async () => bytes.slice().buffer } as unknown as File
+  }
+  const droppedDocument = () => JSON.stringify(toCanonicalDocument(expressionDocument(
+    [{ id: 'dropped-vector', source: 'Dropped = vector(5, 6)' }], {}, { id: 'dropped-document', title: 'Dropped' },
+  ), 'dark'))
+  const fileTransfer = (files: File[]) => ({ types: ['Files'], files, dropEffect: 'none' })
+  const overlay = () => screen.queryByText('Drop a JSON document to open it')
+
+  it('shows an announced overlay while a file is dragged, and hides it on leave', () => {
+    render(<App />)
+    const target = screen.getByRole('textbox', { name: 'Expression 1' })
+    expect(overlay()).not.toBeInTheDocument()
+    fireEvent.dragEnter(document.body, { dataTransfer: fileTransfer([]) })
+    fireEvent.dragEnter(target, { dataTransfer: fileTransfer([]) })
+    expect(overlay()).toBeInTheDocument()
+    expect(overlay()!.closest('[role="status"]')).not.toBeNull()
+    // Leaving a child keeps the overlay; leaving the window hides it.
+    fireEvent.dragLeave(target, { dataTransfer: fileTransfer([]) })
+    expect(overlay()).toBeInTheDocument()
+    fireEvent.dragLeave(document.body, { dataTransfer: fileTransfer([]) })
+    expect(overlay()).not.toBeInTheDocument()
+  })
+
+  it('opens a dropped document exactly as Import would', async () => {
+    render(<App />)
+    fireEvent.dragEnter(document.body, { dataTransfer: fileTransfer([]) })
+    const dropped = fireEvent.drop(document.body, {
+      dataTransfer: fileTransfer([documentFile('dropped.gamut.json', droppedDocument())]),
+    })
+    expect(dropped).toBe(false)
+    expect(overlay()).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('Dropped = vector(5, 6)'))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    // Like an import, the opened document starts a fresh history.
+    expect(screen.getByRole('button', { name: 'Undo document change' })).toBeDisabled()
+  })
+
+  it('reports an invalid, a non-JSON, or several dropped files and keeps the document', async () => {
+    render(<App />)
+    const source = screen.getByRole('textbox', { name: 'Expression 1' })
+
+    fireEvent.drop(document.body, { dataTransfer: fileTransfer([documentFile('broken.json', '{"formatVersion":')]) })
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/^DOCUMENT_/))
+    expect(source).toHaveValue('vector(2, 1)')
+
+    fireEvent.drop(document.body, { dataTransfer: fileTransfer([documentFile('notes.txt', droppedDocument(), 'text/plain')]) })
+    expect(screen.getByRole('alert')).toHaveTextContent('DOCUMENT_DROP_TYPE: “notes.txt” is not a JSON document.')
+
+    fireEvent.drop(document.body, {
+      dataTransfer: fileTransfer([documentFile('a.json', droppedDocument()), documentFile('b.json', droppedDocument())]),
+    })
+    expect(screen.getByRole('alert')).toHaveTextContent('DOCUMENT_DROP_MULTIPLE: 2 files were dropped.')
+    await act(async () => {})
+    expect(source).toHaveValue('vector(2, 1)')
+  })
+
+  it('leaves drags that carry no file to the page', () => {
+    render(<App />)
+    const source = screen.getByRole('textbox', { name: 'Expression 1' })
+    const text = { types: ['text/plain'], files: [], getData: () => 'e1' }
+    expect(fireEvent.dragEnter(source, { dataTransfer: text })).toBe(true)
+    expect(fireEvent.dragOver(source, { dataTransfer: text })).toBe(true)
+    expect(overlay()).not.toBeInTheDocument()
+    expect(fireEvent.drop(source, { dataTransfer: text })).toBe(true)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(source).toHaveValue('vector(2, 1)')
+    // A file drag whose drop holds no file is ignored without a diagnostic.
+    fireEvent.drop(document.body, { dataTransfer: fileTransfer([]) })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })
 
