@@ -2053,6 +2053,14 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           <button type="button" className="document-command" onClick={saveLocalCopy}>Save local copy</button>
         </div>
       )}
+      {!expressionDoc.view.positionEnabled && expressionDoc.items.some((item) => item.positionSource?.trim()) && (
+        <div className="shared-session-notice positions-off-notice" role="status">
+          <span>Positions are turned off in this document, so objects are drawn at the origin.</span>
+          <button type="button" className="document-command" onClick={() => updateView({ ...expressionDoc.view, positionEnabled: true })}>
+            Turn on positions
+          </button>
+        </div>
+      )}
       {shareResult && (
         <section className="share-result" aria-label="Share scene">
           <p role="status">{shareResult.message}</p>
