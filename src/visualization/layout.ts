@@ -59,6 +59,20 @@ const finitePoint = (point: Point2d) => Number.isFinite(point.x) && Number.isFin
  * evaluated list order, or `null` when the list is empty, holds no finite
  * point, or holds any other entity. Only such lists offer connected displays.
  */
+/** Primitive kinds a list styles as points, and as lines. */
+const POINT_PRIMITIVES: ReadonlySet<string> = new Set(['point-marker', 'ideal-point'])
+const LINE_PRIMITIVES: ReadonlySet<string> = new Set(['unbounded-line', 'line-at-infinity'])
+
+/** Which primitive types a list holds, so that each gets its own appearance section. */
+export function listPrimitiveTypes(
+  elements: readonly Readonly<{ primitive: VisualizationPrimitive | null }>[],
+): Readonly<{ points: boolean; lines: boolean }> {
+  return {
+    points: elements.some(({ primitive }) => primitive !== null && POINT_PRIMITIVES.has(primitive.kind)),
+    lines: elements.some(({ primitive }) => primitive !== null && LINE_PRIMITIVES.has(primitive.kind)),
+  }
+}
+
 export function pointListVertices(
   elements: readonly Readonly<{ primitive: VisualizationPrimitive | null }>[],
 ): readonly PointListVertex[] | null {
@@ -185,7 +199,7 @@ export function collectRenderedPrimitives(
     const kind = evaluated.evaluation.valueType === 'list'
       ? `List (${evaluated.evaluation.value.elements.length})`
       : interpretation.describe(evaluated.evaluation.entity)
-    const { visible, color, labelVisible, displayLabel, borderVisible, orientationVisible, bivectorShape, idealPointDisplay, pointListDisplay, pointMarkersVisible } = resolveItemAppearance(
+    const { visible, color, labelVisible, displayLabel, borderVisible, orientationVisible, bivectorShape, idealPointDisplay, pointListDisplay, pointMarkersVisible, linesVisible } = resolveItemAppearance(
       appearance[evaluated.item.id],
       kind,
       declaredName(evaluated.item.source),
@@ -206,7 +220,9 @@ export function collectRenderedPrimitives(
         : []
       if (segments.length > 0) connections.push({ id: evaluated.item.id, color, segments })
       const markerVisible = vertices === null || pointMarkersVisible
-      return elements.flatMap((element, elementIndex) => element.primitive
+      // Hidden lines are skipped in place, so the other elements keep their index.
+      return elements.flatMap((element, elementIndex) => element.primitive &&
+        (linesVisible || !LINE_PRIMITIVES.has(element.primitive.kind))
         ? [{
             id: `${evaluated.item.id}:${element.id}`,
             entity: element.entity,

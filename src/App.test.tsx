@@ -1131,8 +1131,8 @@ describe('VGA 2D vertical slice', () => {
     fireEvent.click(trigger)
     expect(screen.getByRole('dialog', { name: 'Scalar' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Close Scalar menu' })).toHaveFocus()
-    expect(screen.getByRole('button', { name: 'Slider' }))
-      .toHaveAttribute('aria-pressed', 'true')
+    // A new scalar is an animated slider.
+    expect(screen.getByRole('switch', { name: 'Animate' })).toBeChecked()
     expect(screen.getByRole('textbox', { name: 'Minimum source' }))
       .toHaveValue('-10')
     const slider = screen.getByRole('slider', { name: 'Value for a' })
@@ -1147,7 +1147,10 @@ describe('VGA 2D vertical slice', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
     expect(source).toHaveValue('a = ((2))')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Number' }))
+    // Turning Animate off makes it a number field.
+    fireEvent.click(screen.getByRole('switch', { name: 'Animate' }))
+    expect(screen.getByRole('switch', { name: 'Animate' })).not.toBeChecked()
+    expect(screen.queryByRole('button', { name: 'Once' })).not.toBeInTheDocument()
     expect(trigger.parentElement?.querySelector('.expression-action-spacer'))
       .toBeInTheDocument()
     expect(screen.queryByRole('slider', { name: 'Value for a' }))
@@ -1954,6 +1957,22 @@ describe('VGA 2D vertical slice', () => {
     expect(screen.getByRole('img')).toHaveTextContent('No spatial objects are visible')
   })
 
+  it('shares visibility between the menu eye and the row eye', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Open Vector menu for Vector' }))
+    const eye = within(screen.getByRole('dialog', { name: 'Vector' })).getByRole('switch', { name: 'Visible' })
+    expect(eye).toHaveAttribute('aria-checked', 'true')
+
+    fireEvent.click(eye)
+    expect(eye).toHaveAttribute('aria-checked', 'false')
+    expect(eye).toHaveAttribute('title', 'Show')
+    expect(screen.getByRole('button', { name: 'Show Vector' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('img')).toHaveTextContent('No spatial objects are visible')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show Vector' }))
+    expect(eye).toHaveAttribute('aria-checked', 'true')
+  })
+
   it('shows the visibility eye on row hover or focus, and always for a hidden object', () => {
     render(<App />)
     const hide = screen.getByRole('button', { name: 'Hide Vector' })
@@ -2005,6 +2024,10 @@ describe('VGA 2D vertical slice', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open Vector menu for Vector' }))
     expect(screen.getByRole('dialog', { name: 'Vector' })).toBeInTheDocument()
 
+    // A hue keeps the selected shade; the shade bar then picks any shade of it.
+    expect(screen.getByRole('button', { name: 'Yellow' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(screen.getByRole('button', { name: 'Green' }))
+    expect(screen.getByRole('button', { name: 'Use color green 4' })).toHaveAttribute('aria-pressed', 'true')
     fireEvent.click(screen.getByRole('button', { name: 'Use color green 4' }))
     fireEvent.click(screen.getByRole('switch', { name: 'Show label' }))
     fireEvent.change(screen.getByRole('textbox', { name: 'Text' }), {
@@ -2029,14 +2052,15 @@ describe('VGA 2D vertical slice', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Bivector menu for B' }))
     expect(screen.getByRole('button', { name: 'From vectors' })).toBeDisabled()
-    const border = screen.getByRole('switch', { name: 'Border hidden' })
+    const border = screen.getByRole('switch', { name: 'Outline' })
+    expect(border).not.toBeChecked()
     fireEvent.click(border)
 
-    expect(screen.getByRole('switch', { name: 'Border visible' })).toBeChecked()
+    expect(border).toBeChecked()
     expect(bivector).toHaveClass('has-border')
 
     fireEvent.click(screen.getByRole('switch', { name: 'Orientation visible' }))
-    expect(screen.getByRole('switch', { name: 'Orientation hidden' })).not.toBeChecked()
+    expect(screen.getByRole('switch', { name: 'Orientation visible' })).not.toBeChecked()
     expect(container.querySelector('.bivector-orientation')).not.toBeInTheDocument()
   })
 
@@ -2986,6 +3010,37 @@ describe('PGA 2D foundation workflow', () => {
     // Without a connection, the ideal point is drawn again.
     fireEvent.click(screen.getByRole('button', { name: 'No connection' }))
     expect(screen.getByLabelText('L[1]')).toHaveClass('vector')
+    fireEvent.keyDown(document, { key: 'Escape' })
+  })
+
+  it('hides the lines of a list from its Lines section, keeping element indices', () => {
+    selectPga()
+    const first = screen.getByRole('textbox', { name: 'Expression 1' })
+    fireEvent.change(first, { target: { value: 'M = [line(1, 0, 0), point(0, 0), line(0, 1, 0)]' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Open List (3) menu for M' }))
+    expect(screen.getByRole('dialog', { name: 'List' })).toBeInTheDocument()
+    expect(screen.getByLabelText('M[0]')).toHaveClass('unbounded-line')
+    const lines = screen.getByRole('switch', { name: 'Show lines' })
+    expect(lines).toBeChecked()
+
+    fireEvent.click(lines)
+    expect(lines).not.toBeChecked()
+    expect(screen.queryByLabelText('M[0]')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('M[2]')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('M[1]')).toHaveClass('point-marker')
+
+    const history = screen.getByRole('group', { name: 'Expression history' })
+    fireEvent.click(within(history).getByRole('button', { name: 'Undo document change' }))
+    expect(screen.getByLabelText('M[2]')).toHaveClass('unbounded-line')
+    fireEvent.keyDown(document, { key: 'Escape' })
+  })
+
+  it('offers no Lines section for a list without lines', () => {
+    selectPga()
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: 'P = [point(0, 0), point(1, 0)]' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Open List (2) menu for P' }))
+    expect(screen.queryByRole('switch', { name: 'Show lines' })).not.toBeInTheDocument()
+    expect(screen.getByRole('switch', { name: 'Show point markers' })).toBeInTheDocument()
     fireEvent.keyDown(document, { key: 'Escape' })
   })
 

@@ -92,6 +92,8 @@ export type ResolvedAppearance = Readonly<{
   idealPointDisplay: 'vector' | 'ideal' | 'both'
   pointListDisplay: PointListDisplay
   pointMarkersVisible: boolean
+  /** Whether a list draws the lines it holds. */
+  linesVisible: boolean
 }>
 
 /**
@@ -119,5 +121,6 @@ export function resolveItemAppearance(
     idealPointDisplay: appearance?.idealPointDisplay ?? 'vector',
     pointListDisplay: appearance?.primitiveStyles?.points?.connection ?? 'none',
     pointMarkersVisible: appearance?.primitiveStyles?.points?.visible ?? true,
+    linesVisible: appearance?.primitiveStyles?.lines?.visible ?? true,
   }
 }
