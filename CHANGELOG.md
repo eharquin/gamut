@@ -109,6 +109,14 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the origin while its position fields and base drags still updated. Positions
   now switch off only without a visualizer (NoViz, #55): a document drawn on a
   canvas always applies its positions, and writing a position turns them on.
+- In PGA, the normalization choice opens in a popover anchored to the row's
+  norm button, like the appearance menu: a **Normalize** header with a close
+  button, then off · auto · norm · inorm. It closes on a choice, Escape, or a
+  click outside, and returns focus to the button. In VGA, which has one norm,
+  the button switches between off and auto directly, with no menu.
+- **Copy link** confirms a copied link with a brief notice instead of opening
+  the link panel; the panel with selectable text only appears when the
+  clipboard refuses the copy.
 - The settings button shows a cogwheel. Beside it, a sun and moon button
   switches between the light and dark themes in one click; by default the
   application follows the system theme, which the settings menu still offers.

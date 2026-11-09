@@ -46,6 +46,24 @@
 }
 
 .share-result p { margin: 0 0 6px; }
+
+/* A brief confirmation of a copied link, above the canvas corner. */
+.copy-notice {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right, 0px));
+  bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  z-index: 40;
+  max-width: min(360px, calc(100vw - 32px));
+  margin: 0;
+  padding: 8px 12px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: var(--shadow-modal);
+  font-size: 0.8rem;
+  pointer-events: none;
+}
 .share-result textarea {
   display: block;
   width: 100%;
@@ -723,6 +741,17 @@ body.reordering-items .reorder-handle {
 }
 
 /* The normalization modes, under the expression they apply to. */
+/* The normalization popover: the appearance menu's frame, one row of choices. */
+.normalization-popover-body {
+  padding: 8px 10px 10px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.normalization-popover .normalize-choice {
+  width: 100%;
+  margin: 0;
+}
+
 .normalize-choice {
   justify-self: end;
   width: min(220px, 100%);

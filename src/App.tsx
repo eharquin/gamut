@@ -25,6 +25,7 @@ import {
   type DisplaySettings,
 } from './components/SettingsMenu'
 import { ThemeToggle } from './components/ThemeToggle'
+import { NormalizationPopover } from './components/NormalizationPopover'
 import { resolveItemAppearance } from './components/appearancePalette'
 import { OPAQUE_INTERPRETATION, type InterpretedEntity, type Point2d } from './geometry/interpretation'
 import type { VisualizationPrimitive } from './visualization/primitives'
@@ -393,24 +394,15 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const [appearanceItemId, setAppearanceItemId] = useState<string | null>(null)
   /** The row whose normalization choice is open under its expression. */
   const [normalizationChoiceId, setNormalizationChoiceId] = useState<string | null>(null)
-  // The choice closes on a click outside it and its button, and when its row
-  // can no longer be normalized (no button is rendered for it any more).
+  // The popover closes itself on a choice, Escape, or a click outside; it is
+  // also closed when its row can no longer be normalized (its button is gone).
   useEffect(() => {
-    if (normalizationChoiceId === null) return
-    if (!normalizationToggleRefs.current.has(normalizationChoiceId)) {
+    if (normalizationChoiceId !== null && !normalizationToggleRefs.current.has(normalizationChoiceId))
       setNormalizationChoiceId(null)
-      return
-    }
-    const closeOutside = (event: PointerEvent) => {
-      const target = event.target as Node | null
-      const toggle = normalizationToggleRefs.current.get(normalizationChoiceId)
-      const choice = document.getElementById(`normalization-choice-${normalizationChoiceId}`)
-      if (target && (toggle?.contains(target) || choice?.contains(target))) return
-      setNormalizationChoiceId(null)
-    }
-    document.addEventListener('pointerdown', closeOutside)
-    return () => document.removeEventListener('pointerdown', closeOutside)
   }, [normalizationChoiceId, expressionDoc])
+  const closeNormalizationChoice = useCallback(() => setNormalizationChoiceId(null), [])
+  // Only one normalization popover is open at a time: the button that opened it.
+  const normalizationAnchorRef = useRef<HTMLButtonElement | null>(null)
   const normalizationToggleRefs = useRef(new Map<string, HTMLButtonElement>())
   const [expandedListIds, setExpandedListIds] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -425,6 +417,14 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const [anchorPreview, setAnchorPreview] = useState<AnchorCandidate | null>(null)
   const [viewportLocked, setViewportLocked] = useState(() => sharedSession ? false : restoredViewportLock())
   const [shareResult, setShareResult] = useState<{ content: string; label: string; message: string } | null>(null)
+  // A copied link is confirmed briefly; the panel with the text only appears
+  // when the clipboard refuses the copy.
+  const [copyNotice, setCopyNotice] = useState<Readonly<{ message: string; durationMs: number }> | null>(null)
+  useEffect(() => {
+    if (!copyNotice) return
+    const timer = window.setTimeout(() => setCopyNotice(null), copyNotice.durationMs)
+    return () => window.clearTimeout(timer)
+  }, [copyNotice])
   const [sharing, setSharing] = useState(false)
   const [fileDragActive, setFileDragActive] = useState(false)
   const [activePlaybacks, setActivePlaybacks] = useState<
@@ -1832,16 +1832,18 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const copyScene = async () => {
     setSharing(true)
     setShareResult(null)
+    setCopyNotice(null)
     try {
       const url = await createSceneLink(toCanonicalDocument(expressionDoc, theme, resolvedStyles, resolvedOrientation), new URL(import.meta.env.BASE_URL, window.location.href).href)
       let copied = false
       try { await navigator.clipboard.writeText(url); copied = true } catch { /* The selectable text remains available when clipboard access is blocked. */ }
-      setShareResult({
-        content: url,
-        label: 'Scene link',
-        message: (copied ? 'Copied.' : 'Select and copy the text below.') + (url.length > SHARE_URL_WARNING_LENGTH
-          ? ' This link exceeds 8 KiB and some presentation tools may reject it. JSON export is also available.' : ''),
-      })
+      const warning = url.length > SHARE_URL_WARNING_LENGTH
+        ? ' This link exceeds 8 KiB and some presentation tools may reject it. JSON export is also available.' : ''
+      if (copied) {
+        setCopyNotice({ message: 'Link copied.' + warning, durationMs: warning ? 8000 : 2500 })
+      } else {
+        setShareResult({ content: url, label: 'Scene link', message: 'Select and copy the text below.' + warning })
+      }
     } catch (error) {
       setDocumentDiagnostic(error instanceof DocumentFormatError ? error.code + ': ' + error.message : 'SHARE_EXPORT_FAILED: The scene link could not be created. Use JSON export instead.')
     } finally { setSharing(false) }
@@ -2053,6 +2055,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           <button type="button" className="document-command" onClick={saveLocalCopy}>Save local copy</button>
         </div>
       )}
+      <p className="copy-notice" role="status" hidden={!copyNotice}>{copyNotice?.message}</p>
       {shareResult && (
         <section className="share-result" aria-label="Share scene">
           <p role="status">{shareResult.message}</p>
@@ -2345,18 +2348,26 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                               type="button"
                               className={`normalize-toggle${item.normalization ? ' active' : ''}`}
                               aria-label={`Normalization: ${normalizationText}`}
-                              aria-expanded={normalizationChoiceOpen}
-                              aria-controls={normalizationChoiceOpen ? `normalization-choice-${item.id}` : undefined}
+                              // With one norm (VGA) the button switches off and auto
+                              // directly; with norm and inorm (PGA) it opens the choice.
+                              aria-pressed={hasIdealNorm(engine) ? undefined : Boolean(normalizationMode)}
+                              aria-expanded={hasIdealNorm(engine) ? normalizationChoiceOpen : undefined}
+                              aria-haspopup={hasIdealNorm(engine) ? 'dialog' : undefined}
                               title={!normalizationMode
                                 ? 'Not normalized'
                                 : normalizationUnavailable
                                   ? 'Normalization unavailable: the value is unchanged'
                                   : `Normalized by ${NORM_NAME[unitNorm!]}${normalizationMode === 'natural' ? ' (automatic)' : ''}`}
-                              onClick={() => setNormalizationChoiceId((current) => current === item.id ? null : item.id)}
-                              onKeyDown={(event) => {
-                                if (event.key !== 'Escape' || !normalizationChoiceOpen) return
-                                event.stopPropagation()
-                                setNormalizationChoiceId(null)
+                              onClick={(event) => {
+                                if (!hasIdealNorm(engine)) {
+                                  executeCommand({
+                                    kind: 'update-normalization', itemId: item.id,
+                                    normalization: normalizationMode ? undefined : 'natural',
+                                  })
+                                  return
+                                }
+                                normalizationAnchorRef.current = event.currentTarget
+                                setNormalizationChoiceId((current) => current === item.id ? null : item.id)
                               }}
                             >{item.normalization ? normalizationText : 'norm'}</button>
                             <span
@@ -2370,36 +2381,21 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                           </span>
                         )}
                       </div>
-                      {/* The mode is chosen under the expression; choosing closes the list. */}
+                      {/* The mode is chosen in a popover anchored to the norm button, like the appearance menu. */}
                       {normalizationChoiceOpen && (
-                        <div
-                          id={`normalization-choice-${item.id}`}
-                          className="normalize-choice"
-                          role="group"
-                          aria-label="Normalize with"
-                          onKeyDown={(event) => {
-                            if (event.key !== 'Escape') return
-                            event.stopPropagation()
+                        <NormalizationPopover
+                          anchorRef={normalizationAnchorRef}
+                          mode={normalizationMode ?? 'off'}
+                          options={normalizationOptions}
+                          onChoose={(option) => {
+                            executeCommand({
+                              kind: 'update-normalization', itemId: item.id,
+                              normalization: option === 'off' ? undefined : option,
+                            })
                             setNormalizationChoiceId(null)
-                            normalizationToggleRefs.current.get(item.id)?.focus()
                           }}
-                        >
-                          {normalizationOptions.map((option) => (
-                            <button
-                              key={option}
-                              type="button"
-                              aria-pressed={(normalizationMode ?? 'off') === option}
-                              onClick={() => {
-                                executeCommand({
-                                  kind: 'update-normalization', itemId: item.id,
-                                  normalization: option === 'off' ? undefined : option,
-                                })
-                                setNormalizationChoiceId(null)
-                                normalizationToggleRefs.current.get(item.id)?.focus()
-                              }}
-                            >{NORMALIZATION_TEXT[option]}</button>
-                          ))}
-                        </div>
+                          onClose={closeNormalizationChoice}
+                        />
                       )}
                       {/* The label text is edited under the expression while the label is shown (#226). */}
                       {labelFieldShown && (
