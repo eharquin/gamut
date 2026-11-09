@@ -83,6 +83,7 @@
 .scalar-play-button:focus-visible,
 .viewport-command:focus-visible,
 .settings-menu-button:focus-visible,
+.theme-toggle:focus-visible,
 .settings-select:focus-visible,
 .settings-number:focus-visible,
 .appearance-header button:focus-visible {
@@ -111,8 +112,13 @@
   background: color-mix(in srgb, var(--accent-soft) 65%, var(--surface));
 }
 
-.app-header > .settings-menu {
+.app-header > .theme-toggle {
   margin-left: auto;
+}
+
+/* The header gap is 14px; the two buttons sit 6px apart as one group. */
+.app-header > .theme-toggle + .settings-menu {
+  margin-left: -8px;
 }
 
 .document-file-input {

@@ -125,14 +125,14 @@ export function SettingsMenu({
           return !current
         })}
       >
+        {/* A cogwheel with eight teeth. */}
         <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-          <circle cx="8" cy="8" r="2.25" fill="none" />
           <path
-            d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.42 1.42M11.18 11.18l1.42 1.42M3.4 12.6l1.42-1.42M11.18 4.82l1.42-1.42"
+            d="M13.06 6.43 L14.89 6.75 L14.89 9.25 L13.06 9.57 L12.69 10.47 L13.76 11.98 L11.98 13.76 L10.47 12.69 L9.57 13.06 L9.25 14.89 L6.75 14.89 L6.43 13.06 L5.53 12.69 L4.02 13.76 L2.24 11.98 L3.31 10.47 L2.94 9.57 L1.11 9.25 L1.11 6.75 L2.94 6.43 L3.31 5.53 L2.24 4.02 L4.02 2.24 L5.53 3.31 L6.43 2.94 L6.75 1.11 L9.25 1.11 L9.57 2.94 L10.47 3.31 L11.98 2.24 L13.76 4.02 L12.69 5.53Z"
             fill="none"
-            strokeLinecap="round"
+            strokeLinejoin="round"
           />
-          <circle cx="8" cy="8" r="4.75" fill="none" />
+          <circle cx="8" cy="8" r="2.2" fill="none" />
         </svg>
       </button>
       {open && (
