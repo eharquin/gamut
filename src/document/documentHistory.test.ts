@@ -153,4 +153,21 @@ describe('document history', () => {
     expect(source(history)).toBe('1')
     expect(history.present.view).toBe(view)
   })
+
+  it('changes the document identity without discarding or reverting history', () => {
+    let history = createDocumentHistory(expressionDocument([{ id: 'item', source: '1' }], {}, { id: 'shared' }))
+    history = documentHistoryReducer(history, {
+      type: 'execute', command: { kind: 'update-source', itemId: 'item', source: '2' },
+    })
+    history = documentHistoryReducer(history, { type: 'update-identity', id: 'copy' })
+    expect(history.past).toHaveLength(1)
+    expect(history.present.id).toBe('copy')
+
+    history = documentHistoryReducer(history, { type: 'undo' })
+    expect(source(history)).toBe('1')
+    expect(history.present.id).toBe('copy')
+    history = documentHistoryReducer(history, { type: 'redo' })
+    expect(source(history)).toBe('2')
+    expect(history.present.id).toBe('copy')
+  })
 })
