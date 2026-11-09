@@ -273,6 +273,11 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Corrections
 
+- PGA(2) position diagnostics no longer mention VGA vectors. A coordinate
+  tuple such as `(1, 2)` reports that a position must evaluate to a Euclidean
+  point, such as `point(1, 2)`, instead of an unsupported `vector` function;
+  a position that evaluates to another kind, such as a line, reports that it
+  must evaluate to a Euclidean point. VGA(2) messages are unchanged (#236).
 - The appearance menu stays inside the window: it is placed from its measured
   height, opens above its row when it does not fit below, scrolls inside when
   it is taller than the window, and follows its row when the window is
