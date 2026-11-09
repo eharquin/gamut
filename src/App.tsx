@@ -1693,9 +1693,12 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
 
   const saveLocalCopy = () => {
     try {
-      const copy = { ...expressionDoc, id: crypto.randomUUID() }
-      persistence.save(toCanonicalDocument(copy, theme, resolvedStyles))
-      dispatchHistory({ type: 'replace', document: copy })
+      const id = crypto.randomUUID()
+      persistence.save(toCanonicalDocument({ ...expressionDoc, id }, theme, resolvedStyles))
+      // Keep undo history; only the identity changes.
+      dispatchHistory({ type: 'update-identity', id })
+      // Reloading must reopen the saved copy, not the original shared scene.
+      window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search)
       setEphemeral(false)
       setDocumentDiagnostic(null)
     } catch {

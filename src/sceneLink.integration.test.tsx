@@ -64,6 +64,9 @@ describe('scene sharing in the application', () => {
     expect(copy.id).not.toBe(shared.id)
     expect(copy.id).not.toBe(saved.id)
     expect(copy.items[0].source).toBe('Shared = vector(6, 7)')
+    expect(window.location.hash).toBe('')
+    fireEvent.click(screen.getByRole('button', { name: /^Undo/ }))
+    expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('Shared = vector(3, 4)')
   })
 
   it('retains the temporary session and offers export if explicit saving fails', async () => {

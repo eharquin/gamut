@@ -38,6 +38,7 @@ export type HistoryAction =
   | Readonly<{ type: 'cancel-transaction' }>
   | Readonly<{ type: 'replace'; document: ExpressionDocument }>
   | Readonly<{ type: 'update-view'; view: ExpressionDocument['view'] }>
+  | Readonly<{ type: 'update-identity'; id: string }>
 
 export function createDocumentHistory(document: ExpressionDocument): DocumentHistory {
   return {
@@ -51,16 +52,18 @@ function bounded(entries: readonly HistoryEntry[]): readonly HistoryEntry[] {
 }
 
 export function documentHistoryReducer(state: DocumentHistory, action: HistoryAction): DocumentHistory {
-  if (action.type === 'update-view') {
-    const withView = (document: ExpressionDocument): ExpressionDocument =>
-      ({ ...document, view: action.view })
+  if (action.type === 'update-view' || action.type === 'update-identity') {
+    // Applied to every snapshot so that undo and redo never restore a
+    // previous view or document identity.
+    const update = (document: ExpressionDocument): ExpressionDocument =>
+      action.type === 'update-view' ? { ...document, view: action.view } : { ...document, id: action.id }
     return {
       ...state,
-      past: state.past.map((entry) => ({ ...entry, document: withView(entry.document) })),
-      present: withView(state.present),
-      future: state.future.map((entry) => ({ ...entry, document: withView(entry.document) })),
+      past: state.past.map((entry) => ({ ...entry, document: update(entry.document) })),
+      present: update(state.present),
+      future: state.future.map((entry) => ({ ...entry, document: update(entry.document) })),
       transaction: state.transaction
-        ? { before: withView(state.transaction.before) }
+        ? { before: update(state.transaction.before) }
         : null,
       coalescing: null,
     }
