@@ -723,6 +723,17 @@ body.reordering-items .reorder-handle {
 }
 
 /* The normalization modes, under the expression they apply to. */
+/* The normalization popover: the appearance menu's frame, one row of choices. */
+.normalization-popover-body {
+  padding: 8px 10px 10px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.normalization-popover .normalize-choice {
+  width: 100%;
+  margin: 0;
+}
+
 .normalize-choice {
   justify-self: end;
   width: min(220px, 100%);

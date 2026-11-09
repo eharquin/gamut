@@ -3485,21 +3485,31 @@ describe('labels edited under the expression and placed from the menu (#226)', (
 })
 
 describe('normalization chosen from the expression row (#185)', () => {
-  it('closes the choice on Escape from its button and on a click outside', () => {
+  it('opens the choice in a popover that closes on Escape, a click outside, or its close button', () => {
     render(<App />)
     const toggle = screen.getByRole('button', { name: 'Normalization: off' })
+    expect(toggle).toHaveAttribute('aria-haspopup', 'dialog')
     fireEvent.click(toggle)
-    expect(screen.getByRole('group', { name: 'Normalize with' })).toBeInTheDocument()
-    fireEvent.keyDown(toggle, { key: 'Escape' })
-    expect(screen.queryByRole('group', { name: 'Normalize with' })).not.toBeInTheDocument()
-    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    const popover = () => screen.queryByRole('dialog', { name: 'Normalize' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    // Rendered over the page like the appearance menu, not inside the row.
+    expect(popover()!.parentElement).toBe(document.body)
+    expect(popover()!.closest('article')).toBeNull()
+    expect(within(popover()!).getByRole('button', { name: 'off' })).toHaveFocus()
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(popover()).not.toBeInTheDocument()
+    expect(toggle).toHaveFocus()
 
     fireEvent.click(toggle)
-    // A click inside the choice keeps it open; a click elsewhere closes it.
-    fireEvent.pointerDown(screen.getByRole('group', { name: 'Normalize with' }))
-    expect(screen.getByRole('group', { name: 'Normalize with' })).toBeInTheDocument()
-    fireEvent.pointerDown(document.body)
-    expect(screen.queryByRole('group', { name: 'Normalize with' })).not.toBeInTheDocument()
+    fireEvent.mouseDown(within(popover()!).getByRole('group', { name: 'Normalize with' }))
+    expect(popover()).toBeInTheDocument()
+    fireEvent.mouseDown(document.body)
+    expect(popover()).not.toBeInTheDocument()
+
+    fireEvent.click(toggle)
+    fireEvent.click(within(popover()!).getByRole('button', { name: 'Close Normalize menu' }))
+    expect(popover()).not.toBeInTheDocument()
   })
 
   it('reads a forced mode stored in a VGA document as auto', () => {

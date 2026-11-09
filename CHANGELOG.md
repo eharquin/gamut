@@ -105,6 +105,10 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Interface and accessibility
 
+- The normalization choice opens in a popover anchored to the row's norm
+  button, like the appearance menu: a **Normalize** header with a close
+  button, then off · auto · norm · inorm. It closes on a choice, Escape, or a
+  click outside, and returns focus to the button.
 - The settings button shows a cogwheel. Beside it, a sun and moon button
   switches between the light and dark themes in one click; by default the
   application follows the system theme, which the settings menu still offers.
