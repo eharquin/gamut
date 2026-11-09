@@ -22,9 +22,9 @@ import { AppearancePopover } from './components/AppearancePopover'
 import { ClearExpressionsButton } from './components/ClearExpressionsButton'
 import { ZoomLevelField } from './components/ZoomLevelField'
 import {
-  DisplaySettingsMenu,
+  SettingsMenu,
   type DisplaySettings,
-} from './components/DisplaySettingsMenu'
+} from './components/SettingsMenu'
 import { resolveItemAppearance } from './components/appearancePalette'
 import { OPAQUE_INTERPRETATION, type InterpretedEntity, type Point2d } from './geometry/interpretation'
 import type { VisualizationPrimitive } from './visualization/primitives'
@@ -1711,7 +1711,10 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     }
     const leave = (event: DragEvent) => {
       if (!carriesFiles(event)) return
-      depth = Math.max(0, depth - 1)
+      // Browsers may drop a nested dragleave, or skip it when the drag is
+      // cancelled; leaving the window (no related target) always resets the
+      // count so the overlay cannot stay stuck.
+      depth = event.relatedTarget === null ? 0 : Math.max(0, depth - 1)
       if (depth === 0) setFileDragActive(false)
     }
     const drop = (event: DragEvent) => {
@@ -1938,7 +1941,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           aria-label="Import document file"
           onChange={importDocument}
         />
-        <DisplaySettingsMenu
+        <SettingsMenu
           display={expressionDoc.view.display}
           theme={theme}
           documentCommands={{
