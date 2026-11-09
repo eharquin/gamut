@@ -68,6 +68,12 @@ export type Interpretation<E extends InterpretedEntity = InterpretedEntity> = Re
   /** Writes a position source for a point, in this interpretation's syntax. */
   formatPosition(x: string, y: string): string
   toPrimitive(entity: E, options: PrimitiveOptions<E>): VisualizationPrimitive | null
+  /**
+   * The norm that automatic normalization divides by: `euclidean` for an
+   * entity classified Euclidean, `ideal` for one classified ideal, `null`
+   * when the classification does not decide (PGA convention §7).
+   */
+  naturalNorm?(entity: E): 'euclidean' | 'ideal' | null
 }>
 
 export type AnyInterpretation = Interpretation<InterpretedEntity>

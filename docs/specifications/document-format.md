@@ -84,8 +84,9 @@ labels and the points and handles of other objects. Appearance sources are
 evaluated after the value nodes they read, which is equivalent to the graph
 order of section 5 since no source can reference them. An item with no
 stored `orientationVisible` is saved with its kind's default: hidden for a
-line, shown otherwise. The `euclidean` and `ideal` normalization modes are
-preserved but evaluated without normalization. This note records
+line, shown otherwise. The `natural`, `euclidean`, and `ideal` normalization
+modes are chosen from the expression row (*auto*, *norm*, *inorm*; VGA offers
+off and auto only) and evaluated as described in section 2.2. This note records
 implementation evidence and does not change the normative serialized structure
 below.
 

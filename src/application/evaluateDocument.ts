@@ -28,6 +28,7 @@ import {
   parseExpression,
   type ParsedDocumentExpression,
 } from '../language/parseExpression'
+import { normalizeItemValue } from './normalization'
 import {
   presentEvaluation,
   type EvaluationContext,
@@ -512,10 +513,10 @@ export function evaluateDocument(
     }
     if (
       node.property === 'value' &&
-      node.item.normalization === 'natural' &&
+      node.item.normalization &&
       value.kind === 'multivector'
     ) {
-      value = engine.normalize(value).value
+      value = normalizeItemValue(node.item.normalization, value, engine, interpretation).value
     }
     if (node.property === 'position' && !isPositionValue(interpretation, value)) {
       const invalid = diagnostic(

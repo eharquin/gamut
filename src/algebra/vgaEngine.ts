@@ -250,7 +250,9 @@ export function createVga2Engine(): AlgebraEngine {
     norm(value) {
       return finiteOwned([normScalar(value), 0, 0, 0])
     },
-    normalize(value) {
+    normalize(value, kind) {
+      // VGA has the Euclidean norm only.
+      if (kind === 'ideal') return { status: 'unavailable', value }
       const norm = normScalar(value)
       if (norm === 0) {
         return { status: 'unavailable', value }

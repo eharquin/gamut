@@ -35,11 +35,21 @@ export type AlgebraEngine = Readonly<{
   inverse(value: OwnedMultivector): OwnedMultivector
   sandwich(rotor: OwnedMultivector, value: OwnedMultivector): OwnedMultivector
   norm(value: OwnedMultivector): OwnedMultivector
-  normalize(value: OwnedMultivector): NormalizationResult
+  /** The ideal norm `inorm`, for an algebra that has one (PGA convention §7). */
+  idealNorm?(value: OwnedMultivector): OwnedMultivector
+  /**
+   * Divides by the requested norm, or, without one, by the engine's own
+   * choice. A zero or non-finite norm leaves the value unchanged and
+   * unavailable.
+   */
+  normalize(value: OwnedMultivector, norm?: NormKind): NormalizationResult
   exp(value: OwnedMultivector): OwnedMultivector
   /** A built-in scalar function of language section 10 on scalar arguments. */
   scalarFunction(name: ScalarFunctionName, args: readonly OwnedMultivector[]): OwnedMultivector
 }>
+
+/** The Euclidean norm `norm` or the ideal norm `inorm`. */
+export type NormKind = 'euclidean' | 'ideal'
 
 export type NormalizationResult =
   | Readonly<{ status: 'normalized'; value: OwnedMultivector }>
