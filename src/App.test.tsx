@@ -2445,9 +2445,9 @@ describe('VGA 2D vertical slice', () => {
     }
 
     switchTo('VGA · 2D', 1)
-    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+    runDocumentCommand('Export')
     switchTo('PGA · 2D', 0)
-    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+    runDocumentCommand('Export')
 
     expect(downloads).toEqual([
       'PGA-2D-Triangle-Example.gamut.json',
