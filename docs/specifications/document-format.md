@@ -74,8 +74,13 @@ produces an explicit recovery diagnostic. Viewport display controls and
 annotations do not yet have dedicated editing interfaces. The format version
 7 appearance fields and list primitive styles are validated, migrated, and
 preserved. `strokeStyle`, `strokeWidthSource`, `opacitySource`,
-`pointStyle`, `pointSizeSource`, and both `primitiveStyles` blocks affect the
-drawing; the label settings do not yet. Appearance sources are
+`pointStyle`, `pointSizeSource`, both `primitiveStyles` blocks, and the label
+settings affect the drawing. A label distance is an offset along each axis
+(8 pixels right and 8 pixels up for `top-right`), and a set label size or
+distance is multiplied by `objectScale`; the empty defaults keep the fixed
+13-pixel font and 8-pixel offset. `auto` estimates each label's box from its
+text and tries the eight positions from `top-right` clockwise, avoiding other
+labels and the points and handles of other objects. Appearance sources are
 evaluated after the value nodes they read, which is equivalent to the graph
 order of section 5 since no source can reference them. An item with no
 stored `orientationVisible` is saved with its kind's default: hidden for a

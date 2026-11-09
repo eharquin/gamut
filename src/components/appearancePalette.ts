@@ -1,4 +1,4 @@
-import type { ExpressionAppearance, PointListDisplay, PointStyle, StrokeStyle } from '../document/expressionDocument'
+import type { ExpressionAppearance, LabelAnchor, PointListDisplay, PointStyle, StrokeStyle } from '../document/expressionDocument'
 
 // Hue order of the palette: the registry, the swatches, and the reference
 // tables all follow it.
@@ -102,6 +102,8 @@ export type ResolvedAppearance = Readonly<{
   /** Marker style of the points a list holds, and the stroke of their connection. */
   listPointStyle: PointStyle
   connectionStrokeStyle: StrokeStyle
+  /** New objects place their label automatically; migrated documents store `top-right`. */
+  labelAnchor: LabelAnchor
 }>
 
 /**
@@ -147,5 +149,6 @@ export function resolveItemAppearance(
     pointStyle: appearance?.pointStyle ?? 'dot',
     listPointStyle: appearance?.primitiveStyles?.points?.pointStyle ?? 'dot',
     connectionStrokeStyle: appearance?.primitiveStyles?.points?.strokeStyle ?? 'solid',
+    labelAnchor: appearance?.labelAnchor ?? 'auto',
   }
 }

@@ -2031,7 +2031,9 @@ describe('VGA 2D vertical slice', () => {
     expect(screen.getByRole('button', { name: 'Use color green 4' })).toHaveAttribute('aria-pressed', 'true')
     fireEvent.click(screen.getByRole('button', { name: 'Use color green 4' }))
     fireEvent.click(screen.getByRole('switch', { name: 'Show label' }))
-    fireEvent.change(screen.getByRole('textbox', { name: 'Text' }), {
+    // The text is edited under the expression, not in the menu (#226).
+    expect(screen.queryByRole('textbox', { name: 'Text' })).not.toBeInTheDocument()
+    fireEvent.change(screen.getByRole('textbox', { name: 'Label of expression 1' }), {
       target: { value: 'Velocity' },
     })
 
@@ -2102,7 +2104,7 @@ describe('VGA 2D vertical slice', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open Vector menu for V' }))
     fireEvent.click(screen.getByRole('switch', { name: 'Show label' }))
 
-    const label = screen.getByRole('textbox', { name: 'Text' })
+    const label = screen.getByRole('textbox', { name: 'Label of expression 1' })
     fireEvent.change(label, { target: { value: 'Velocity' } })
     expect(screen.getByText('Velocity', { selector: 'text' })).toBeInTheDocument()
 
@@ -2119,7 +2121,7 @@ describe('VGA 2D vertical slice', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: 'Open Vector menu for V' }))
     fireEvent.click(screen.getByRole('switch', { name: 'Show label' }))
-    const label = screen.getByRole('textbox', { name: 'Text' })
+    const label = screen.getByRole('textbox', { name: 'Label of expression 1' })
 
     label.focus()
     fireEvent.change(label, { target: { value: 'V' } })
@@ -2862,7 +2864,7 @@ describe('PGA 2D foundation workflow', () => {
     fireEvent.keyDown(document, { key: 'Escape' })
   })
 
-  it('draws a connected point list as segments alone, keeping its labels', () => {
+  it('draws a connected point list as segments alone, keeping its accessible names', () => {
     selectPga()
     const first = screen.getByRole('textbox', { name: 'Expression 1' })
     fireEvent.change(first, { target: { value: 'P = [point(0, 0), point(1, 0), point(1, 1)]' } })
@@ -2878,8 +2880,9 @@ describe('PGA 2D foundation workflow', () => {
     expect(markers).not.toBeChecked()
     expect(screen.queryByLabelText(/^P\[\d\]$/)).not.toBeInTheDocument()
     expect(document.querySelector('.point-list-connection')!.getAttribute('d')!.match(/M/g)).toHaveLength(3)
-    fireEvent.click(screen.getByRole('switch', { name: 'Show label' }))
-    expect(document.querySelectorAll('.object-label')).toHaveLength(3)
+    // A list has no label: no Label section and no numbered labels (#226).
+    expect(screen.queryByRole('switch', { name: 'Show label' })).not.toBeInTheDocument()
+    expect(document.querySelectorAll('.object-label')).toHaveLength(0)
 
     // Without a connection, markers return, whatever the stored marker visibility.
     fireEvent.click(screen.getByRole('button', { name: 'No connection' }))
@@ -3379,5 +3382,50 @@ describe('point style and size from the appearance menu (#222)', () => {
     fireEvent.change(within(dialog).getByRole('textbox', { name: 'Size' }), { target: { value: '40' } })
     expect(document.querySelector('rect.manipulation-base-point')).toHaveAttribute('width', '13.5')
     expect(dialog.querySelector('.appearance-error')).toHaveTextContent('Size: 40 is outside 1 to 20. Default used.')
+  })
+})
+
+describe('labels edited under the expression and placed from the menu (#226)', () => {
+  it('edits the text under the expression and places the label from the menu', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: 'V = vector(2, 1)' } })
+    expect(screen.queryByRole('textbox', { name: 'Label of expression 1' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Open Vector menu for V' }))
+    const dialog = screen.getByRole('dialog', { name: 'Vector' })
+    fireEvent.click(within(dialog).getByRole('switch', { name: 'Show label' }))
+
+    const field = screen.getByRole('textbox', { name: 'Label of expression 1' })
+    expect(field).toHaveAttribute('placeholder', 'V')
+    // Under the expression, inside its row.
+    expect(screen.getByRole('textbox', { name: 'Expression 1' }).closest('article')).toContainElement(field)
+    const text = () => screen.getByText(/^(V|Velocity)$/, { selector: 'text' })
+    const tip = document.querySelector('line.vector[aria-label="V"]')!
+    expect(text()).not.toHaveAttribute('text-anchor')
+    expect(Number(text().getAttribute('y'))).toBeLessThan(Number(tip.getAttribute('y2')))
+
+    fireEvent.change(field, { target: { value: 'Velocity' } })
+    expect(text()).toHaveTextContent('Velocity')
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Bottom left' }))
+    expect(text()).toHaveAttribute('text-anchor', 'end')
+    expect(text()).toHaveAttribute('dominant-baseline', 'hanging')
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Angle' }), { target: { value: '30' } })
+    expect(text().getAttribute('transform')).toMatch(/^rotate\(-30 /)
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Size' }), { target: { value: '20' } })
+    expect(text().style.fontSize).toBe('20px')
+  })
+
+  it('moves an automatic label away from another point', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: 'V = vector(2, 1)' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add expression' }))
+    // W's base handle sits just above and right of V's head.
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 2' }), { target: { value: 'W = vector(1, 1)' } })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Position 2' }), { target: { value: '(2.15, 1.15)' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Open Vector menu for V' }))
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Vector' })).getByRole('switch', { name: 'Show label' }))
+    // Top right would cover W's base, so the label takes a later position.
+    const label = screen.getByText('V', { selector: 'text' })
+    expect(label.getAttribute('dominant-baseline') ?? label.getAttribute('text-anchor')).not.toBeNull()
   })
 })

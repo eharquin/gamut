@@ -83,7 +83,9 @@ function normalized(element: Element): string {
 }
 
 // The snapshots were recorded on the renderer of format version 6. A saved
-// document whose version 7 settings are untouched must draw the same SVG.
+// document whose version 7 settings are untouched must draw the same SVG,
+// except for the numbered labels of list elements, which #226 removes: the
+// two lines `U[0]` and `U[1]` were deleted from the VGA snapshot then.
 describe('documents saved before the version 7 appearance settings', () => {
   it('draw VGA vectors, bivectors and lists exactly as before', async () => {
     const markup = await canvasMarkup(version6Document('vga-v6', { algebraId: 'org.multivector.vga', parameters: {} },

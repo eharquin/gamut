@@ -4,6 +4,7 @@ import type {
   PointerEvent as ReactPointerEvent,
 } from 'react'
 import type { PointStyle, StrokeStyle } from '../document/expressionDocument'
+import type { PlacedLabel } from './labels'
 import { PointShape } from './PointShape'
 import { DEFAULT_STROKE_WIDTHS, POINT_OUTER_SCALE, strokePattern } from './stroke'
 import type { Point2d } from '../geometry/interpretation'
@@ -32,6 +33,23 @@ function strokeOverride(
 /** The glyph's color, and its opacity when one is set. */
 function glyphStyle(color: string, opacity: number | null | undefined): CSSProperties {
   return opacity === null || opacity === undefined ? { color } : { color, opacity }
+}
+
+/**
+ * An object's label, placed by `placeLabels`. A default top-right label has
+ * only its position, as before format version 7.
+ */
+export function ObjectLabel({ label }: Readonly<{ label: PlacedLabel | null }>) {
+  if (!label) return null
+  return <text
+    className="object-label"
+    x={label.x}
+    y={label.y}
+    textAnchor={label.textAnchor}
+    dominantBaseline={label.baseline}
+    style={label.fontSize === undefined ? undefined : { fontSize: label.fontSize }}
+    transform={label.angle ? `rotate(${-label.angle} ${label.x} ${label.y})` : undefined}
+  >{label.text}</text>
 }
 
 /** `line` translates a line, `normal` rotates it about the selected anchor. */
@@ -136,7 +154,7 @@ export type OrientedSegmentGlyphProps = Readonly<{
   primitive: OrientedSegmentPrimitive
   layout: SegmentLayout
   color: string
-  label: string | null
+  label: PlacedLabel | null
   scale: number
   /** The primitive belongs to a document item (list elements do not). */
   itemPresent: boolean
@@ -222,7 +240,7 @@ export function OrientedSegmentGlyph({
       controller={controller}
       yieldToHead={headMovable && headAndBaseCoincide}
     />}
-    {label && <text className="object-label" x={end.x + 8} y={end.y - 8}>{label}</text>}
+    <ObjectLabel label={label} />
   </g>
 }
 
@@ -275,7 +293,7 @@ export type OrientedAreaGlyphProps = Readonly<{
   primitive: OrientedAreaPrimitive
   layout: AreaLayout
   color: string
-  label: string | null
+  label: PlacedLabel | null
   scale: number
   borderVisible: boolean
   orientationVisible: boolean
@@ -293,7 +311,7 @@ export function OrientedAreaGlyph({
   id, primitive, layout, color, label, scale, borderVisible, orientationVisible, itemPresent, baseMovable, controller,
   strokeStyle = 'solid', strokeWidth = null, opacity,
 }: OrientedAreaGlyphProps) {
-  const { path, labelPoint, orientationCenter, base } = layout
+  const { path, orientationCenter, base } = layout
   return <g style={glyphStyle(color, opacity)}>
     <path
       className={`bivector${borderVisible ? ' has-border' : ''}`}
@@ -319,7 +337,7 @@ export function OrientedAreaGlyph({
       scale={scale}
       controller={controller}
     />}
-    {label && <text className="object-label" x={labelPoint.x + 8} y={labelPoint.y - 8}>{label}</text>}
+    <ObjectLabel label={label} />
   </g>
 }
 
@@ -328,7 +346,7 @@ export type PointMarkerGlyphProps = Readonly<{
   primitive: PointMarkerPrimitive
   point: Point2d
   color: string
-  label: string | null
+  label: PlacedLabel | null
   scale: number
   itemPresent: boolean
   movable: boolean
@@ -365,7 +383,7 @@ export function PointMarkerGlyph({
       pointStyle={pointStyle}
       pointSize={pointSize}
     />}
-    {label && <text className="object-label" x={point.x + 8} y={point.y - 8}>{label}</text>}
+    <ObjectLabel label={label} />
   </g>
 }
 
@@ -411,7 +429,7 @@ export type UnboundedLineGlyphProps = Readonly<{
   primitive: UnboundedLinePrimitive
   layout: NonNullable<LineLayout>
   color: string
-  label: string | null
+  label: PlacedLabel | null
   scale: number
   itemPresent: boolean
   /** The line's coefficients are a literal, so it can be translated and rotated. */
@@ -527,7 +545,7 @@ export function UnboundedLineGlyph({
         onKeyDown={(event) => controller.keyDown(event, id, 'normal', selection.mathematicalAnchor)}
       />
     </g>}
-    {label && <text className="object-label" x={layout.labelPoint.x + 8} y={layout.labelPoint.y - 8}>{label}</text>}
+    <ObjectLabel label={label} />
   </g>
 }
 
@@ -535,7 +553,7 @@ export type DirectionMarkerGlyphProps = Readonly<{
   accessibleName: string
   layout: DirectionLayout
   color: string
-  label: string | null
+  label: PlacedLabel | null
   scale: number
   opacity?: number | null
 }>
@@ -559,7 +577,7 @@ export function DirectionMarkerGlyph({ accessibleName, layout, color, label, sca
       aria-label={`${accessibleName} at infinity`}
     />
     <polygon className="direction-marker-head" points={head} aria-hidden="true" />
-    {label && <text className="object-label" x={layout.tail.x + 8} y={layout.tail.y - 8}>{label}</text>}
+    <ObjectLabel label={label} />
   </g>
 }
 
@@ -567,7 +585,7 @@ export type LineAtInfinityGlyphProps = Readonly<{
   accessibleName: string
   layout: InfinityLayout
   color: string
-  label: string | null
+  label: PlacedLabel | null
   scale: number
   opacity?: number | null
 }>
@@ -583,6 +601,6 @@ export function LineAtInfinityGlyph({ accessibleName, layout, color, label, scal
       strokeDasharray={`${6 * scale} ${5 * scale}`}
       aria-label={accessibleName}
     />
-    {label && <text className="object-label" x={layout.center.x + layout.radiusX * Math.SQRT1_2 + 8} y={layout.center.y - layout.radiusY * Math.SQRT1_2 - 8}>{label}</text>}
+    <ObjectLabel label={label} />
   </g>
 }
