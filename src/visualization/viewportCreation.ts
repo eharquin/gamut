@@ -24,22 +24,25 @@ export function nextObjectName(sources: readonly string[]): string {
 }
 
 /**
- * Keeps created source stable and readable while retaining approximately one
- * tenth of a reference screen pixel at the current zoom.
+ * The decimal places of a coordinate written by the viewport: about one
+ * reference screen pixel at the given scale, `round(log10(pixelsPerUnit))`
+ * clamped from zero through eight. Precision grows as the user zooms in.
+ */
+export function viewportCoordinateDecimals(pixelsPerUnit: number): number {
+  return Math.max(0, Math.min(MAX_COORDINATE_DECIMALS, Math.round(Math.log10(pixelsPerUnit))))
+}
+
+/**
+ * Formats a coordinate written by creation, drags, and keyboard moves, so that
+ * source shows only the digits the screen can resolve. Trailing zeroes are
+ * removed and negative zero is written `0`. A caller that needs a finer step,
+ * such as line coefficients, passes a proportionally larger scale.
  */
 export function formatViewportCoordinate(
   value: number,
   pixelsPerUnit: number,
 ): string {
-  const decimals = Math.max(
-    0,
-    Math.min(
-      MAX_COORDINATE_DECIMALS,
-      Math.ceil(Math.log10(Math.max(1, pixelsPerUnit * 10))),
-    ),
-  )
-  const rounded = Number(value.toFixed(decimals))
-  return formatRoundTripNumber(rounded)
+  return formatRoundTripNumber(Number(value.toFixed(viewportCoordinateDecimals(pixelsPerUnit))))
 }
 
 /** The declaration created for a located object at a viewport point (INTERACT2D-001). */

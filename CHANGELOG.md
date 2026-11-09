@@ -88,6 +88,13 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Interface and accessibility
 
+- Coordinates written by the viewport are rounded to about one screen pixel,
+  `round(log10(pixelsPerUnit))` decimals clamped from 0 to 8, instead of one
+  tenth of a pixel. With about five units across the viewport, a double-click
+  now creates `point(-0.96, -0.86)` instead of `point(-0.9553, -0.8645)`.
+  Creation, drags, arrow-key moves, and their announcements share the rule;
+  line coefficients keep a ten times finer step. Existing documents are
+  unchanged until an object is moved.
 - The expression reference follows the document's algebra and names it. A
   PGA(2) document lists `point(x, y)`, `point(x, y, w)`, `ipoint(x, y)`,
   `line(a, b, c)`, the blades `e0` to `e012` with the null `e0`, `A.inorm`,

@@ -847,13 +847,15 @@ describe('VGA 2D vertical slice', () => {
     fireEvent.keyDown(head(), { key: 'ArrowLeft' })
     expect(source).toHaveValue('V = vector(2.09, 2)')
 
+    // Zoomed out to 7.2 px per unit, the screen resolves one decimal: the
+    // moved head is written at that precision, as creation and drags are.
     fireEvent.change(zoom, { target: { value: '10' } })
     fireEvent.keyDown(zoom, { key: 'Enter' })
     fireEvent.keyDown(head(), { key: 'ArrowDown' })
-    expect(source).toHaveValue('V = vector(2.09, 1)')
+    expect(source).toHaveValue('V = vector(2.1, 1)')
     fireEvent.keyDown(head(), { key: 'ArrowRight', shiftKey: true })
-    expect(source).toHaveValue('V = vector(12.09, 1)')
-    expect(screen.getByText('Vector head moved to 12.09, 1.')).toBeInTheDocument()
+    expect(source).toHaveValue('V = vector(12.1, 1)')
+    expect(screen.getByText('Vector head moved to 12.1, 1.')).toBeInTheDocument()
   })
 
   it('snaps a vector base to a named vector head and unlinks it by dragging away', () => {
@@ -3206,5 +3208,38 @@ describe('PGA 2D foundation workflow', () => {
     fireEvent.doubleClick(canvas, { clientX: 392, clientY: 168 })
     expect(screen.getByRole('textbox', { name: 'Expression 2' })).toHaveValue('A = point(1, 1)')
     expect(screen.getByText('A created at 1, 1.')).toBeInTheDocument()
+  })
+
+  it('writes created, dragged, and rotated coordinates at the visible screen resolution', () => {
+    selectPga()
+    const first = screen.getByRole('textbox', { name: 'Expression 1' })
+    fireEvent.change(first, { target: { value: 'P = point(1, 2)' } })
+    const canvas = viewportCanvas()
+    sizeViewportCanvas(canvas)
+    // 220% is 158.4 px per unit: about four units across the 640 px canvas,
+    // where the screen resolves two decimals.
+    const zoom = screen.getByRole('textbox', { name: 'Zoom level' })
+    fireEvent.change(zoom, { target: { value: '220' } })
+    fireEvent.keyDown(zoom, { key: 'Enter' })
+    const pixelsPerUnit = 158.4
+    const screenPoint = (x: number, y: number) => ({ clientX: 320 + x * pixelsPerUnit, clientY: 240 - y * pixelsPerUnit })
+
+    fireEvent.doubleClick(canvas, screenPoint(-0.95531, -0.86449))
+    expect(screen.getByRole('textbox', { name: 'Expression 2' })).toHaveValue('A = point(-0.96, -0.86)')
+    expect(screen.getByText('A created at -0.96, -0.86.')).toBeInTheDocument()
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Move P' }), { button: 0, pointerId: 31 })
+    fireEvent.pointerMove(canvas, { pointerId: 31, ...screenPoint(0.50694, 0.87942) })
+    fireEvent.pointerUp(canvas, { pointerId: 31 })
+    expect(first).toHaveValue('P = point(0.51, 0.88)')
+
+    // Line coefficients keep a ten times finer step, so rotation stays smooth.
+    fireEvent.change(first, { target: { value: 'L = line(1, 0, 0)' } })
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Move L' }), { button: 0, pointerId: 32, ...screenPoint(0, 0) })
+    fireEvent.pointerUp(canvas, { pointerId: 32 })
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Rotate L' }), { button: 0, pointerId: 33 })
+    fireEvent.pointerMove(canvas, { pointerId: 33, ...screenPoint(Math.cos(0.3), Math.sin(0.3)) })
+    fireEvent.pointerUp(canvas, { pointerId: 33 })
+    expect(first).toHaveValue('L = line(0.955, 0.296, 0)')
   })
 })
