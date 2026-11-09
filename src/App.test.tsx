@@ -2180,6 +2180,25 @@ describe('VGA 2D vertical slice', () => {
     expect(document.documentElement).toHaveAttribute('data-theme', 'light')
   })
 
+  it('switches between light and dark from the header, starting from the system theme', () => {
+    render(<App />)
+    expect(document.documentElement).toHaveAttribute('data-theme', 'system')
+    const header = screen.getByRole('banner')
+    const settings = within(header).getByRole('button', { name: 'Settings' })
+    const toggle = within(header).getByRole('button', { name: 'Switch to dark theme' })
+    expect(toggle.compareDocumentPosition(settings) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+    fireEvent.click(toggle)
+    expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
+    fireEvent.click(within(header).getByRole('button', { name: 'Switch to light theme' }))
+    expect(document.documentElement).toHaveAttribute('data-theme', 'light')
+
+    // The settings menu still offers the system theme.
+    openSettings()
+    fireEvent.change(screen.getByRole('combobox', { name: 'Theme' }), { target: { value: 'system' } })
+    expect(document.documentElement).toHaveAttribute('data-theme', 'system')
+  })
+
   it('toggles natural VGA normalization without rewriting the expression', () => {
     render(<App />)
     const expression = screen.getByRole('textbox', { name: 'Expression 1' })
