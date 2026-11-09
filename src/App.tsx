@@ -410,7 +410,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     }
     document.addEventListener('pointerdown', closeOutside)
     return () => document.removeEventListener('pointerdown', closeOutside)
-  })
+  }, [normalizationChoiceId, expressionDoc])
   const normalizationToggleRefs = useRef(new Map<string, HTMLButtonElement>())
   const [expandedListIds, setExpandedListIds] = useState<ReadonlySet<string>>(
     () => new Set(),
