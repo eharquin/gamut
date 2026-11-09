@@ -675,9 +675,54 @@ body.reordering-items .reorder-handle {
 }
 
 .normalize-toggle.active {
-  color: var(--surface);
-  background: var(--accent);
+  color: var(--text-strong);
+  background: var(--accent-soft);
   border-color: var(--accent);
+}
+
+.normalize-toggle[aria-expanded='true'] {
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+/* The normalization modes, under the expression they apply to. */
+.normalize-choice {
+  justify-self: end;
+  width: min(220px, 100%);
+  margin: 4px 4px 2px auto;
+  display: grid;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+  gap: 2px;
+  padding: 2px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.normalize-choice button {
+  min-height: 24px;
+  padding: 2px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  font: 500 0.72rem var(--font-mono);
+  cursor: pointer;
+}
+
+.normalize-choice button:hover {
+  color: var(--text);
+}
+
+.normalize-choice button[aria-pressed='true'] {
+  color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgb(30 36 51 / 14%), 0 0 0 1px var(--border);
+}
+
+.normalize-choice button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .unit-norm-indicator {

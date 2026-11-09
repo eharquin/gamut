@@ -76,8 +76,9 @@ annotations do not yet have dedicated editing interfaces. The format version
 preserved, but only `primitiveStyles.points.connection` and
 `primitiveStyles.points.visible` (the former `pointListDisplay` and
 `pointMarkersVisible`) affect the drawing yet; appearance sources are not yet
-dependency nodes, and the `euclidean` and `ideal` normalization modes are
-preserved but evaluated without normalization. This note records
+dependency nodes. The `natural`, `euclidean`, and `ideal` normalization modes
+are chosen from the expression row (*auto*, *norm*, *inorm*; VGA offers off
+and auto only) and evaluated as described in section 2.2. This note records
 implementation evidence and does not change the normative serialized structure
 below.
 

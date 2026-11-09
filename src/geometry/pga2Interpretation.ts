@@ -243,6 +243,13 @@ export const PGA_2D_INTERPRETATION: Interpretation<Pga2Entity> = Object.freeze({
     return null
   },
   formatPosition: (x, y) => `point(${x}, ${y})`,
+  // Automatic normalization follows the classification (PGA-INT-006), so a
+  // point whose weight is within tolerance of zero is ideal and uses inorm.
+  naturalNorm(entity) {
+    if (entity.kind === 'euclidean-point' || entity.kind === 'euclidean-line') return 'euclidean'
+    if (entity.kind === 'ideal-point' || entity.kind === 'line-at-infinity') return 'ideal'
+    return null
+  },
   toPrimitive(entity, { accessibleName, position }) {
     switch (entity.kind) {
       case 'euclidean-point': return pointMarker(entity, accessibleName)

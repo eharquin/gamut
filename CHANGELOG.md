@@ -115,6 +115,15 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   **Animate** switch replaces the number or slider choice: on, the scalar is
   an animated slider with Once, Loop, or Ping-pong; off, a number field. A
   slider without animation keeps its display until the switch is used.
+- The row's **norm** button chooses the normalization mode (#185): a click
+  opens off · auto · norm · inorm under the expression, and choosing closes
+  it. The button shows the active mode (auto, norm, inorm) in the accent
+  color, or a grey "norm" when off; VGA offers off and auto only. Auto follows
+  the interpretation's classification, so a PGA point whose weight is within
+  the classification tolerance is normalized by `inorm` instead of a tiny
+  `norm`; norm and inorm force their norm and leave the value unchanged, as
+  unavailable, when it is zero. The unit badge follows the norm actually
+  applied, so a normalized ideal point shows it.
 
 - The settings menu is named **Settings** for assistive technology, since it
   also holds the document commands (Import, Export, Copy link).

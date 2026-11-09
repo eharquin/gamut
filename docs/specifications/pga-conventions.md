@@ -185,6 +185,14 @@ positive, is left unchanged and receives an explicit normalization-unavailable
 state; it is never divided by a quantity that classification placed below its
 tolerance.
 
+This is the automatic mode (`natural`, shown as *auto*) of an item's
+normalization. A value the classification places neither Euclidean nor ideal,
+such as a versor or a mixed value, is divided by `norm`, or by `inorm` when
+`norm` is zero. The `euclidean` and `ideal` modes of the
+[document format](document-format.md) force `norm` or `inorm` whatever the
+classification, with the same unavailable state when the forced norm is zero
+or not finite.
+
 ## 8. Exponential
 
 The exponential is defined by the series and the closed forms of

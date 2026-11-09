@@ -12,7 +12,6 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import { showcaseMetadata } from './algebra/algebraDefinition'
-import { type AlgebraEngine } from './algebra/algebraEngine'
 import { createBuiltinAlgebraRegistry } from './algebra/builtinAlgebras'
 import { evaluateDocument } from './application/evaluateDocument'
 import { AlgebraInfoDialog } from './components/AlgebraInfoDialog'
@@ -81,6 +80,7 @@ import {
   formatDisplayValue,
 } from './presentation/formatNumber'
 import { evaluateScalarControl } from './application/evaluateScalarControl'
+import { hasIdealNorm, isUnitNorm, measuredNorm, normalizeItemValue } from './application/normalization'
 import { directScalarEdit } from './language/directScalarEdit'
 import {
   directConstructorComponents,
@@ -106,17 +106,12 @@ const restoreOptions = {
   visualizerAvailable: (visualizerId: string) => algebraRegistry.resolveVisualizer(visualizerId) !== null,
 }
 const MIN_PANEL_WIDTH = 240
-const UNIT_NORM_TOLERANCE = 1e-10
 /** Keeps the `.panel-resize` separator reachable at any panel width. */
 const PANEL_RESIZE_WIDTH = 6
 
-function isUnitNaturalNorm(engine: AlgebraEngine, value: Parameters<AlgebraEngine['norm']>[0]): boolean {
-  try {
-    return Math.abs(engine.norm(value).coefficients[0] - 1) <= UNIT_NORM_TOLERANCE
-  } catch {
-    return false
-  }
-}
+/** The row's normalization modes, by stored value; off is no mode (#185). */
+const NORMALIZATION_TEXT = { off: 'off', natural: 'auto', euclidean: 'norm', ideal: 'inorm' } as const
+const NORM_NAME = { euclidean: 'the Euclidean norm', ideal: 'the ideal norm' } as const
 
 type EditorFocus = Readonly<{
   id: string
@@ -391,6 +386,9 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     height: defaultViewport.height,
   })
   const [appearanceItemId, setAppearanceItemId] = useState<string | null>(null)
+  /** The row whose normalization choice is open under its expression. */
+  const [normalizationChoiceId, setNormalizationChoiceId] = useState<string | null>(null)
+  const normalizationToggleRefs = useRef(new Map<string, HTMLButtonElement>())
   const [expandedListIds, setExpandedListIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   )
@@ -2047,11 +2045,20 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                 evaluation.entity.kind !== 'scalar'
               const normalizationUnavailable =
                 supportsNormalization &&
-                item.normalization === 'natural' &&
-                engine.normalize(evaluation.value).status === 'unavailable'
-              const hasUnitNaturalNorm =
+                item.normalization !== undefined &&
+                normalizeItemValue(item.normalization, evaluation.value, engine, interpretation).status === 'unavailable'
+              // The badge follows the norm the mode applies (#185).
+              const unitNorm = supportsNormalization
+                ? measuredNorm(item.normalization, evaluation.value, engine, interpretation)
+                : null
+              const hasUnitNorm =
                 supportsNormalization &&
-                isUnitNaturalNorm(engine, evaluation.value)
+                isUnitNorm(item.normalization, evaluation.value, engine, interpretation)
+              const normalizationText = NORMALIZATION_TEXT[item.normalization ?? 'off']
+              const normalizationChoiceOpen = supportsNormalization && normalizationChoiceId === item.id
+              const normalizationOptions = (hasIdealNorm(engine)
+                ? ['off', 'natural', 'euclidean', 'ideal'] as const
+                : ['off', 'natural'] as const)
               const kind = evaluation?.status === 'valid'
                 ? evaluation.valueType === 'list'
                   ? `List (${evaluation.value.elements.length})`
@@ -2233,25 +2240,62 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                         {supportsNormalization && (
                           <span className="normalize-control">
                             <button
+                              ref={(element) => {
+                                if (element) normalizationToggleRefs.current.set(item.id, element)
+                                else normalizationToggleRefs.current.delete(item.id)
+                              }}
                               type="button"
                               className={`normalize-toggle${item.normalization ? ' active' : ''}`}
-                              aria-pressed={item.normalization === 'natural'}
-                              onClick={() => executeCommand({
-                                kind: 'update-normalization', itemId: item.id,
-                                normalization: item.normalization === 'natural' ? undefined : 'natural',
-                              })}
-                            >norm</button>
+                              aria-label={`Normalization: ${normalizationText}`}
+                              aria-expanded={normalizationChoiceOpen}
+                              aria-controls={normalizationChoiceOpen ? `normalization-choice-${item.id}` : undefined}
+                              title={item.normalization
+                                ? `Normalized by ${NORM_NAME[unitNorm!]}${item.normalization === 'natural' ? ' (automatic)' : ''}`
+                                : 'Not normalized'}
+                              onClick={() => setNormalizationChoiceId((current) => current === item.id ? null : item.id)}
+                            >{item.normalization ? normalizationText : 'norm'}</button>
                             <span
-                              className={`unit-norm-indicator${hasUnitNaturalNorm ? ' is-unit' : ''}`}
-                              title={hasUnitNaturalNorm ? 'Unit norm' : undefined}
+                              className={`unit-norm-indicator${hasUnitNorm ? ' is-unit' : ''}`}
+                              title={hasUnitNorm ? (unitNorm === 'ideal' ? 'Unit ideal norm' : 'Unit norm') : undefined}
                             >
-                              {hasUnitNaturalNorm && (
-                                <span className="visually-hidden">Unit norm</span>
+                              {hasUnitNorm && (
+                                <span className="visually-hidden">{unitNorm === 'ideal' ? 'Unit ideal norm' : 'Unit norm'}</span>
                               )}
                             </span>
                           </span>
                         )}
                       </div>
+                      {/* The mode is chosen under the expression; choosing closes the list. */}
+                      {normalizationChoiceOpen && (
+                        <div
+                          id={`normalization-choice-${item.id}`}
+                          className="normalize-choice"
+                          role="group"
+                          aria-label="Normalize with"
+                          onKeyDown={(event) => {
+                            if (event.key !== 'Escape') return
+                            event.stopPropagation()
+                            setNormalizationChoiceId(null)
+                            normalizationToggleRefs.current.get(item.id)?.focus()
+                          }}
+                        >
+                          {normalizationOptions.map((option) => (
+                            <button
+                              key={option}
+                              type="button"
+                              aria-pressed={(item.normalization ?? 'off') === option}
+                              onClick={() => {
+                                executeCommand({
+                                  kind: 'update-normalization', itemId: item.id,
+                                  normalization: option === 'off' ? undefined : option,
+                                })
+                                setNormalizationChoiceId(null)
+                                normalizationToggleRefs.current.get(item.id)?.focus()
+                              }}
+                            >{NORMALIZATION_TEXT[option]}</button>
+                          ))}
+                        </div>
+                      )}
 
                       {evaluation || positionEvaluation ? (
                         <div
@@ -2305,7 +2349,10 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                               )}</output>
                               {normalizationUnavailable && <>
                                 <span className="feedback-label">Normalization unavailable</span>
-                                <span>This multivector has zero natural norm and was left unchanged.</span>
+                                <span>This multivector has zero {
+                                  item.normalization === 'natural' ? 'natural norm'
+                                    : item.normalization === 'ideal' ? 'ideal norm' : 'Euclidean norm'
+                                } and was left unchanged.</span>
                               </>}
                             </>
                           ) : evaluation?.status === 'invalid' ? (

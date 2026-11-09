@@ -2180,18 +2180,29 @@ describe('VGA 2D vertical slice', () => {
     expect(document.documentElement).toHaveAttribute('data-theme', 'light')
   })
 
-  it('toggles natural VGA normalization without rewriting the expression', () => {
+  it('chooses automatic VGA normalization from the row without rewriting the expression', () => {
     render(<App />)
     const expression = screen.getByRole('textbox', { name: 'Expression 1' })
-    const normalize = screen.getByRole('button', { name: 'norm' })
+    const normalize = screen.getByRole('button', { name: 'Normalization: off' })
+    expect(normalize).toHaveTextContent(/^norm$/)
 
     fireEvent.click(normalize)
-    expect(normalize).toHaveAttribute('aria-pressed', 'true')
+    expect(normalize).toHaveAttribute('aria-expanded', 'true')
+    // VGA has one norm: off and auto only.
+    const choice = screen.getByRole('group', { name: 'Normalize with' })
+    expect(within(choice).getAllByRole('button').map((button) => button.textContent)).toEqual(['off', 'auto'])
+    fireEvent.click(within(choice).getByRole('button', { name: 'auto' }))
+    expect(screen.queryByRole('group', { name: 'Normalize with' })).not.toBeInTheDocument()
+    expect(normalize).toHaveAccessibleName('Normalization: auto')
+    expect(normalize).toHaveTextContent(/^auto$/)
+    expect(normalize).toHaveFocus()
     expect(expression).toHaveValue('vector(2, 1)')
     expect(screen.queryByText('2e1 + e2', { selector: 'output' })).not.toBeInTheDocument()
 
     fireEvent.click(normalize)
+    fireEvent.click(within(screen.getByRole('group', { name: 'Normalize with' })).getByRole('button', { name: 'off' }))
     expect(screen.getByText('2e1 + e2', { selector: 'output' })).toBeInTheDocument()
+    expect(normalize).toHaveAccessibleName('Normalization: off')
   })
 
   it('offers normalization for rotors and mixed multivectors but not scalars', () => {
@@ -2199,32 +2210,29 @@ describe('VGA 2D vertical slice', () => {
     const expression = screen.getByRole('textbox', { name: 'Expression 1' })
 
     fireEvent.change(expression, { target: { value: 'R = 2 + e12' } })
-    const rotorNormalize = screen.getByRole('button', { name: 'norm' })
-    fireEvent.click(rotorNormalize)
-    expect(rotorNormalize).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(screen.getByRole('button', { name: 'Normalization: off' }))
+    fireEvent.click(screen.getByRole('button', { name: 'auto' }))
+    expect(screen.getByRole('button', { name: 'Normalization: auto' })).toBeInTheDocument()
     expect(expression).toHaveValue('R = 2 + e12')
 
     fireEvent.change(expression, { target: { value: 'M = 1 + e1' } })
-    const mixedNormalize = screen.getByRole('button', { name: 'norm' })
-    expect(mixedNormalize).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Normalization: auto' })).toBeInTheDocument()
     expect(screen.getByText('Normalization unavailable')).toBeInTheDocument()
     expect(screen.getByText(/zero natural norm/)).toBeInTheDocument()
 
     fireEvent.change(expression, { target: { value: 's = 2' } })
-    expect(screen.queryByRole('button', { name: 'norm' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Normalization/ })).not.toBeInTheDocument()
   })
 
-  it('marks unit-norm multivectors independently of the normalization toggle', () => {
+  it('marks unit-norm multivectors independently of the normalization mode', () => {
     render(<App />)
     const expression = screen.getByRole('textbox', { name: 'Expression 1' })
-    const normalize = screen.getByRole('button', { name: 'norm' })
-
-    expect(normalize).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: 'Normalization: off' })).toBeInTheDocument()
     expect(screen.queryByText('Unit norm')).not.toBeInTheDocument()
 
     fireEvent.change(expression, { target: { value: 'V = e1' } })
     expect(screen.getByText('Unit norm')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'norm' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: 'Normalization: off' })).toBeInTheDocument()
 
     fireEvent.change(expression, { target: { value: 'V = 2*e1' } })
     expect(screen.queryByText('Unit norm')).not.toBeInTheDocument()
@@ -3317,5 +3325,51 @@ describe('PGA 2D foundation workflow', () => {
     fireEvent.pointerMove(canvas, { pointerId: 33, ...screenPoint(Math.cos(0.3), Math.sin(0.3)) })
     fireEvent.pointerUp(canvas, { pointerId: 33 })
     expect(first).toHaveValue('L = line(0.955, 0.296, 0)')
+  })
+})
+
+describe('normalization chosen from the expression row (#185)', () => {
+  it('offers off, auto, norm and inorm in PGA, and shows the applied mode and unit badge', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: 'VGA · 2D. Change algebra' }))
+    fireEvent.click(within(screen.getByRole('menu')).getAllByRole('menuitemradio')[1])
+    for (const textbox of screen.getAllByRole('textbox', { name: /^Expression \d+$/ }).slice(1)) {
+      fireEvent.change(textbox, { target: { value: '' } })
+      fireEvent.keyDown(textbox, { key: 'Backspace' })
+    }
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: 'I = ipoint(3, 4)' } })
+    const toggle = screen.getByRole('button', { name: 'Normalization: off' })
+    expect(toggle).toHaveTextContent(/^norm$/)
+    expect(toggle).not.toHaveClass('active')
+
+    const choose = (mode: string) => {
+      fireEvent.click(toggle)
+      const choice = screen.getByRole('group', { name: 'Normalize with' })
+      expect(within(choice).getAllByRole('button').map((button) => button.textContent)).toEqual(['off', 'auto', 'norm', 'inorm'])
+      fireEvent.click(within(choice).getByRole('button', { name: mode }))
+      expect(screen.queryByRole('group', { name: 'Normalize with' })).not.toBeInTheDocument()
+    }
+
+    // Auto divides an ideal point by inorm, and the badge follows that norm.
+    choose('auto')
+    expect(toggle).toHaveAccessibleName('Normalization: auto')
+    expect(toggle).toHaveClass('active')
+    expect(toggle).toHaveAttribute('title', 'Normalized by the ideal norm (automatic)')
+    expect(screen.getByText('Unit ideal norm')).toBeInTheDocument()
+    expect(screen.getByText('0.8e01 - 0.6e02', { selector: 'output' })).toBeInTheDocument()
+
+    choose('inorm')
+    expect(toggle).toHaveAccessibleName('Normalization: inorm')
+    expect(toggle).toHaveTextContent(/^inorm$/)
+    expect(screen.getByText('Unit ideal norm')).toBeInTheDocument()
+
+    // An ideal point has no Euclidean norm: the value stays unchanged.
+    choose('norm')
+    expect(toggle).toHaveTextContent(/^norm$/)
+    expect(screen.getByText('Normalization unavailable')).toBeInTheDocument()
+    expect(screen.getByText(/zero Euclidean norm/)).toBeInTheDocument()
+    expect(screen.queryByText('Unit ideal norm')).not.toBeInTheDocument()
+    expect(screen.getByText('4e01 - 3e02', { selector: 'output' })).toBeInTheDocument()
   })
 })

@@ -285,7 +285,14 @@ export function createPga2Engine(): AlgebraEngine {
       return multiplyOwned(multiplyOwned(versor, value), gradeSigned(basis, versor, reverseSign, finiteOwned))
     },
     norm: (value) => scalar(normScalar(value)),
-    normalize(value) {
+    idealNorm: (value) => scalar(idealNormScalar(value)),
+    normalize(value, norm) {
+      if (norm !== undefined) {
+        const divisor = norm === 'euclidean' ? normScalar(value) : idealNormScalar(value)
+        return Number.isFinite(divisor) && divisor > 0
+          ? { status: 'normalized', value: scaleOwned(value, 1 / divisor) }
+          : { status: 'unavailable', value }
+      }
       const euclidean = normScalar(value)
       if (euclidean > 0) return { status: 'normalized', value: scaleOwned(value, 1 / euclidean) }
       const ideal = idealNormScalar(value)
