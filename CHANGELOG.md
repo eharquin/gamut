@@ -273,6 +273,15 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Corrections
 
+- Where base handles coincide, the handle of the selected object is on top and
+  takes the press: the object whose expression row has focus or the pointer,
+  otherwise the last object moved in the viewport. The order holds while a
+  handle has keyboard focus, so it never loses focus, and the tab order of the
+  handles follows it. A base drag no longer links back to the anchor it
+  started on: the anchor is taken only after the pointer has left it once, so
+  a short drag separates coinciding or linked objects. A drag starts only after
+  the pointer has moved 3 pixels, so a click on a linked base keeps its link
+  (#100).
 - PGA(2) position diagnostics no longer mention VGA vectors. A coordinate
   tuple such as `(1, 2)` reports that a position must evaluate to a Euclidean
   point, such as `point(1, 2)`, instead of an unsupported `vector` function;
