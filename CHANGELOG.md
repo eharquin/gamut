@@ -278,6 +278,10 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   point, such as `point(1, 2)`, instead of an unsupported `vector` function;
   a position that evaluates to another kind, such as a line, reports that it
   must evaluate to a Euclidean point. VGA(2) messages are unchanged (#236).
+- In PGA(2), the empty position of an ideal point evaluates to the origin
+  point `e12`, where its arrow is drawn, instead of `0`: `J.position` is `e12`
+  and `J.head` is `J + e12`, as the row shows. An empty VGA(2) position still
+  evaluates to `0` (#235).
 - The appearance menu stays inside the window: it is placed from its measured
   height, opens above its row when it does not fit below, scrolls inside when
   it is taller than the window, and follows its row when the window is
