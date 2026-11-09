@@ -104,6 +104,18 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Interface and accessibility
 
+- The appearance menu is reworked (#216): the header shows the object kind,
+  a visibility eye (the same setting as the row's eye), and the close button;
+  titled sections fold from a chevron on their title. **Color** offers nine
+  hues and the six shades of the selected hue; **Style** gathers the drawing
+  settings (bivector shape, outline, orientation, ideal-point display) as
+  named icon buttons and switches; a list gets one section per primitive type
+  it holds, **Points** (with the connection) and **Lines**, each with its
+  display switch; **Label** has its switch in the title. A scalar's
+  **Animate** switch replaces the number or slider choice: on, the scalar is
+  an animated slider with Once, Loop, or Ping-pong; off, a number field. A
+  slider without animation keeps its display until the switch is used.
+
 - Coordinates written by the viewport are rounded to about one screen pixel,
   `round(log10(pixelsPerUnit))` decimals clamped from 0 to 8, instead of one
   tenth of a pixel. With about five units across the viewport, a double-click
