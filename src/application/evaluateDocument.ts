@@ -368,12 +368,17 @@ export function evaluateDocument(
       const positionNode = supportsDirectPosition(interpretation, valueResult)
         ? nodes.get(nodeKey(target.item.id, 'position'))
         : undefined
+      // An empty position is the origin of the active algebra, where the
+      // object is drawn: zero in VGA(2), the origin point e12 in PGA(2) (#235).
+      const emptyPosition = () => reference.property === null
+        ? engine.scalar(0)
+        : interpretation.positionValue({ x: 0, y: 0 }, engine.basis)
       let positionValue: LanguageValue = valueResult.valueType === 'list'
         ? ownedList(valueResult.elements.map((element) => ({
             id: element.id,
-            value: engine.scalar(0),
+            value: emptyPosition(),
           })))
-        : engine.scalar(0)
+        : emptyPosition()
       if (
         reference.property !== null &&
         valueResult.valueType === 'list' &&

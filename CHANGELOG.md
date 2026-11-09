@@ -273,6 +273,10 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Corrections
 
+- In PGA(2), the empty position of an ideal point evaluates to the origin
+  point `e12`, where its arrow is drawn, instead of `0`: `J.position` is `e12`
+  and `J.head` is `J + e12`, as the row shows. An empty VGA(2) position still
+  evaluates to `0` (#235).
 - The appearance menu stays inside the window: it is placed from its measured
   height, opens above its row when it does not fit below, scrolls inside when
   it is taller than the window, and follows its row when the window is
