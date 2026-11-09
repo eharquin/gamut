@@ -61,7 +61,11 @@ export function primitiveBase(primitive: VisualizationPrimitive): Point2d | null
   return anchorPoints(primitive).find((anchor) => anchor.property === 'position')?.mathematical ?? null
 }
 
-export type AnchorSearch = Readonly<{
+/** Identifies an anchor point of a target across pointer moves. */
+export const anchorKey = (anchor: Pick<AnchorCandidate, 'targetId' | 'property'>): string =>
+  `${anchor.targetId}:${anchor.property}`
+
+export type AnchorProximity = Readonly<{
   draggedId: string
   rendered: readonly RenderedPrimitive[]
   viewport: Viewport2d
@@ -71,15 +75,21 @@ export type AnchorSearch = Readonly<{
   cssScale: Point2d
   /** Declared name of a document item, or `null` when it cannot be referenced. */
   nameOf(itemId: string): string | null
+}>
+
+export type AnchorSearch = AnchorProximity & Readonly<{
   /** Whether linking the dragged base to `target.property` evaluates validly. */
   isValid(candidate: AnchorCandidate): boolean
+  /** Anchors that cannot be taken yet, by {@link anchorKey}. */
+  disarmed?: ReadonlySet<string>
 }>
 
 /**
  * Lists the anchors within the retain radius of the pointer, nearest first,
- * excluding list elements and the dragged object itself.
+ * excluding list elements and the dragged object itself, without checking
+ * whether linking to them is valid.
  */
-export function findAnchorCandidates(search: AnchorSearch): readonly AnchorCandidate[] {
+export function nearbyAnchors(search: AnchorProximity): readonly AnchorCandidate[] {
   return search.rendered.flatMap((rendered) => {
     if (rendered.id.includes(':') || rendered.id === search.draggedId) return []
     const targetName = search.nameOf(rendered.id)
@@ -102,9 +112,33 @@ export function findAnchorCandidates(search: AnchorSearch): readonly AnchorCandi
     })
   })
     .filter((candidate) => candidate.distance <= ANCHOR_RETAIN_DISTANCE)
-    .filter((candidate) => search.isValid(candidate))
     .sort((left, right) => left.distance - right.distance ||
       left.targetId.localeCompare(right.targetId) || left.order - right.order)
+}
+
+/**
+ * Lists the anchors within the retain radius of the pointer that may be
+ * taken, nearest first: not disarmed, and valid to link to.
+ */
+export function findAnchorCandidates(search: AnchorSearch): readonly AnchorCandidate[] {
+  return nearbyAnchors(search)
+    .filter((candidate) => !search.disarmed?.has(anchorKey(candidate)))
+    .filter((candidate) => search.isValid(candidate))
+}
+
+/**
+ * A base drag separates its object from the anchors it starts on (#100):
+ * every anchor within the retain radius of the press is disarmed, and stays
+ * so until the pointer has left its retain radius once. Returns the anchors
+ * still disarmed, given those near the pointer now.
+ */
+export function rearmAnchors(
+  disarmed: ReadonlySet<string>,
+  nearby: readonly AnchorCandidate[],
+): ReadonlySet<string> {
+  if (disarmed.size === 0) return disarmed
+  const near = new Set(nearby.map(anchorKey))
+  return new Set([...disarmed].filter((key) => near.has(key)))
 }
 
 /**

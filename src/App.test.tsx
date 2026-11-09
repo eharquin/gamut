@@ -900,6 +900,95 @@ describe('VGA 2D vertical slice', () => {
     expect(container.querySelector('.anchor-preview')).not.toBeInTheDocument()
   })
 
+  it('separates coinciding bases instead of linking them back (#100)', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), {
+      target: { value: 'V = vector(2, 1)' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Add expression' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 2' }), {
+      target: { value: 'W = vector(1, 0)' },
+    })
+    const canvas = viewportCanvas()
+    sizeViewportCanvas(canvas)
+    const base = screen.getByRole('button', { name: 'Move base of W' })
+
+    // Both bases are at the origin; a short drag away keeps W separate.
+    fireEvent.pointerDown(base, { button: 0, pointerId: 41, clientX: 320, clientY: 240 })
+    fireEvent.pointerMove(canvas, { pointerId: 41, clientX: 330, clientY: 240 })
+    fireEvent.pointerUp(canvas, { pointerId: 41 })
+    expect(screen.getByRole('textbox', { name: 'Position 2' })).not.toHaveValue('V.position')
+    expect(screen.getByText('Object manipulation committed.')).toBeInTheDocument()
+
+    // Leaving the anchor and coming back to it is a deliberate link.
+    fireEvent.pointerDown(base, { button: 0, pointerId: 42, clientX: 330, clientY: 240 })
+    fireEvent.pointerMove(canvas, { pointerId: 42, clientX: 400, clientY: 240 })
+    fireEvent.pointerMove(canvas, { pointerId: 42, clientX: 322, clientY: 240 })
+    fireEvent.pointerUp(canvas, { pointerId: 42 })
+    expect(screen.getByRole('textbox', { name: 'Position 2' })).toHaveValue('V.position')
+  })
+
+  it('unlinks a linked base with a short drag instead of keeping the link (#100)', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), {
+      target: { value: 'V = vector(2, 1)' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Add expression' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 2' }), {
+      target: { value: 'W = vector(1, 0)' },
+    })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Position 2' }), {
+      target: { value: 'V.head' },
+    })
+    const canvas = viewportCanvas()
+    sizeViewportCanvas(canvas)
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Move base of W' }), {
+      button: 0, pointerId: 43, clientX: 464, clientY: 168,
+    })
+    fireEvent.pointerMove(canvas, { pointerId: 43, clientX: 464, clientY: 180 })
+    fireEvent.pointerUp(canvas, { pointerId: 43 })
+    expect(screen.getByRole('textbox', { name: 'Position 2' })).not.toHaveValue('V.head')
+  })
+
+  it('raises the handles of the focused, hovered or last manipulated object (#100)', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), {
+      target: { value: 'V1 = vector(1, 0)' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Add expression' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 2' }), {
+      target: { value: 'V2 = vector(0, 1)' },
+    })
+    act(() => (document.activeElement as HTMLElement | null)?.blur())
+    const base = (name: string) => screen.getByRole('button', { name: `Move base of ${name}` })
+    // A later element is drawn above an earlier one and takes the press.
+    const onTop = (upper: string, lower: string) =>
+      (base(lower).compareDocumentPosition(base(upper)) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+    expect(onTop('V2', 'V1')).toBe(true)
+
+    const source1 = screen.getByRole('textbox', { name: 'Expression 1' })
+    act(() => source1.focus())
+    expect(onTop('V1', 'V2')).toBe(true)
+    act(() => source1.blur())
+    expect(onTop('V2', 'V1')).toBe(true)
+
+    const row1 = source1.closest('article') as HTMLElement
+    fireEvent.pointerEnter(row1)
+    expect(onTop('V1', 'V2')).toBe(true)
+    fireEvent.pointerLeave(row1)
+    expect(onTop('V2', 'V1')).toBe(true)
+
+    // The order holds during a drag and follows the dragged object after it.
+    const canvas = viewportCanvas()
+    sizeViewportCanvas(canvas)
+    fireEvent.pointerDown(base('V1'), { button: 0, pointerId: 44, clientX: 320, clientY: 240 })
+    expect(onTop('V2', 'V1')).toBe(true)
+    fireEvent.pointerMove(canvas, { pointerId: 44, clientX: 330, clientY: 240 })
+    fireEvent.pointerUp(canvas, { pointerId: 44 })
+    expect(onTop('V1', 'V2')).toBe(true)
+  })
+
   it('snaps a vector base to a named bivector position', () => {
     render(<App />)
     fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), {

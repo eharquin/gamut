@@ -273,6 +273,12 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Corrections
 
+- Where base handles coincide, the handle of the selected object is on top and
+  takes the press: the object whose expression row has focus or the pointer,
+  otherwise the last object moved in the viewport. A base drag no longer links
+  back to the anchor it started on: the anchor is taken only after the pointer
+  has left it once, so a short drag separates coinciding or linked objects
+  (#100).
 - The appearance menu stays inside the window: it is placed from its measured
   height, opens above its row when it does not fit below, scrolls inside when
   it is taller than the window, and follows its row when the window is
