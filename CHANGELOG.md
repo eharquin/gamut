@@ -105,6 +105,11 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Interface and accessibility
 
+- In PGA, the normalization choice opens in a popover anchored to the row's
+  norm button, like the appearance menu: a **Normalize** header with a close
+  button, then off · auto · norm · inorm. It closes on a choice, Escape, or a
+  click outside, and returns focus to the button. In VGA, which has one norm,
+  the button switches between off and auto directly, with no menu.
 - **Copy link** confirms a copied link with a brief notice instead of opening
   the link panel; the panel with selectable text only appears when the
   clipboard refuses the copy.
