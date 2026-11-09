@@ -10,6 +10,7 @@ import {
   type KeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
+  type ReactElement,
 } from 'react'
 import { showcaseMetadata } from './algebra/algebraDefinition'
 import { createBuiltinAlgebraRegistry } from './algebra/builtinAlgebras'
@@ -37,11 +38,13 @@ import {
   vga2FoundationExampleDocument,
   type ExpressionControl,
   type ExpressionItem,
+  type ExpressionDocument,
 } from './document/expressionDocument'
 import { hasContent, type DocumentCommand } from './document/documentCommands'
 import {
   createDocumentHistory,
   documentHistoryReducer,
+  type HistoryAction,
 } from './document/documentHistory'
 import {
   adaptiveGrid,
@@ -61,7 +64,15 @@ import {
 } from './visualization/viewportCreation'
 import { describeViewport } from './visualization/viewportDescription'
 import { DirectionMarkerGlyph, LineAtInfinityGlyph, OrientedAreaGlyph, OrientedSegmentGlyph, PointListConnectionGlyph, PointMarkerGlyph, UnboundedLineGlyph, type HandleController } from './visualization/glyphs'
-import { findAnchorCandidates, selectAnchor, type AnchorCandidate } from './visualization/anchoring'
+import {
+  findAnchorCandidates,
+  nearbyAnchors,
+  rearmAnchors,
+  anchorKey,
+  selectAnchor,
+  type AnchorCandidate,
+  type AnchorProximity,
+} from './visualization/anchoring'
 import { collectRenderedPrimitives, layoutIdealArrow, layoutIdealMarker, layoutLineAtInfinity, layoutLineSelection, layoutOrientedArea, layoutOrientedSegment, layoutPointListConnection, layoutUnboundedLine, lineNormalLength, listPrimitiveTypes, pointListVertices, lineOrientationTicks } from './visualization/layout'
 import { requireAvailableAlgebra } from './application/algebraAvailability'
 import {
@@ -111,6 +122,14 @@ const algebraRegistry = createBuiltinAlgebraRegistry()
 const restoreOptions = {
   visualizerAvailable: (visualizerId: string) => algebraRegistry.resolveVisualizer(visualizerId) !== null,
 }
+/** How far, in CSS pixels, a pressed handle must move before its drag starts. */
+const DRAG_DEAD_ZONE = 3
+
+/** The standard visualizer of an algebra, so that undo and redo keep each algebra's own visualizer. */
+function standardVisualizerId(algebra: ExpressionDocument['algebra']): string | null {
+  const resolution = algebraRegistry.resolve(algebra)
+  return resolution.status === 'resolved' ? resolution.definition.standardVisualizerId : null
+}
 const MIN_PANEL_WIDTH = 240
 /** Keeps the `.panel-resize` separator reachable at any panel width. */
 const PANEL_RESIZE_WIDTH = 6
@@ -149,6 +168,11 @@ function playbackParametersEqual(
 
 function declaredName(source: string): string | null {
   return /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/.exec(source)?.[1] ?? null
+}
+
+/** Whether a node is a manipulation handle of the canvas. */
+function isHandleElement(target: EventTarget | null): boolean {
+  return target instanceof Element && target.hasAttribute('data-handle-key')
 }
 
 function naturalList(values: readonly string[]): string {
@@ -195,6 +219,28 @@ function persistViewportLock(locked: boolean): void {
     window.localStorage.setItem(VIEWPORT_LOCK_STORAGE_KEY, String(locked))
   } catch {
     // The lock remains usable for this session when browser storage is unavailable.
+  }
+}
+
+/**
+ * Whether the expression panel is collapsed is a local view preference, kept
+ * like the viewport lock; it is never part of the document (#234).
+ */
+const PANEL_COLLAPSED_STORAGE_KEY = 'gamut.expressionPanelCollapsed'
+
+function restoredPanelCollapsed(): boolean {
+  try {
+    return window.localStorage.getItem(PANEL_COLLAPSED_STORAGE_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+function persistPanelCollapsed(collapsed: boolean): void {
+  try {
+    window.localStorage.setItem(PANEL_COLLAPSED_STORAGE_KEY, String(collapsed))
+  } catch {
+    // The panel still collapses for this session when browser storage is unavailable.
   }
 }
 
@@ -265,11 +311,26 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       }
     }
   })
-  const [history, dispatchHistory] = useReducer(
+  const [history, dispatchDocumentHistory] = useReducer(
     documentHistoryReducer,
     initial.document,
     createDocumentHistory,
   )
+  /**
+   * The visualizer and viewport left for NoViz, restored on the way back
+   * (#55). It belongs to the open document only.
+   */
+  const retainedVisualView = useRef<Readonly<{
+    algebraId: string
+    visualizerId: string
+    viewport: Extract<ExpressionDocument['view']['viewport'], { kind: 'two-dimensional' }>
+  }> | null>(null)
+  // Every document replacement (import, drop, and any later open or new)
+  // goes through `replace`, which forgets the view kept for the previous one.
+  const dispatchHistory = useCallback((action: HistoryAction) => {
+    if (action.type === 'replace') retainedVisualView.current = null
+    dispatchDocumentHistory(action)
+  }, [])
   const expressionDoc = history.present
   // Documents entering the history are checked at restore and import, so a
   // failed resolution here is a programming error, not a user-facing state.
@@ -294,7 +355,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const executeCommand = useCallback((
     command: DocumentCommand,
     coalesceKey?: string,
-  ) => dispatchHistory({ type: 'execute', command, coalesceKey }), [])
+  ) => dispatchHistory({ type: 'execute', command, coalesceKey }), [dispatchHistory])
   const nextId = useRef(2)
   const labelPlacementCache = useRef<{ key: string; placed: ReturnType<typeof placeLabels> } | null>(null)
   const inputRefs = useRef(new Map<string, HTMLInputElement>())
@@ -337,6 +398,10 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     itemId: string
     kind: ManipulationKind
     pointerId: number
+    /** Where the press was, in client pixels, until the pointer has moved past the dead zone. */
+    press: Readonly<{ x: number; y: number }> | null
+    /** Anchors a base drag started on, not taken until the pointer leaves them (#100). */
+    disarmedAnchors: ReadonlySet<string>
   }> | null>(null)
   /** Where a line translation started, so each move is measured from the press. */
   const lineDragOrigin = useRef<Readonly<{
@@ -348,6 +413,36 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const [selectedLine, setSelectedLine] = useState<Readonly<{ itemId: string; anchor: Point2d }> | null>(null)
   const anchorValidityCache = useRef(new Map<string, boolean>())
   const [hoveredManipulation, setHoveredManipulation] = useState<string | null>(null)
+  // Where handles coincide, those of the selected object are drawn on top and
+  // take the press (#100): the object whose expression row has focus or the
+  // pointer, otherwise the last object a pointer manipulated in the viewport.
+  // The drawing order is kept for the length of a drag and while a handle has
+  // keyboard focus, so that a handle is never moved in the document while it
+  // holds pointer capture or focus, which moving it would release.
+  const [rowFocusId, setRowFocusId] = useState<string | null>(null)
+  const [rowHoverId, setRowHoverId] = useState<string | null>(null)
+  const [lastManipulatedId, setLastManipulatedId] = useState<string | null>(null)
+  const [dragSelection, setDragSelection] = useState<Readonly<{ itemId: string | null }> | null>(null)
+  const [handleFocusSelection, setHandleFocusSelection] =
+    useState<Readonly<{ itemId: string | null }> | null>(null)
+  const frozenSelection = dragSelection ?? handleFocusSelection
+  // A deleted object's row fires neither blur nor pointer leave, so its id is
+  // ignored here and cleared once the document has changed.
+  const isPresentItem = (itemId: string | null): itemId is string =>
+    itemId !== null && expressionDoc.items.some((item) => item.id === itemId)
+  const selectedObjectId = frozenSelection
+    ? frozenSelection.itemId
+    : [rowFocusId, rowHoverId, lastManipulatedId].find(isPresentItem) ?? null
+  useEffect(() => {
+    const present = new Set(expressionDoc.items.map((item) => item.id))
+    const clearDeleted = (itemId: string | null) =>
+      itemId !== null && !present.has(itemId) ? null : itemId
+    setRowFocusId(clearDeleted)
+    setRowHoverId(clearDeleted)
+    setLastManipulatedId(clearDeleted)
+    // A focused handle removed with its object fires no blur either.
+    if (!isHandleElement(document.activeElement)) setHandleFocusSelection(null)
+  }, [expressionDoc.items])
   // Keyboard focus on a handle is drawn as an SVG ring rather than a CSS
   // outline, which WebKit fails to repaint when focus moves between SVG
   // elements. The ring follows the input modality at the moment of focus,
@@ -417,6 +512,12 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null)
   const [anchorPreview, setAnchorPreview] = useState<AnchorCandidate | null>(null)
   const [viewportLocked, setViewportLocked] = useState(() => sharedSession ? false : restoredViewportLock())
+  const [panelCollapsed, setPanelCollapsed] = useState(() => sharedSession ? false : restoredPanelCollapsed())
+  const collapsePanelButtonRef = useRef<HTMLButtonElement | null>(null)
+  const expandPanelButtonRef = useRef<HTMLButtonElement | null>(null)
+  const expressionPanelRef = useRef<HTMLElement | null>(null)
+  /** The button that receives focus after the user collapses or expands the panel. */
+  const panelToggleFocus = useRef<'collapse' | 'expand' | null>(null)
   const [shareResult, setShareResult] = useState<{ content: string; label: string; message: string } | null>(null)
   // A copied link is confirmed briefly; the panel with the text only appears
   // when the clipboard refuses the copy.
@@ -442,7 +543,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const closeAppearance = useCallback(() => {
     setAppearanceItemId(null)
     dispatchHistory({ type: 'boundary' })
-  }, [])
+  }, [dispatchHistory])
   const rememberEditorFocus = (element: HTMLInputElement) => {
     lastEditorFocus.current = {
       id: element.id,
@@ -456,7 +557,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     pendingTraversal.current = !history.transaction &&
       (type === 'undo' ? history.past.length > 0 : history.future.length > 0)
     dispatchHistory({ type })
-  }, [history.past.length, history.future.length, history.transaction])
+  }, [history.past.length, history.future.length, history.transaction, dispatchHistory])
 
   const viewport: Viewport2d = expressionDoc.view.viewport.kind === 'two-dimensional'
     ? {
@@ -470,10 +571,31 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const visualizerActive = interpretationResolution.status === 'resolved' &&
     visualizer !== null &&
     expressionDoc.view.viewport.kind === 'two-dimensional'
+  // Without a canvas there is nothing to give the room to, so the panel stays open.
+  const panelHidden = panelCollapsed && visualizerActive
+  /**
+   * The NoViz calculator (#55): the document has no visualizer, so nothing is
+   * drawn, positions are off, and the panel takes the whole width. Any
+   * document without a canvas is shown this way, so that **Show canvas** is
+   * always offered: besides the NoViz state itself (`visualizerId: null` and
+   * viewport `none`), a document with only one of the two markers, an unknown
+   * visualizer, or an unavailable interpretation.
+   */
+  const noViz = !visualizerActive
+  /** The button that receives focus after the user enters or leaves NoViz. */
+  const workspaceModeFocus = useRef<'show-canvas' | 'hide-canvas' | null>(null)
+  const showCanvasButtonRef = useRef<HTMLButtonElement | null>(null)
+  const hideCanvasButtonRef = useRef<HTMLButtonElement | null>(null)
+  useEffect(() => {
+    const target = workspaceModeFocus.current
+    workspaceModeFocus.current = null
+    if (target === 'show-canvas') showCanvasButtonRef.current?.focus()
+    else if (target === 'hide-canvas') hideCanvasButtonRef.current?.focus()
+  }, [noViz])
   const grid = adaptiveGrid(viewport)
   const updateView = useCallback((view: typeof expressionDoc.view) => {
-    dispatchHistory({ type: 'update-view', view })
-  }, [])
+    dispatchHistory({ type: 'update-view', view, standardVisualizerId })
+  }, [dispatchHistory])
   const updateDisplay = useCallback((change: Partial<DisplaySettings>) => {
     updateView({
       ...expressionDoc.view,
@@ -726,6 +848,23 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     const b = primitive.normal.y * primitive.scale
     return [a, b, -(a * primitive.point.x + b * primitive.point.y)]
   }
+  /** Where the anchors of a base drag are measured from, in CSS pixels. */
+  const anchorProximity = (draggedId: string, pointer: Point2d): AnchorProximity => {
+    const rectangle = viewportSvgRef.current?.getBoundingClientRect()
+    const cssScaleX = rectangle && rectangle.width > 0 ? rectangle.width / viewport.width : 1
+    const cssScaleY = rectangle && rectangle.height > 0 ? rectangle.height / viewport.height : 1
+    return {
+      draggedId,
+      rendered: renderedPrimitives,
+      viewport,
+      pointer,
+      cssScale: { x: cssScaleX, y: cssScaleY },
+      nameOf: (itemId) => {
+        const targetItem = expressionDoc.items.find((item) => item.id === itemId)
+        return targetItem ? declaredName(targetItem.source) : null
+      },
+    }
+  }
   const beginManipulation = (
     event: ReactPointerEvent<SVGElement>,
     itemId: string,
@@ -738,7 +877,17 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     // ring. Selection is prevented by user-select on the canvas instead.
     event.currentTarget.setPointerCapture?.(event.pointerId)
     guardGestureSelection('manipulate')
-    manipulationDrag.current = { itemId, kind, pointerId: event.pointerId }
+    const disarmedAnchors = kind === 'base'
+      ? new Set(nearbyAnchors(anchorProximity(itemId, screenPoint(event.clientX, event.clientY)))
+          .map(anchorKey))
+      : new Set<string>()
+    manipulationDrag.current = {
+      itemId, kind, pointerId: event.pointerId,
+      press: { x: event.clientX, y: event.clientY },
+      disarmedAnchors,
+    }
+    setDragSelection({ itemId: selectedObjectId })
+    setLastManipulatedId(itemId)
     anchorValidityCache.current.clear()
     if (kind === 'line') {
       const rendered = renderedPrimitives.find((candidate) => candidate.id === itemId)
@@ -896,23 +1045,25 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           formatViewportCoordinate(current.y + delta.y, viewport.pixelsPerUnit)}.`)
   }
   const moveViewportPan = (event: ReactPointerEvent<SVGSVGElement>) => {
-    const manipulation = manipulationDrag.current
-    if (manipulation?.pointerId === event.pointerId) {
+    const pressed = manipulationDrag.current
+    if (pressed?.pointerId === event.pointerId) {
+      // A press that has not yet moved past the dead zone is a click: it
+      // writes nothing, so it cannot unlink a base or nudge an object.
+      if (pressed.press && Math.hypot(
+        event.clientX - pressed.press.x,
+        event.clientY - pressed.press.y,
+      ) < DRAG_DEAD_ZONE) return
+      const manipulation = pressed.press ? { ...pressed, press: null } : pressed
+      manipulationDrag.current = manipulation
       const pointer = screenPoint(event.clientX, event.clientY)
       if (manipulation.kind === 'base') {
-        const rectangle = event.currentTarget.getBoundingClientRect()
-        const cssScaleX = rectangle.width > 0 ? rectangle.width / viewport.width : 1
-        const cssScaleY = rectangle.height > 0 ? rectangle.height / viewport.height : 1
+        const proximity = anchorProximity(manipulation.itemId, pointer)
+        const disarmedAnchors = rearmAnchors(manipulation.disarmedAnchors, nearbyAnchors(proximity))
+        if (disarmedAnchors !== manipulation.disarmedAnchors)
+          manipulationDrag.current = { ...manipulation, disarmedAnchors }
         const candidates = findAnchorCandidates({
-          draggedId: manipulation.itemId,
-          rendered: renderedPrimitives,
-          viewport,
-          pointer,
-          cssScale: { x: cssScaleX, y: cssScaleY },
-          nameOf: (itemId) => {
-            const targetItem = expressionDoc.items.find((item) => item.id === itemId)
-            return targetItem ? declaredName(targetItem.source) : null
-          },
+          ...proximity,
+          disarmed: disarmedAnchors,
           isValid: (candidate) => {
             const key = `${manipulation.itemId}:${candidate.targetId}:${candidate.property}`
             const cached = anchorValidityCache.current.get(key)
@@ -967,6 +1118,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   // Keyboard users reach handles with Tab as before.
   const finishManipulation = (outcome: 'commit' | 'cancel') => {
     manipulationDrag.current = null
+    setDragSelection(null)
     anchorValidityCache.current.clear()
     setAnchorPreview(null)
     dispatchHistory(outcome === 'commit'
@@ -1056,6 +1208,85 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     } else return
     event.preventDefault()
     updateViewport(next)
+  }
+
+  const togglePanelCollapsed = () => {
+    const collapsed = !panelCollapsed
+    panelToggleFocus.current = collapsed ? 'expand' : 'collapse'
+    setPanelCollapsed(collapsed)
+    if (!ephemeral) persistPanelCollapsed(collapsed)
+  }
+  useEffect(() => {
+    const target = panelToggleFocus.current
+    panelToggleFocus.current = null
+    if (target === 'expand') expandPanelButtonRef.current?.focus()
+    else if (target === 'collapse') collapsePanelButtonRef.current?.focus()
+  }, [panelCollapsed])
+  // A document without a canvas (imported, dropped, restored or linked)
+  // reopens a collapsed panel: nothing would be left on screen to expand it
+  // from, and it must not collapse again when a canvas comes back. Focus left
+  // in the removed canvas moves to Show canvas (or the panel) instead of the page.
+  const hadCanvas = useRef(visualizerActive)
+  useEffect(() => {
+    const lostCanvas = hadCanvas.current && !visualizerActive
+    hadCanvas.current = visualizerActive
+    if (visualizerActive) return
+    if (panelCollapsed) {
+      setPanelCollapsed(false)
+      if (!ephemeral) persistPanelCollapsed(false)
+    }
+    const focused = document.activeElement
+    if (lostCanvas && (focused === null || focused === document.body || !focused.isConnected)) {
+      const target = showCanvasButtonRef.current ?? expressionPanelRef.current
+      target?.focus()
+    }
+  }, [visualizerActive, panelCollapsed, ephemeral])
+
+  /** Collapses the canvas to the right into the NoViz calculator (#55). */
+  const enterNoViz = () => {
+    const { visualizerId, viewport: currentViewport } = expressionDoc.view
+    if (visualizerId === null || currentViewport.kind !== 'two-dimensional') return
+    retainedVisualView.current = {
+      algebraId: expressionDoc.algebra.algebraId, visualizerId, viewport: currentViewport,
+    }
+    viewportPan.current = null
+    setSelectedLine(null)
+    setAnchorPreview(null)
+    setAppearanceItemId(null)
+    // A collapsed panel reopens with every loss of the canvas (#234).
+    workspaceModeFocus.current = 'show-canvas'
+    // NoViz is the only state in which positions are off (#248).
+    updateView({ ...expressionDoc.view, visualizerId: null, positionEnabled: false, viewport: { kind: 'none' } })
+  }
+  /**
+   * Brings the canvas back with the visualizer and viewport NoViz left, or
+   * the algebra's standard visualizer at the stored or default view. It also
+   * repairs a document that cannot be displayed (one NoViz marker only, an
+   * unknown visualizer, or an unavailable interpretation, which takes the
+   * algebra's standard interpretation in an undoable step).
+   */
+  const leaveNoViz = () => {
+    const retained = retainedVisualView.current?.algebraId === expressionDoc.algebra.algebraId
+      ? retainedVisualView.current
+      : null
+    const storedViewport = expressionDoc.view.viewport.kind === 'two-dimensional' ? expressionDoc.view.viewport : null
+    workspaceModeFocus.current = 'hide-canvas'
+    updateView({
+      ...expressionDoc.view,
+      visualizerId: retained?.visualizerId ?? algebraDefinition.standardVisualizerId,
+      positionEnabled: true,
+      viewport: retained?.viewport ?? storedViewport ?? {
+        kind: 'two-dimensional', centerX: 0, centerY: 0, zoom: DEFAULT_PIXELS_PER_UNIT,
+      },
+    })
+    if (interpretationResolution.status !== 'resolved') {
+      dispatchHistory({ type: 'boundary' })
+      executeCommand({
+        kind: 'update-algebra',
+        algebra: expressionDoc.algebra,
+        interpretation: { interpretationId: algebraDefinition.standardInterpretationId, interpretationVersion: 1 },
+      })
+    }
   }
 
   const toggleViewportLock = () => {
@@ -1161,7 +1392,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     }
     setPlaybackAnnouncement(`${playback.name} animation paused.`)
     setActivePlaybacks(next)
-  }, [activePlaybacks])
+  }, [activePlaybacks, dispatchHistory])
 
   const stopAllPlaybacks = useCallback(() => {
     if (activePlaybacks.size === 0) return
@@ -1171,7 +1402,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     playbackSessionNames.current.clear()
     setPlaybackAnnouncement(`${animationSubject(names)} stopped.`)
     setActivePlaybacks(new Map())
-  }, [activePlaybacks])
+  }, [activePlaybacks, dispatchHistory])
 
   const cancelPlaybackSession = useCallback(() => {
     if (activePlaybacks.size === 0) return
@@ -1183,7 +1414,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     dispatchHistory({ type: 'cancel-transaction' })
     setPlaybackAnnouncement(`${animationSubject(names)} cancelled.`)
     setActivePlaybacks(new Map())
-  }, [activePlaybacks])
+  }, [activePlaybacks, dispatchHistory])
 
   const startPlayback = (
     item: ExpressionItem,
@@ -1267,7 +1498,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       }
     }
     setActivePlaybacks(next)
-  }, [activePlaybacks, expressionDoc.items, scalarControlEvaluations])
+  }, [activePlaybacks, expressionDoc.items, scalarControlEvaluations, dispatchHistory])
 
   useEffect(() => {
     if (activePlaybacks.size === 0) return
@@ -1304,7 +1535,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     }
     frame = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frame)
-  }, [activePlaybacks, executeCommand])
+  }, [activePlaybacks, executeCommand, dispatchHistory])
 
   useEffect(() => {
     if (activePlaybacks.size === 0) return
@@ -1334,7 +1565,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     }
     window.addEventListener('keydown', cancel)
     return () => window.removeEventListener('keydown', cancel)
-  }, [])
+  }, [dispatchHistory])
   const resolvedAppearances = useMemo(
     () => evaluatedItems.map(({ item, evaluation }) => {
       const kind = evaluation?.status === 'valid'
@@ -1397,9 +1628,12 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   // historical renderer used 1.5 as that baseline, so keep the visual size
   // while restoring a meaningful multiplicative setting.
   const objectRenderScale = expressionDoc.view.display.objectScale * 1.5
-  const { rendered: renderedPrimitives, connections: renderedConnections, omitted: omittedRenderElements } = collectRenderedPrimitives(
-    evaluatedItems, expressionDoc.appearance, interpretation, declaredName, appearanceSources,
-  )
+  // NoViz builds no render primitives (#55).
+  const { rendered: renderedPrimitives, connections: renderedConnections, omitted: omittedRenderElements } = noViz
+    ? { rendered: [], connections: [], omitted: 0 }
+    : collectRenderedPrimitives(
+        evaluatedItems, expressionDoc.appearance, interpretation, declaredName, appearanceSources,
+      )
   const renderedVectors = renderedPrimitives.flatMap((entry) =>
     entry.primitive.kind === 'oriented-segment'
       ? [{ ...entry, primitive: entry.primitive, layout: layoutOrientedSegment(entry.primitive, viewport, objectRenderScale) }]
@@ -1665,7 +1899,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       window.removeEventListener('pointercancel', handlePointerCancel)
       document.body.classList.remove('reordering-items')
     }
-  }, [resolveDropTargetIndex, moveItemToIndex])
+  }, [resolveDropTargetIndex, moveItemToIndex, dispatchHistory])
 
   const beginRowReorder = (
     event: ReactPointerEvent<HTMLButtonElement>,
@@ -1938,7 +2172,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
         parameters: validation.parameters,
       },
       interpretation: { interpretationId: definition.standardInterpretationId, interpretationVersion: 1 },
-      visualizerId: definition.standardVisualizerId,
+      // A NoViz document stays a calculator in the new algebra.
+      visualizerId: noViz ? null : definition.standardVisualizerId,
       ...showcaseMetadata(definition),
     })
     // The algebra's showcase makes the switch land on a working example.
@@ -2005,6 +2240,15 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     formatNumber: displayedNumber,
   })
 
+  // The glyphs of the selected object are drawn after all others, so that its
+  // handles are on top where handles coincide (#100). Keys are item ids, list
+  // element ids `id:index`, or `connection-id` for a list's links.
+  const raiseSelectedGlyphs = (glyphs: readonly ReactElement[]): readonly ReactElement[] => {
+    if (selectedObjectId === null) return glyphs
+    const owned = (glyph: ReactElement) =>
+      ownerOf(String(glyph.key).replace(/^connection-/, '')) === selectedObjectId
+    return [...glyphs.filter((glyph) => !owned(glyph)), ...glyphs.filter(owned)]
+  }
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -2048,6 +2292,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
             theme={theme}
             onDisplayChange={updateDisplay}
             onThemeChange={setTheme}
+            renderingSettings={!noViz}
           />
         </div>
       </header>
@@ -2080,9 +2325,13 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
 
       <main className="workspace" ref={workspaceRef}>
         <aside
-          className="expression-panel"
+          ref={expressionPanelRef}
+          id="expression-panel"
+          tabIndex={-1}
+          className={`expression-panel${panelHidden ? ' is-collapsed' : ''}${noViz ? ' is-full-width' : ''}`}
           aria-label="Expressions"
-          style={{ width: panelWidth }}
+          style={noViz ? undefined : { width: panelWidth, '--panel-width': `${panelWidth}px` } as CSSProperties}
+          inert={panelHidden}
         >
           <div className="expression-toolbar">
             <button
@@ -2120,6 +2369,39 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                 <span aria-hidden="true">↷</span>
               </button>
             </div>
+            {noViz && <>
+              <span className="workspace-mode" role="status">NoViz calculator</span>
+              <button
+                ref={showCanvasButtonRef}
+                type="button"
+                className="panel-toggle show-canvas"
+                aria-label="Show canvas"
+                title="Show canvas"
+                onClick={leaveNoViz}
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                  <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5" fill="none" />
+                  <line x1="10" y1="2.75" x2="10" y2="13.25" />
+                  <path d="M7 6l-2 2 2 2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </>}
+            {visualizerActive && <button
+              ref={collapsePanelButtonRef}
+              type="button"
+              className="panel-toggle panel-collapse"
+              aria-label="Collapse expression panel"
+              title="Collapse expression panel"
+              aria-expanded={!panelHidden}
+              aria-controls="expression-panel"
+              onClick={togglePanelCollapsed}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5" fill="none" />
+                <line x1="6" y1="2.75" x2="6" y2="13.25" />
+                <path d="M11 6l-2 2 2 2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>}
           </div>
 
           <div className="expression-list">
@@ -2229,6 +2511,13 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                     if (element) expressionRowRefs.current.set(item.id, element)
                     else expressionRowRefs.current.delete(item.id)
                   }}
+                  onFocus={() => setRowFocusId(item.id)}
+                  onBlur={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget))
+                      setRowFocusId((current) => current === item.id ? null : current)
+                  }}
+                  onPointerEnter={() => setRowHoverId(item.id)}
+                  onPointerLeave={() => setRowHoverId((current) => current === item.id ? null : current)}
                   className={`expression-item${visible ? '' : ' is-hidden'}${
                     empty ? ' is-empty-expression' : ''
                   }${dropBefore ? ' drop-before' : ''}${dropAfter ? ' drop-after' : ''} ${
@@ -2263,7 +2552,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                           : <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
                               <path d="M2.5 1.2 8.5 5 2.5 8.8z" />
                             </svg>}</button>
-                      ) : drawable && valid && (
+                      ) : drawable && valid && !noViz && (
                           <button
                             type="button"
                             className="visibility-toggle"
@@ -2281,11 +2570,17 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                             </svg>
                           </button>
                       )}
-                      {valid && !drawable &&
+                      {valid && (!drawable || noViz) &&
                         !(scalar && effectiveControl?.mode === 'slider') && (
                         <span className="expression-action-spacer" aria-hidden="true" />
                       )}
-                      {valid ? (
+                      {valid && noViz ? (
+                          // Appearance is kept in the document but dormant
+                          // without a canvas: the swatch only shows the color.
+                          <span className="appearance-swatch is-dormant" aria-hidden="true">
+                            <span className="appearance-swatch-fill" style={{ backgroundColor: color }} />
+                          </span>
+                      ) : valid ? (
                           <button
                             type="button"
                             className="appearance-swatch"
@@ -2401,7 +2696,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                         />
                       )}
                       {/* The label text is edited under the expression while the label is shown (#226). */}
-                      {labelFieldShown && (
+                      {labelFieldShown && !noViz && (
                         <label className="expression-label-row">
                           <span aria-hidden="true">Label</span>
                           <input
@@ -2675,7 +2970,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                           </ol>
                       )}
 
-                      {supportsPosition && (
+                      {supportsPosition && !noViz && (
                         <div className="position-input-row">
                           <span className="position-prefix" aria-hidden="true">position</span>
                           <input
@@ -2812,7 +3107,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           </div>
         </aside>
 
-        <div
+        {!panelHidden && !noViz && <div
           className="panel-resize"
           role="separator"
           aria-label="Resize expression panel"
@@ -2823,10 +3118,40 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           tabIndex={0}
           onPointerDown={beginPanelResize}
           onKeyDown={resizePanelWithKeyboard}
-        />
+        />}
 
         {visualizerActive && <section className="visualizer" aria-label={visualizer?.regionName}>
           <div ref={canvasFrameRef} className="canvas-frame">
+            {panelHidden && <button
+              ref={expandPanelButtonRef}
+              type="button"
+              className="panel-toggle panel-expand"
+              aria-label="Expand expression panel"
+              title="Expand expression panel"
+              aria-expanded={false}
+              aria-controls="expression-panel"
+              onClick={togglePanelCollapsed}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5" fill="none" />
+                <line x1="6" y1="2.75" x2="6" y2="13.25" />
+                <path d="M9 6l2 2-2 2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>}
+            <button
+              ref={hideCanvasButtonRef}
+              type="button"
+              className="panel-toggle hide-canvas"
+              aria-label="Hide canvas (NoViz calculator)"
+              title="Hide canvas (NoViz calculator)"
+              onClick={enterNoViz}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5" fill="none" />
+                <line x1="10" y1="2.75" x2="10" y2="13.25" />
+                <path d="M5 6l2 2-2 2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
             <div
               className="viewport-toolbar"
               role="toolbar"
@@ -2921,6 +3246,14 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
               onLostPointerCapture={loseViewportCapture}
               onKeyDown={navigateViewportWithKeyboard}
               onDoubleClick={createVectorFromViewport}
+              onFocus={(event) => {
+                if (isHandleElement(event.target))
+                  setHandleFocusSelection((current) => current ?? { itemId: selectedObjectId })
+              }}
+              onBlur={(event) => {
+                if (isHandleElement(event.target) && !isHandleElement(event.relatedTarget))
+                  setHandleFocusSelection(null)
+              }}
             >
               <desc id="canvas-description">{canvasDescription}</desc>
               {expressionDoc.view.display.gridVisible && <g aria-hidden="true">
@@ -2961,90 +3294,14 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                 })}
               </g>}
 
-              {renderedVectors.map(({ id, primitive, entity, layout, color, strokeStyle, strokeWidth, opacity }) => {
-                const item = expressionDoc.items.find((candidate) => candidate.id === id)
-                return <OrientedSegmentGlyph
-                  key={id}
-                  id={id}
-                  primitive={primitive}
-                  layout={layout}
-                  color={color}
-                  label={placedLabel(id)}
-                  scale={objectRenderScale}
-                  itemPresent={!!item}
-                  headMovable={!!item && headMovable(item, entity)}
-                  baseMovable={!!item && objectBaseMovable(item, entity)}
-                  controller={handleController}
-                  strokeStyle={strokeStyle}
-                  strokeWidth={strokeWidth}
-                  opacity={opacity}
-                />
-              })}
-              {renderedAreas.map(({ id, primitive, entity, layout, color, borderVisible, orientationVisible, strokeStyle, strokeWidth, opacity }) => {
-                const item = expressionDoc.items.find((candidate) => candidate.id === id)
-                return <OrientedAreaGlyph
-                  key={id}
-                  id={id}
-                  primitive={primitive}
-                  layout={layout}
-                  color={color}
-                  label={placedLabel(id)}
-                  scale={objectRenderScale}
-                  borderVisible={borderVisible}
-                  orientationVisible={orientationVisible}
-                  itemPresent={!!item}
-                  baseMovable={!!item && objectBaseMovable(item, entity)}
-                  controller={handleController}
-                  strokeStyle={strokeStyle}
-                  strokeWidth={strokeWidth}
-                  opacity={opacity}
-                />
-              })}
-              {renderedLines.map(({ id, primitive, entity, layout, color, orientationVisible, strokeStyle, strokeWidth, opacity }) => {
-                const item = expressionDoc.items.find((candidate) => candidate.id === id)
-                const selection = selectedLine?.itemId === id
-                  ? layoutLineSelection(primitive, selectedLine.anchor, viewport, objectRenderScale)
-                  : null
-                return <UnboundedLineGlyph
-                  key={id}
-                  id={id}
-                  primitive={primitive}
-                  layout={layout}
-                  color={color}
-                  label={placedLabel(id)}
-                  scale={objectRenderScale}
-                  itemPresent={!!item}
-                  movable={!!item && lineMovable(item, entity)}
-                  orientationVisible={orientationVisible}
-                  orientationTicks={lineOrientationTicks(primitive, layout, objectRenderScale)}
-                  selection={selection}
-                  controller={handleController}
-                  strokeStyle={strokeStyle}
-                  strokeWidth={strokeWidth}
-                  opacity={opacity}
-                />
-              })}
-              {renderedInfinity.map(({ id, primitive, layout, color, opacity }) => (
-                <LineAtInfinityGlyph key={id} accessibleName={primitive.accessibleName} layout={layout} color={color} label={placedLabel(id)} scale={objectRenderScale} opacity={opacity} />
-              ))}
-              {renderedIdealPoints.map(({ id, primitive, entity, arrow, marker, color, strokeStyle, strokeWidth, opacity }) => {
-                const item = expressionDoc.items.find((candidate) => candidate.id === id)
-                return <g key={id}>
-                  {marker && <DirectionMarkerGlyph
-                    accessibleName={primitive.accessibleName}
-                    layout={marker}
-                    color={color}
-                    label={arrow ? null : placedLabel(id)}
-                    scale={objectRenderScale}
-                    opacity={opacity}
-                  />}
-                  {arrow && <OrientedSegmentGlyph
+              {raiseSelectedGlyphs([
+                ...renderedVectors.map(({ id, primitive, entity, layout, color, strokeStyle, strokeWidth, opacity }) => {
+                  const item = expressionDoc.items.find((candidate) => candidate.id === id)
+                  return <OrientedSegmentGlyph
+                    key={id}
                     id={id}
-                    primitive={{ kind: 'oriented-segment', start: primitive.position, end: {
-                      x: primitive.position.x + primitive.direction.x * primitive.magnitude,
-                      y: primitive.position.y + primitive.direction.y * primitive.magnitude,
-                    }, accessibleName: primitive.accessibleName }}
-                    layout={arrow}
+                    primitive={primitive}
+                    layout={layout}
                     color={color}
                     label={placedLabel(id)}
                     scale={objectRenderScale}
@@ -3055,39 +3312,117 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                     strokeStyle={strokeStyle}
                     strokeWidth={strokeWidth}
                     opacity={opacity}
-                  />}
-                </g>
-              })}
-              {renderedConnections.map(({ id, segments, color, opacity, strokeStyle, strokeWidth }) => (
-                <PointListConnectionGlyph
-                  key={`connection-${id}`}
-                  path={layoutPointListConnection(segments, viewport)}
-                  color={color}
-                  scale={objectRenderScale}
-                  opacity={opacity}
-                  strokeStyle={strokeStyle}
-                  strokeWidth={strokeWidth}
-                />
-              ))}
-              {renderedPoints.map(({ id, primitive, entity, point, color, markerVisible, opacity, pointStyle, pointSize }) => {
-                const item = expressionDoc.items.find((candidate) => candidate.id === id)
-                return <PointMarkerGlyph
-                  key={id}
-                  id={id}
-                  primitive={primitive}
-                  point={point}
-                  color={color}
-                  label={placedLabel(id)}
-                  scale={objectRenderScale}
-                  itemPresent={!!item}
-                  movable={!!item && objectBaseMovable(item, entity)}
-                  markerVisible={markerVisible}
-                  controller={handleController}
-                  opacity={opacity}
-                  pointStyle={pointStyle}
-                  pointSize={pointSize}
-                />
-              })}
+                  />
+                }),
+                ...renderedAreas.map(({ id, primitive, entity, layout, color, borderVisible, orientationVisible, strokeStyle, strokeWidth, opacity }) => {
+                  const item = expressionDoc.items.find((candidate) => candidate.id === id)
+                  return <OrientedAreaGlyph
+                    key={id}
+                    id={id}
+                    primitive={primitive}
+                    layout={layout}
+                    color={color}
+                    label={placedLabel(id)}
+                    scale={objectRenderScale}
+                    borderVisible={borderVisible}
+                    orientationVisible={orientationVisible}
+                    itemPresent={!!item}
+                    baseMovable={!!item && objectBaseMovable(item, entity)}
+                    controller={handleController}
+                    strokeStyle={strokeStyle}
+                    strokeWidth={strokeWidth}
+                    opacity={opacity}
+                  />
+                }),
+                ...renderedLines.map(({ id, primitive, entity, layout, color, orientationVisible, strokeStyle, strokeWidth, opacity }) => {
+                  const item = expressionDoc.items.find((candidate) => candidate.id === id)
+                  const selection = selectedLine?.itemId === id
+                    ? layoutLineSelection(primitive, selectedLine.anchor, viewport, objectRenderScale)
+                    : null
+                  return <UnboundedLineGlyph
+                    key={id}
+                    id={id}
+                    primitive={primitive}
+                    layout={layout}
+                    color={color}
+                    label={placedLabel(id)}
+                    scale={objectRenderScale}
+                    itemPresent={!!item}
+                    movable={!!item && lineMovable(item, entity)}
+                    orientationVisible={orientationVisible}
+                    orientationTicks={lineOrientationTicks(primitive, layout, objectRenderScale)}
+                    selection={selection}
+                    controller={handleController}
+                    strokeStyle={strokeStyle}
+                    strokeWidth={strokeWidth}
+                    opacity={opacity}
+                  />
+                }),
+                ...renderedInfinity.map(({ id, primitive, layout, color, opacity }) => (
+                  <LineAtInfinityGlyph key={id} accessibleName={primitive.accessibleName} layout={layout} color={color} label={placedLabel(id)} scale={objectRenderScale} opacity={opacity} />
+                )),
+                ...renderedIdealPoints.map(({ id, primitive, entity, arrow, marker, color, strokeStyle, strokeWidth, opacity }) => {
+                  const item = expressionDoc.items.find((candidate) => candidate.id === id)
+                  return <g key={id}>
+                    {marker && <DirectionMarkerGlyph
+                      accessibleName={primitive.accessibleName}
+                      layout={marker}
+                      color={color}
+                      label={arrow ? null : placedLabel(id)}
+                      scale={objectRenderScale}
+                      opacity={opacity}
+                    />}
+                    {arrow && <OrientedSegmentGlyph
+                      id={id}
+                      primitive={{ kind: 'oriented-segment', start: primitive.position, end: {
+                        x: primitive.position.x + primitive.direction.x * primitive.magnitude,
+                        y: primitive.position.y + primitive.direction.y * primitive.magnitude,
+                      }, accessibleName: primitive.accessibleName }}
+                      layout={arrow}
+                      color={color}
+                      label={placedLabel(id)}
+                      scale={objectRenderScale}
+                      itemPresent={!!item}
+                      headMovable={!!item && headMovable(item, entity)}
+                      baseMovable={!!item && objectBaseMovable(item, entity)}
+                      controller={handleController}
+                      strokeStyle={strokeStyle}
+                      strokeWidth={strokeWidth}
+                      opacity={opacity}
+                    />}
+                  </g>
+                }),
+                ...renderedConnections.map(({ id, segments, color, opacity, strokeStyle, strokeWidth }) => (
+                  <PointListConnectionGlyph
+                    key={`connection-${id}`}
+                    path={layoutPointListConnection(segments, viewport)}
+                    color={color}
+                    scale={objectRenderScale}
+                    opacity={opacity}
+                    strokeStyle={strokeStyle}
+                    strokeWidth={strokeWidth}
+                  />
+                )),
+                ...renderedPoints.map(({ id, primitive, entity, point, color, markerVisible, opacity, pointStyle, pointSize }) => {
+                  const item = expressionDoc.items.find((candidate) => candidate.id === id)
+                  return <PointMarkerGlyph
+                    key={id}
+                    id={id}
+                    primitive={primitive}
+                    point={point}
+                    color={color}
+                    label={placedLabel(id)}
+                    scale={objectRenderScale}
+                    itemPresent={!!item}
+                    movable={!!item && objectBaseMovable(item, entity)}
+                    markerVisible={markerVisible}
+                    controller={handleController}
+                    opacity={opacity}
+                    pointStyle={pointStyle}
+                    pointSize={pointSize}
+                  />
+                }),
+              ])}
               {anchorPreview && <g className="anchor-preview" aria-hidden="true">
                 <circle cx={anchorPreview.point.x} cy={anchorPreview.point.y} r="12" />
                 <circle cx={anchorPreview.point.x} cy={anchorPreview.point.y} r="3" />

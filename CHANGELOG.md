@@ -106,6 +106,24 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Interface and accessibility
 
+- A NoViz calculator mode: a button at the top left of the canvas collapses
+  the canvas to the right and leaves the expression panel full width, and a
+  button at the right edge of the panel brings the canvas back at the view it
+  had in this session, as long as the same document stays open. Nothing is drawn, and position fields, visibility buttons, labels, the
+  appearance menu, and the rendering settings are hidden while evaluation,
+  scalar controls, history, and import and export keep working. NoViz is saved
+  in the document (`visualizerId: null`, viewport `none`, positions off) and
+  carried by exports and scene links. Undo and redo across an algebra change
+  show each algebra with its own visualizer, in and out of NoViz. A document
+  that cannot be drawn (one NoViz marker only, an unknown visualizer, or an
+  unavailable interpretation) opens as the calculator, and **Show canvas**
+  repairs it (#55).
+- A button at the top right of the expression panel collapses it to the
+  left so that the canvas fills the window; a button at the left edge of the
+  canvas brings it back at its previous width. The choice is remembered in
+  this browser, like the viewport lock, but is not part of the document,
+  its export, or scene links. Opening a document without a canvas reopens a
+  collapsed panel and moves focus left in the canvas to **Show canvas** (#234).
 - A document that stored `view.positionEnabled: false` drew every object at
   the origin while its position fields and base drags still updated. Positions
   now switch off only without a visualizer (NoViz, #55): a document drawn on a
@@ -274,6 +292,24 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Corrections
 
+- Where base handles coincide, the handle of the selected object is on top and
+  takes the press: the object whose expression row has focus or the pointer,
+  otherwise the last object moved in the viewport. The order holds while a
+  handle has keyboard focus, so it never loses focus, and the tab order of the
+  handles follows it. A base drag no longer links back to the anchor it
+  started on: the anchor is taken only after the pointer has left it once, so
+  a short drag separates coinciding or linked objects. A drag starts only after
+  the pointer has moved 3 pixels, so a click on a linked base keeps its link
+  (#100).
+- PGA(2) position diagnostics no longer mention VGA vectors. A coordinate
+  tuple such as `(1, 2)` reports that a position must evaluate to a Euclidean
+  point, such as `point(1, 2)`, instead of an unsupported `vector` function;
+  a position that evaluates to another kind, such as a line, reports that it
+  must evaluate to a Euclidean point. VGA(2) messages are unchanged (#236).
+- In PGA(2), the empty position of an ideal point evaluates to the origin
+  point `e12`, where its arrow is drawn, instead of `0`: `J.position` is `e12`
+  and `J.head` is `J + e12`, as the row shows. An empty VGA(2) position still
+  evaluates to `0` (#235).
 - The appearance menu stays inside the window: it is placed from its measured
   height, opens above its row when it does not fit below, scrolls inside when
   it is taller than the window, and follows its row when the window is

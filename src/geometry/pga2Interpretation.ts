@@ -205,6 +205,7 @@ export const PGA_2D_INTERPRETATION: Interpretation<Pga2Entity> = Object.freeze({
   supportsPosition: (entity) => entity.kind === 'ideal-point',
   supportsHead: (entity) => entity.kind === 'ideal-point',
   isPositionValue: exactEuclideanPoint,
+  positionDescription: 'a Euclidean point',
   positionOf(value) {
     const c = value.coefficients
     return { x: -c[INDEX.e02] / c[INDEX.e12], y: c[INDEX.e01] / c[INDEX.e12] }
