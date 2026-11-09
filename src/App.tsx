@@ -2337,14 +2337,24 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                               type="button"
                               className={`normalize-toggle${item.normalization ? ' active' : ''}`}
                               aria-label={`Normalization: ${normalizationText}`}
-                              aria-expanded={normalizationChoiceOpen}
-                              aria-haspopup="dialog"
+                              // With one norm (VGA) the button switches off and auto
+                              // directly; with norm and inorm (PGA) it opens the choice.
+                              aria-pressed={hasIdealNorm(engine) ? undefined : Boolean(normalizationMode)}
+                              aria-expanded={hasIdealNorm(engine) ? normalizationChoiceOpen : undefined}
+                              aria-haspopup={hasIdealNorm(engine) ? 'dialog' : undefined}
                               title={!normalizationMode
                                 ? 'Not normalized'
                                 : normalizationUnavailable
                                   ? 'Normalization unavailable: the value is unchanged'
                                   : `Normalized by ${NORM_NAME[unitNorm!]}${normalizationMode === 'natural' ? ' (automatic)' : ''}`}
                               onClick={(event) => {
+                                if (!hasIdealNorm(engine)) {
+                                  executeCommand({
+                                    kind: 'update-normalization', itemId: item.id,
+                                    normalization: normalizationMode ? undefined : 'natural',
+                                  })
+                                  return
+                                }
                                 normalizationAnchorRef.current = event.currentTarget
                                 setNormalizationChoiceId((current) => current === item.id ? null : item.id)
                               }}

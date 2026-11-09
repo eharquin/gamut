@@ -2202,29 +2202,27 @@ describe('VGA 2D vertical slice', () => {
     expect(document.documentElement).toHaveAttribute('data-theme', 'system')
   })
 
-  it('chooses automatic VGA normalization from the row without rewriting the expression', () => {
+  it('switches VGA normalization from the row button, without a menu or rewriting the expression', () => {
     render(<App />)
     const expression = screen.getByRole('textbox', { name: 'Expression 1' })
     const normalize = screen.getByRole('button', { name: 'Normalization: off' })
     expect(normalize).toHaveTextContent(/^norm$/)
+    // VGA has one norm: the button switches off and auto directly.
+    expect(normalize).toHaveAttribute('aria-pressed', 'false')
+    expect(normalize).not.toHaveAttribute('aria-haspopup')
 
     fireEvent.click(normalize)
-    expect(normalize).toHaveAttribute('aria-expanded', 'true')
-    // VGA has one norm: off and auto only.
-    const choice = screen.getByRole('group', { name: 'Normalize with' })
-    expect(within(choice).getAllByRole('button').map((button) => button.textContent)).toEqual(['off', 'auto'])
-    fireEvent.click(within(choice).getByRole('button', { name: 'auto' }))
-    expect(screen.queryByRole('group', { name: 'Normalize with' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Normalize' })).not.toBeInTheDocument()
     expect(normalize).toHaveAccessibleName('Normalization: auto')
+    expect(normalize).toHaveAttribute('aria-pressed', 'true')
     expect(normalize).toHaveTextContent(/^auto$/)
-    expect(normalize).toHaveFocus()
     expect(expression).toHaveValue('vector(2, 1)')
     expect(screen.queryByText('2e1 + e2', { selector: 'output' })).not.toBeInTheDocument()
 
     fireEvent.click(normalize)
-    fireEvent.click(within(screen.getByRole('group', { name: 'Normalize with' })).getByRole('button', { name: 'off' }))
     expect(screen.getByText('2e1 + e2', { selector: 'output' })).toBeInTheDocument()
     expect(normalize).toHaveAccessibleName('Normalization: off')
+    expect(normalize).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('offers normalization for rotors and mixed multivectors but not scalars', () => {
@@ -2233,7 +2231,6 @@ describe('VGA 2D vertical slice', () => {
 
     fireEvent.change(expression, { target: { value: 'R = 2 + e12' } })
     fireEvent.click(screen.getByRole('button', { name: 'Normalization: off' }))
-    fireEvent.click(screen.getByRole('button', { name: 'auto' }))
     expect(screen.getByRole('button', { name: 'Normalization: auto' })).toBeInTheDocument()
     expect(expression).toHaveValue('R = 2 + e12')
 
@@ -3487,7 +3484,10 @@ describe('labels edited under the expression and placed from the menu (#226)', (
 describe('normalization chosen from the expression row (#185)', () => {
   it('opens the choice in a popover that closes on Escape, a click outside, or its close button', () => {
     render(<App />)
-    const toggle = screen.getByRole('button', { name: 'Normalization: off' })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: 'VGA · 2D. Change algebra' }))
+    fireEvent.click(within(screen.getByRole('menu')).getAllByRole('menuitemradio')[1])
+    const toggle = screen.getAllByRole('button', { name: 'Normalization: off' })[0]
     expect(toggle).toHaveAttribute('aria-haspopup', 'dialog')
     fireEvent.click(toggle)
     const popover = () => screen.queryByRole('dialog', { name: 'Normalize' })
@@ -3522,9 +3522,11 @@ describe('normalization chosen from the expression row (#185)', () => {
     const toggle = screen.getByRole('button', { name: 'Normalization: auto' })
     expect(toggle).toHaveAttribute('title', 'Normalized by the Euclidean norm (automatic)')
     expect(screen.getByText('0.6e1 + 0.8e2', { selector: 'output' })).toBeInTheDocument()
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    // The button switches it off directly, with no menu.
     fireEvent.click(toggle)
-    expect(within(screen.getByRole('group', { name: 'Normalize with' })).getByRole('button', { name: 'auto' }))
-      .toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryByRole('dialog', { name: 'Normalize' })).not.toBeInTheDocument()
+    expect(toggle).toHaveAccessibleName('Normalization: off')
     vi.unstubAllEnvs()
     window.localStorage.clear()
   })
