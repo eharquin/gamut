@@ -121,7 +121,10 @@ to milestones that explicitly include the standard PGA interpretation.
   Euclidean point written with the `point` constructor; its `head` is the
   Euclidean point `position + value`, the end of its arrow. An empty position
   is the origin point `e12`, so `position` and `head` evaluate to what is drawn.
-  The line at infinity accepts no position.
+  The line at infinity accepts no position. A position diagnostic shall say that a
+  position must evaluate to a Euclidean point, and for a coordinate tuple
+  give the `point(1, 2)` form; it shall not mention VGA vectors. The expected
+  kind is worded by the interpretation, not by the evaluator.
 
 ## 4. Visualization
 

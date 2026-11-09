@@ -273,6 +273,11 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Corrections
 
+- PGA(2) position diagnostics no longer mention VGA vectors. A coordinate
+  tuple such as `(1, 2)` reports that a position must evaluate to a Euclidean
+  point, such as `point(1, 2)`, instead of an unsupported `vector` function;
+  a position that evaluates to another kind, such as a line, reports that it
+  must evaluate to a Euclidean point. VGA(2) messages are unchanged (#236).
 - In PGA(2), the empty position of an ideal point evaluates to the origin
   point `e12`, where its arrow is drawn, instead of `0`: `J.position` is `e12`
   and `J.head` is `J + e12`, as the row shows. An empty VGA(2) position still

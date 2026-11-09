@@ -577,6 +577,45 @@ describe('document dependency evaluation', () => {
   })
 })
 
+describe('position diagnostics name what the algebra expects (#236)', () => {
+  const pgaContext = { engine: createPga2Engine(), interpretation: PGA_2D_INTERPRETATION }
+  const positionMessage = (results: ReturnType<typeof evaluateDocument>) => {
+    const position = results[0].positionEvaluation
+    if (position?.status !== 'invalid') throw new Error('Expected an invalid position')
+    return position.diagnostic
+  }
+
+  it('asks PGA(2) for a point instead of a tuple', () => {
+    const diagnostic = positionMessage(evaluateDocument(expressionDocument([
+      { id: 'i', source: 'I = ipoint(1, 0)', positionSource: '(1, 2)' },
+    ]), pgaContext))
+    expect(diagnostic).toMatchObject({
+      code: 'GEOM_INVALID_POSITION',
+      message: 'A position must evaluate to a Euclidean point, such as point(1, 2); coordinate tuples are not supported by the active algebra.',
+    })
+    expect(diagnostic.message).not.toMatch(/vector|VGA/)
+  })
+
+  it('asks PGA(2) for a Euclidean point when the position is a line', () => {
+    const diagnostic = positionMessage(evaluateDocument(expressionDocument([
+      { id: 'i', source: 'I = ipoint(1, 0)', positionSource: 'line(1, 0, 0)' },
+    ]), pgaContext))
+    expect(diagnostic).toMatchObject({
+      code: 'GEOM_INVALID_POSITION',
+      message: 'A position must evaluate to a Euclidean point.',
+    })
+  })
+
+  it('keeps the VGA(2) messages', () => {
+    const wrongKind = positionMessage(evaluateItems([
+      { id: 'v', source: 'V = vector(1, 0)', positionSource: 'e12' },
+    ]))
+    expect(wrongKind.message).toBe('A position must evaluate to a VGA 2D vector or zero.')
+    const [tuple] = evaluateItems([{ id: 'v', source: 'V = vector(1, 0)', positionSource: '(1, 2)' }])
+    expect(tuple.positionEvaluation).toMatchObject({ status: 'valid' })
+  })
+})
+
 describe('empty VGA(2) positions (#235)', () => {
   it('keep evaluating to zero', () => {
     const [, position, head] = evaluate('V = vector(2, 1)', 'P = V.position', 'H = V.head')
