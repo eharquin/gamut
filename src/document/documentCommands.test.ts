@@ -3,6 +3,17 @@ import { executeDocumentCommand } from './documentCommands'
 import { expressionDocument } from './expressionDocument'
 
 describe('semantic document commands', () => {
+  it('turns positions on when a position is written into a document that has them off', () => {
+    const base = expressionDocument([{ id: 'v', source: 'V = vector(2, 1)' }])
+    const off = { ...base, view: { ...base.view, positionEnabled: false } }
+    const written = executeDocumentCommand(off, { kind: 'update-position', itemId: 'v', positionSource: '(1, 1)' })
+    expect(written.document.view.positionEnabled).toBe(true)
+    expect(written.document.items[0].positionSource).toBe('(1, 1)')
+    // Clearing a position does not turn them on.
+    const cleared = executeDocumentCommand(off, { kind: 'update-position', itemId: 'v', positionSource: '' })
+    expect(cleared.document.view.positionEnabled).toBe(false)
+  })
+
   it('targets stable identities independently of row position', () => {
     const document = expressionDocument([
       { id: 'first', source: 'A = 1' },

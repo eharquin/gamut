@@ -229,10 +229,15 @@ export function executeDocumentCommand(
       : command.kind === 'update-normalization'
         ? { ...item, normalization: command.normalization }
         : { ...item, control: command.control }
+  // Writing a position means positions are wanted: a document whose positions
+  // are turned off would otherwise keep drawing the object at the origin.
+  const enablesPositions = command.kind === 'update-position' &&
+    !document.view.positionEnabled && command.positionSource.trim() !== ''
   return {
     status: 'applied',
     document: {
       ...document,
+      ...(enablesPositions ? { view: { ...document.view, positionEnabled: true } } : {}),
       items: document.items.map((candidate, candidateIndex) =>
         candidateIndex === index ? replacement : candidate),
     },

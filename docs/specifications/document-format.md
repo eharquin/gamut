@@ -238,7 +238,10 @@ requires `positionSource`, `normalization`, and `control` to be `null`.
 
 `positionSource` is either `null` or source text stored verbatim. It is preserved
 when position support is disabled. When enabled, it participates in the
-dependency graph described below.
+dependency graph described below. Position support is disabled only without a
+visualizer (NoViz, #55), where nothing is drawn: a document opened with a
+visualizer applies its positions even if it stored `positionEnabled: false`,
+and writing a non-empty position enables position support in the same command.
 
 `normalization` is `null`, `natural`, `euclidean`, or `ideal`. `natural`
 requests the active algebra's versioned natural-normalization service after

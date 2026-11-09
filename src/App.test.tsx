@@ -3481,6 +3481,43 @@ describe('labels edited under the expression and placed from the menu (#226)', (
   })
 })
 
+describe('documents whose positions are turned off', () => {
+  function openWithPositionsOff(positionSource = '(1, 1)') {
+    const document = expressionDocument([
+      { id: 'v', source: 'V = vector(2, 1)', ...(positionSource ? { positionSource } : {}) },
+    ], {}, { id: 'positions-off' })
+    const stored = toCanonicalDocument({ ...document, view: { ...document.view, positionEnabled: false } }, 'light')
+    window.localStorage.setItem(ACTIVE_DOCUMENT_KEY, serializeCanonicalDocument(stored))
+    vi.stubEnv('MODE', 'development')
+    render(<App />)
+  }
+  const base = () => {
+    const line = document.querySelector('line.vector[aria-label="V"]')!
+    return [line.getAttribute('x1'), line.getAttribute('y1')]
+  }
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    window.localStorage.clear()
+  })
+
+  it('applies the stored positions, since a canvas is shown', () => {
+    openWithPositionsOff('')
+    const origin = base()
+    cleanup()
+    openWithPositionsOff()
+    expect(base()).not.toEqual(origin)
+    expect(screen.queryByText(/Positions are turned off/)).not.toBeInTheDocument()
+  })
+
+  it('moves the object when its position is edited', () => {
+    openWithPositionsOff()
+    const before = base()
+    fireEvent.change(screen.getByRole('textbox', { name: 'Position 1' }), { target: { value: '(2, 2)' } })
+    expect(base()).not.toEqual(before)
+  })
+})
+
 describe('normalization chosen from the expression row (#185)', () => {
   it('opens the choice in a popover that closes on Escape, a click outside, or its close button', () => {
     render(<App />)

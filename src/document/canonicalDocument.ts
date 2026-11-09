@@ -612,7 +612,9 @@ export function fromCanonicalDocument(
       languageVersion: document.languageVersion,
       algebra: document.algebra,
       interpretation: document.interpretation,
-      view: { ...document.view, display },
+      // Positions only switch off without a visualizer (NoViz, #55): a document
+      // drawn on a canvas always applies its positions, whatever it stored.
+      view: { ...document.view, display, positionEnabled: document.view.visualizerId !== null || document.view.positionEnabled },
       items,
       appearance: document.appearance,
     },

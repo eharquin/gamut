@@ -105,6 +105,10 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Interface and accessibility
 
+- A document that stored `view.positionEnabled: false` drew every object at
+  the origin while its position fields and base drags still updated. Positions
+  now switch off only without a visualizer (NoViz, #55): a document drawn on a
+  canvas always applies its positions, and writing a position turns them on.
 - In PGA, the normalization choice opens in a popover anchored to the row's
   norm button, like the appearance menu: a **Normalize** header with a close
   button, then off · auto · norm · inorm. It closes on a choice, Escape, or a
