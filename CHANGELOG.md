@@ -104,6 +104,9 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Interface and accessibility
 
+- The settings button shows a cogwheel. Beside it, a sun and moon button
+  switches between the light and dark themes in one click; by default the
+  application follows the system theme, which the settings menu still offers.
 - The appearance menu is reworked (#216): the header shows the object kind,
   a visibility eye (the same setting as the row's eye), and the close button;
   titled sections fold from a chevron on their title. **Color** offers nine

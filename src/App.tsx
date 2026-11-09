@@ -25,6 +25,7 @@ import {
   SettingsMenu,
   type DisplaySettings,
 } from './components/SettingsMenu'
+import { ThemeToggle } from './components/ThemeToggle'
 import { resolveItemAppearance } from './components/appearancePalette'
 import { OPAQUE_INTERPRETATION, type InterpretedEntity, type Point2d } from './geometry/interpretation'
 import type { VisualizationPrimitive } from './visualization/primitives'
@@ -1941,6 +1942,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           aria-label="Import document file"
           onChange={importDocument}
         />
+        <ThemeToggle theme={theme} onThemeChange={setTheme} />
         <SettingsMenu
           display={expressionDoc.view.display}
           theme={theme}
