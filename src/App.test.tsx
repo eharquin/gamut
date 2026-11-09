@@ -2552,6 +2552,81 @@ describe('VGA 2D vertical slice', () => {
   })
 })
 
+describe('opening a document by dropping a file onto the window', () => {
+  const documentFile = (name: string, contents: string, type = 'application/json') => {
+    const bytes = new TextEncoder().encode(contents)
+    return { name, type, arrayBuffer: async () => bytes.slice().buffer } as unknown as File
+  }
+  const droppedDocument = () => JSON.stringify(toCanonicalDocument(expressionDocument(
+    [{ id: 'dropped-vector', source: 'Dropped = vector(5, 6)' }], {}, { id: 'dropped-document', title: 'Dropped' },
+  ), 'dark'))
+  const fileTransfer = (files: File[]) => ({ types: ['Files'], files, dropEffect: 'none' })
+  const overlay = () => screen.queryByText('Drop a JSON document to open it')
+
+  it('shows an announced overlay while a file is dragged, and hides it on leave', () => {
+    render(<App />)
+    const target = screen.getByRole('textbox', { name: 'Expression 1' })
+    expect(overlay()).not.toBeInTheDocument()
+    fireEvent.dragEnter(document.body, { dataTransfer: fileTransfer([]) })
+    fireEvent.dragEnter(target, { dataTransfer: fileTransfer([]) })
+    expect(overlay()).toBeInTheDocument()
+    expect(overlay()!.closest('[role="status"]')).not.toBeNull()
+    // Leaving a child keeps the overlay; leaving the window hides it.
+    fireEvent.dragLeave(target, { dataTransfer: fileTransfer([]) })
+    expect(overlay()).toBeInTheDocument()
+    fireEvent.dragLeave(document.body, { dataTransfer: fileTransfer([]) })
+    expect(overlay()).not.toBeInTheDocument()
+  })
+
+  it('opens a dropped document exactly as Import would', async () => {
+    render(<App />)
+    fireEvent.dragEnter(document.body, { dataTransfer: fileTransfer([]) })
+    const dropped = fireEvent.drop(document.body, {
+      dataTransfer: fileTransfer([documentFile('dropped.gamut.json', droppedDocument())]),
+    })
+    expect(dropped).toBe(false)
+    expect(overlay()).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('Dropped = vector(5, 6)'))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    // Like an import, the opened document starts a fresh history.
+    expect(screen.getByRole('button', { name: 'Undo document change' })).toBeDisabled()
+  })
+
+  it('reports an invalid, a non-JSON, or several dropped files and keeps the document', async () => {
+    render(<App />)
+    const source = screen.getByRole('textbox', { name: 'Expression 1' })
+
+    fireEvent.drop(document.body, { dataTransfer: fileTransfer([documentFile('broken.json', '{"formatVersion":')]) })
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/^DOCUMENT_/))
+    expect(source).toHaveValue('vector(2, 1)')
+
+    fireEvent.drop(document.body, { dataTransfer: fileTransfer([documentFile('notes.txt', droppedDocument(), 'text/plain')]) })
+    expect(screen.getByRole('alert')).toHaveTextContent('DOCUMENT_DROP_TYPE: “notes.txt” is not a JSON document.')
+
+    fireEvent.drop(document.body, {
+      dataTransfer: fileTransfer([documentFile('a.json', droppedDocument()), documentFile('b.json', droppedDocument())]),
+    })
+    expect(screen.getByRole('alert')).toHaveTextContent('DOCUMENT_DROP_MULTIPLE: 2 files were dropped.')
+    await act(async () => {})
+    expect(source).toHaveValue('vector(2, 1)')
+  })
+
+  it('leaves drags that carry no file to the page', () => {
+    render(<App />)
+    const source = screen.getByRole('textbox', { name: 'Expression 1' })
+    const text = { types: ['text/plain'], files: [], getData: () => 'e1' }
+    expect(fireEvent.dragEnter(source, { dataTransfer: text })).toBe(true)
+    expect(fireEvent.dragOver(source, { dataTransfer: text })).toBe(true)
+    expect(overlay()).not.toBeInTheDocument()
+    expect(fireEvent.drop(source, { dataTransfer: text })).toBe(true)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(source).toHaveValue('vector(2, 1)')
+    // A file drag whose drop holds no file is ignored without a diagnostic.
+    fireEvent.drop(document.body, { dataTransfer: fileTransfer([]) })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+})
+
 describe('point-list connection eligibility outside PGA', () => {
   it('offers no connection for a list of VGA vectors', () => {
     render(<App />)

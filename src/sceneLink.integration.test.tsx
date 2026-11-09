@@ -74,6 +74,22 @@ describe('scene sharing in the application', () => {
     expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('Shared = vector(3, 4)')
   })
 
+  it('keeps a document dropped into a temporary session temporary', async () => {
+    const source = serializeCanonicalDocument(saved)
+    window.localStorage.setItem(ACTIVE_DOCUMENT_KEY, source)
+    const writes = vi.spyOn(Storage.prototype, 'setItem')
+    await openSharedScene()
+    const bytes = new TextEncoder().encode(serializeCanonicalDocument(toCanonicalDocument(expressionDocument(
+      [{ id: 'dropped-vector', source: 'Dropped = vector(1, 1)' }], {}, { id: 'dropped-document' },
+    ), 'light')))
+    const file = { name: 'dropped.gamut.json', type: 'application/json', arrayBuffer: async () => bytes.slice().buffer } as unknown as File
+    fireEvent.drop(document.body, { dataTransfer: { types: ['Files'], files: [file] } })
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('Dropped = vector(1, 1)'))
+    expect(screen.getByRole('button', { name: 'Save local copy' })).toBeInTheDocument()
+    expect(writes).not.toHaveBeenCalled()
+    expect(window.localStorage.getItem(ACTIVE_DOCUMENT_KEY)).toBe(source)
+  })
+
   it('retains the temporary session and offers export if explicit saving fails', async () => {
     await openSharedScene()
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('Quota') })

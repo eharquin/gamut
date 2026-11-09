@@ -2363,3 +2363,30 @@ line.manipulation-focus-ring {
   stroke-linecap: round;
   pointer-events: none;
 }
+
+/*
+ * Shown while a file is dragged over the window. It ignores pointer events so
+ * that drag events keep reaching the page, whose window listeners own the drop.
+ */
+.file-drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  border: 2px dashed var(--accent);
+  pointer-events: none;
+}
+
+.file-drop-overlay p {
+  margin: 0;
+  padding: 12px 18px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--accent-border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-modal);
+  font-size: 0.9rem;
+}
