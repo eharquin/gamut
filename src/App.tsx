@@ -197,6 +197,28 @@ function persistViewportLock(locked: boolean): void {
   }
 }
 
+/**
+ * Whether the expression panel is collapsed is a local view preference, kept
+ * like the viewport lock; it is never part of the document (#234).
+ */
+const PANEL_COLLAPSED_STORAGE_KEY = 'gamut.expressionPanelCollapsed'
+
+function restoredPanelCollapsed(): boolean {
+  try {
+    return window.localStorage.getItem(PANEL_COLLAPSED_STORAGE_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+function persistPanelCollapsed(collapsed: boolean): void {
+  try {
+    window.localStorage.setItem(PANEL_COLLAPSED_STORAGE_KEY, String(collapsed))
+  } catch {
+    // The panel still collapses for this session when browser storage is unavailable.
+  }
+}
+
 type SharedDocument = ReturnType<typeof fromCanonicalDocument>
 
 function SharedScene() {
@@ -416,6 +438,11 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null)
   const [anchorPreview, setAnchorPreview] = useState<AnchorCandidate | null>(null)
   const [viewportLocked, setViewportLocked] = useState(() => sharedSession ? false : restoredViewportLock())
+  const [panelCollapsed, setPanelCollapsed] = useState(() => sharedSession ? false : restoredPanelCollapsed())
+  const collapsePanelButtonRef = useRef<HTMLButtonElement | null>(null)
+  const expandPanelButtonRef = useRef<HTMLButtonElement | null>(null)
+  /** The button that receives focus after the user collapses or expands the panel. */
+  const panelToggleFocus = useRef<'collapse' | 'expand' | null>(null)
   const [shareResult, setShareResult] = useState<{ content: string; label: string; message: string } | null>(null)
   // A copied link is confirmed briefly; the panel with the text only appears
   // when the clipboard refuses the copy.
@@ -469,6 +496,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const visualizerActive = interpretationResolution.status === 'resolved' &&
     visualizer !== null &&
     expressionDoc.view.viewport.kind === 'two-dimensional'
+  // Without a canvas there is nothing to give the room to, so the panel stays open.
+  const panelHidden = panelCollapsed && visualizerActive
   const grid = adaptiveGrid(viewport)
   const updateView = useCallback((view: typeof expressionDoc.view) => {
     dispatchHistory({ type: 'update-view', view })
@@ -1056,6 +1085,19 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     event.preventDefault()
     updateViewport(next)
   }
+
+  const togglePanelCollapsed = () => {
+    const collapsed = !panelCollapsed
+    panelToggleFocus.current = collapsed ? 'expand' : 'collapse'
+    setPanelCollapsed(collapsed)
+    if (!ephemeral) persistPanelCollapsed(collapsed)
+  }
+  useEffect(() => {
+    const target = panelToggleFocus.current
+    panelToggleFocus.current = null
+    if (target === 'expand') expandPanelButtonRef.current?.focus()
+    else if (target === 'collapse') collapsePanelButtonRef.current?.focus()
+  }, [panelCollapsed])
 
   const toggleViewportLock = () => {
     const locked = !viewportLocked
@@ -2077,9 +2119,11 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
 
       <main className="workspace" ref={workspaceRef}>
         <aside
-          className="expression-panel"
+          id="expression-panel"
+          className={`expression-panel${panelHidden ? ' is-collapsed' : ''}`}
           aria-label="Expressions"
-          style={{ width: panelWidth }}
+          style={{ width: panelWidth, '--panel-width': `${panelWidth}px` } as CSSProperties}
+          inert={panelHidden}
         >
           <div className="expression-toolbar">
             <button
@@ -2117,6 +2161,22 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                 <span aria-hidden="true">↷</span>
               </button>
             </div>
+            {visualizerActive && <button
+              ref={collapsePanelButtonRef}
+              type="button"
+              className="panel-toggle panel-collapse"
+              aria-label="Collapse expression panel"
+              title="Collapse expression panel"
+              aria-expanded={!panelHidden}
+              aria-controls="expression-panel"
+              onClick={togglePanelCollapsed}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5" fill="none" />
+                <line x1="6" y1="2.75" x2="6" y2="13.25" />
+                <path d="M11 6l-2 2 2 2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>}
           </div>
 
           <div className="expression-list">
@@ -2809,7 +2869,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           </div>
         </aside>
 
-        <div
+        {!panelHidden && <div
           className="panel-resize"
           role="separator"
           aria-label="Resize expression panel"
@@ -2820,10 +2880,26 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           tabIndex={0}
           onPointerDown={beginPanelResize}
           onKeyDown={resizePanelWithKeyboard}
-        />
+        />}
 
         {visualizerActive && <section className="visualizer" aria-label={visualizer?.regionName}>
           <div ref={canvasFrameRef} className="canvas-frame">
+            {panelHidden && <button
+              ref={expandPanelButtonRef}
+              type="button"
+              className="panel-toggle panel-expand"
+              aria-label="Expand expression panel"
+              title="Expand expression panel"
+              aria-expanded={false}
+              aria-controls="expression-panel"
+              onClick={togglePanelCollapsed}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5" fill="none" />
+                <line x1="6" y1="2.75" x2="6" y2="13.25" />
+                <path d="M9 6l2 2-2 2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>}
             <div
               className="viewport-toolbar"
               role="toolbar"

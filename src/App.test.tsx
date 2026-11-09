@@ -3612,3 +3612,53 @@ describe('normalization chosen from the expression row (#185)', () => {
     expect(screen.getByText('4e01 - 3e02', { selector: 'output' })).toBeInTheDocument()
   })
 })
+
+describe('collapsing the expression panel (#234)', () => {
+  const panel = () => document.getElementById('expression-panel') as HTMLElement
+
+  it('collapses to the left, moves focus, and expands back', () => {
+    render(<App />)
+    const collapse = screen.getByRole('button', { name: 'Collapse expression panel' })
+    expect(collapse).toHaveAttribute('aria-expanded', 'true')
+    expect(collapse).toHaveAttribute('aria-controls', 'expression-panel')
+
+    fireEvent.click(collapse)
+    expect(panel()).toHaveClass('is-collapsed')
+    expect(panel()).toHaveAttribute('inert')
+    expect(screen.queryByRole('separator', { name: 'Resize expression panel' })).not.toBeInTheDocument()
+    const expand = screen.getByRole('button', { name: 'Expand expression panel' })
+    expect(expand).toHaveAttribute('aria-expanded', 'false')
+    expect(expand).toHaveFocus()
+    // The canvas keeps running: it is still there and takes the freed room.
+    expect(viewportCanvas()).toBeInTheDocument()
+
+    fireEvent.click(expand)
+    expect(panel()).not.toHaveClass('is-collapsed')
+    expect(panel()).not.toHaveAttribute('inert')
+    expect(screen.getByRole('separator', { name: 'Resize expression panel' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Expand expression panel' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Collapse expression panel' })).toHaveFocus()
+  })
+
+  it('remembers the collapsed panel locally, outside the document and its history', () => {
+    const first = render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse expression panel' }))
+    expect(window.localStorage.getItem('gamut.expressionPanelCollapsed')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Undo document change' })).toBeDisabled()
+    first.unmount()
+
+    render(<App />)
+    expect(panel()).toHaveClass('is-collapsed')
+    fireEvent.click(screen.getByRole('button', { name: 'Expand expression panel' }))
+    expect(window.localStorage.getItem('gamut.expressionPanelCollapsed')).toBe('false')
+  })
+
+  it('keeps the panel collapsible when browser storage is unavailable', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('blocked') })
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('blocked') })
+    render(<App />)
+    expect(panel()).not.toHaveClass('is-collapsed')
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse expression panel' }))
+    expect(panel()).toHaveClass('is-collapsed')
+  })
+})

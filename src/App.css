@@ -189,6 +189,61 @@
   flex-direction: column;
   background: var(--surface);
   overflow: hidden;
+  transition: margin-left 180ms ease, visibility 0s linear 0s;
+}
+
+/* Collapsed to the left: it slides out, then leaves the accessibility tree
+   and the focus order once the slide ends (#234). */
+.expression-panel.is-collapsed {
+  margin-left: calc(-1 * var(--panel-width));
+  visibility: hidden;
+  transition: margin-left 180ms ease, visibility 0s linear 180ms;
+}
+
+.panel-toggle {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease;
+}
+
+.panel-toggle:hover {
+  color: var(--accent);
+  background: var(--surface-active);
+}
+
+.panel-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.panel-toggle svg rect,
+.panel-toggle svg line,
+.panel-toggle svg path {
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+.panel-collapse {
+  margin-left: auto;
+}
+
+/* At the left edge of the canvas, where the panel went. */
+.panel-expand {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 9;
+  background: var(--surface);
+  border: 1px solid var(--border);
 }
 
 .expression-toolbar {
@@ -1910,6 +1965,13 @@ body.reordering-items .reorder-handle {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .expression-panel,
+  .expression-panel.is-collapsed {
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
   .appearance-fold svg,
   .appearance-shade,
   .appearance-popover input[role='switch'],
@@ -2567,6 +2629,11 @@ body.canvas-gesture .expression-panel {
     width: 100% !important;
     max-height: 52svh;
     border-bottom: 1px solid var(--border);
+  }
+
+  /* Stacked above the canvas, the collapsed panel leaves no room at all. */
+  .expression-panel.is-collapsed {
+    display: none;
   }
 
   .panel-resize {
