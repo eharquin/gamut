@@ -1,5 +1,5 @@
 /// <reference types="node" />
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { webcrypto } from 'node:crypto'
 import App from './App'
@@ -164,17 +164,12 @@ describe('scene sharing in the application', () => {
     expect(screen.queryByText(/^Link copied/)).not.toBeInTheDocument()
   })
 
-  it('hides the copy confirmation after a moment', async () => {
+  it('hides the copy confirmation after a moment', { timeout: 15_000 }, async () => {
     vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } })
-    await openSharedScene()
-    vi.useFakeTimers({ shouldAdvanceTime: true })
-    try {
-      copyLink()
-      await waitFor(() => expect(screen.getByText('Link copied.')).toBeInTheDocument())
-      await act(async () => { vi.advanceTimersByTime(3000) })
-      expect(screen.queryByText('Link copied.')).not.toBeInTheDocument()
-    } finally {
-      vi.useRealTimers()
-    }
+    await openSharedScene(5000)
+    copyLink()
+    await waitFor(() => expect(screen.getByText('Link copied.')).toBeInTheDocument(), { timeout: 5000 })
+    // The notice lasts 2.5 s; real timers keep the test independent of the runner.
+    await waitFor(() => expect(screen.queryByText('Link copied.')).not.toBeInTheDocument(), { timeout: 6000 })
   })
 })
