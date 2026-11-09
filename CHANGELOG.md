@@ -116,6 +116,10 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   an animated slider with Once, Loop, or Ping-pong; off, a number field. A
   slider without animation keeps its display until the switch is used.
 
+- The settings menu is named **Settings** for assistive technology, since it
+  also holds the document commands (Import, Export, Copy link).
+- The file-drop overlay always hides when a drag leaves the window, even when
+  the browser skipped a nested `dragleave` event.
 - Coordinates written by the viewport are rounded to about one screen pixel,
   `round(log10(pixelsPerUnit))` decimals clamped from 0 to 8, instead of one
   tenth of a pixel. With about five units across the viewport, a double-click

@@ -30,8 +30,8 @@ afterEach(() => {
 })
 
 function copyLink() {
-  fireEvent.click(screen.getByRole('button', { name: 'Display settings' }))
-  fireEvent.click(within(screen.getByRole('dialog', { name: 'Display settings' })).getByRole('button', { name: 'Copy link' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+  fireEvent.click(within(screen.getByRole('dialog', { name: 'Settings' })).getByRole('button', { name: 'Copy link' }))
 }
 
 async function openSharedScene() {

@@ -82,7 +82,7 @@
 .normalize-toggle:focus-visible,
 .scalar-play-button:focus-visible,
 .viewport-command:focus-visible,
-.display-settings-button:focus-visible,
+.settings-menu-button:focus-visible,
 .settings-select:focus-visible,
 .settings-number:focus-visible,
 .appearance-header button:focus-visible {
@@ -111,7 +111,7 @@
   background: color-mix(in srgb, var(--accent-soft) 65%, var(--surface));
 }
 
-.app-header > .display-settings {
+.app-header > .settings-menu {
   margin-left: auto;
 }
 
@@ -1072,12 +1072,12 @@ body.reordering-items .reorder-handle {
   opacity: 0.75;
 }
 
-.display-settings {
+.settings-menu {
   position: relative;
   display: inline-block;
 }
 
-.display-settings-button {
+.settings-menu-button {
   width: 26px;
   height: 26px;
   display: grid;
@@ -1091,21 +1091,21 @@ body.reordering-items .reorder-handle {
   transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
 }
 
-.display-settings-button svg circle,
-.display-settings-button svg path {
+.settings-menu-button svg circle,
+.settings-menu-button svg path {
   stroke: currentColor;
   stroke-width: 1.5;
 }
 
-.display-settings-button:hover,
-.display-settings-button.is-open {
+.settings-menu-button:hover,
+.settings-menu-button.is-open {
   color: var(--accent);
   background: var(--surface-hover);
   border-color: var(--accent-border);
 }
 
 /* Anchored to the header trigger, which never sits near a viewport edge. */
-.display-settings-popover {
+.settings-menu-popover {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
