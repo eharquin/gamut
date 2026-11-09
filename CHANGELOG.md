@@ -105,6 +105,14 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Interface and accessibility
 
+- A NoViz calculator mode: a button at the top left of the canvas collapses
+  the canvas to the right and leaves the expression panel full width, and a
+  button at the right edge of the panel brings the canvas back at the view it
+  had. Nothing is drawn, and position fields, visibility buttons, labels, the
+  appearance menu, and the rendering settings are hidden while evaluation,
+  scalar controls, history, and import and export keep working. NoViz is saved
+  in the document (`visualizerId: null`, viewport `none`, positions off) and
+  carried by exports and scene links (#55).
 - A button at the top right of the expression panel collapses it to the
   left so that the canvas fills the window; a button at the left edge of the
   canvas brings it back at its previous width. The choice is remembered in

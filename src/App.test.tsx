@@ -3662,3 +3662,86 @@ describe('collapsing the expression panel (#234)', () => {
     expect(panel()).toHaveClass('is-collapsed')
   })
 })
+
+describe('NoViz calculator mode (#55)', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    window.localStorage.clear()
+  })
+  const storedView = () => JSON.parse(window.localStorage.getItem(ACTIVE_DOCUMENT_KEY)!).view
+  const canvas = () => screen.queryByRole('img', { name: /Two-dimensional [VP]GA viewport/ })
+
+  it('collapses the canvas into a full-width calculator and brings it back', () => {
+    vi.stubEnv('MODE', 'development')
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+    const zoom = (screen.getByRole('textbox', { name: 'Zoom level' }) as HTMLInputElement).value
+    expect(screen.getByRole('textbox', { name: 'Position 1' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide canvas (NoViz calculator)' }))
+
+    // Nothing is rendered; the panel takes the whole width and says so.
+    expect(canvas()).not.toBeInTheDocument()
+    expect(document.querySelector('svg.canvas')).not.toBeInTheDocument()
+    expect(screen.getByText('NoViz calculator')).toBeInTheDocument()
+    expect(document.getElementById('expression-panel')).toHaveClass('is-full-width')
+    expect(screen.queryByRole('separator', { name: 'Resize expression panel' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Collapse expression panel' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Show canvas' })).toHaveFocus()
+    // Render-only fields and settings are gone; evaluation goes on.
+    expect(screen.queryByRole('textbox', { name: 'Position 1' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^(Hide|Show) V1$/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Open .* menu for V1/ })).not.toBeInTheDocument()
+    expect(screen.getAllByText('0.66e1 + 3.042e2').length).toBeGreaterThan(0)
+    openSettings()
+    const settings = screen.getByRole('dialog', { name: 'Settings' })
+    expect(within(settings).queryByRole('switch', { name: 'Grid' })).not.toBeInTheDocument()
+    expect(within(settings).queryByRole('slider', { name: 'Object scale' })).not.toBeInTheDocument()
+    expect(within(settings).getByRole('spinbutton', { name: 'Decimal places' })).toBeInTheDocument()
+    fireEvent.keyDown(settings, { key: 'Escape' })
+
+    // NoViz is document state: saved with no visualizer and positions off.
+    expect(storedView()).toMatchObject({ visualizerId: null, positionEnabled: false, viewport: { kind: 'none' } })
+    expect(screen.getByRole('button', { name: 'Undo document change' })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+    expect(canvas()).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Zoom level' })).toHaveValue(zoom)
+    expect(screen.getByRole('textbox', { name: 'Position 1' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Hide canvas (NoViz calculator)' })).toHaveFocus()
+    expect(storedView()).toMatchObject({
+      visualizerId: 'org.multivector.vga-2d', positionEnabled: true, viewport: { kind: 'two-dimensional' },
+    })
+  })
+
+  it('opens a stored NoViz document as a calculator and shows the canvas at the default view', () => {
+    const stored = toCanonicalDocument(expressionDocument([
+      { id: 'v', source: 'V = vector(2, 1)', positionSource: '(1, 1)' },
+    ], {}, { id: 'noviz' }), 'light')
+    window.localStorage.setItem(ACTIVE_DOCUMENT_KEY, serializeCanonicalDocument({
+      ...stored,
+      view: { ...stored.view, visualizerId: null, positionEnabled: false, viewport: { kind: 'none' } },
+    }))
+    vi.stubEnv('MODE', 'development')
+    render(<App />)
+    expect(canvas()).not.toBeInTheDocument()
+    expect(screen.queryByText(/DOCUMENT_VIEW_UNSUPPORTED/)).not.toBeInTheDocument()
+    expect(screen.getByText('NoViz calculator')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+    expect(canvas()).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Zoom level' })).toHaveValue('100%')
+    // Positions apply again: the vector starts at (1, 1), not at the origin.
+    expect(screen.getByRole('textbox', { name: 'Position 1' })).toHaveValue('(1, 1)')
+    expect(storedView()).toMatchObject({ positionEnabled: true })
+  })
+
+  it('opens with the whole panel when the expression panel was collapsed', () => {
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse expression panel' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Hide canvas (NoViz calculator)' }))
+    expect(document.getElementById('expression-panel')).not.toHaveClass('is-collapsed')
+    fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+    expect(document.getElementById('expression-panel')).not.toHaveClass('is-collapsed')
+  })
+})
