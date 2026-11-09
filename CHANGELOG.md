@@ -105,6 +105,9 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Interface and accessibility
 
+- **Copy link** confirms a copied link with a brief notice instead of opening
+  the link panel; the panel with selectable text only appears when the
+  clipboard refuses the copy.
 - The settings button shows a cogwheel. Beside it, a sun and moon button
   switches between the light and dark themes in one click; by default the
   application follows the system theme, which the settings menu still offers.
