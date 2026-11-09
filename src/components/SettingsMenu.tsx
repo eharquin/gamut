@@ -26,7 +26,7 @@ export type DocumentMenuCommands = Readonly<{
   sharing: boolean
 }>
 
-type DisplaySettingsMenuProps = Readonly<{
+type SettingsMenuProps = Readonly<{
   display: DisplaySettings
   theme: ThemeMode
   documentCommands: DocumentMenuCommands
@@ -67,13 +67,13 @@ function SwitchRow({ label, checked, inputRef, onChange }: SwitchRowProps) {
  * which owns the view command and the document commands; this component never
  * mutates a document.
  */
-export function DisplaySettingsMenu({
+export function SettingsMenu({
   display,
   theme,
   documentCommands,
   onDisplayChange,
   onThemeChange,
-}: DisplaySettingsMenuProps) {
+}: SettingsMenuProps) {
   const [open, setOpen] = useState(false)
   const wrapperRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -112,12 +112,12 @@ export function DisplaySettingsMenu({
   }
 
   return (
-    <div className="display-settings" ref={wrapperRef}>
+    <div className="settings-menu" ref={wrapperRef}>
       <button
         ref={triggerRef}
         type="button"
-        className={`display-settings-button${open ? ' is-open' : ''}`}
-        aria-label="Display settings"
+        className={`settings-menu-button${open ? ' is-open' : ''}`}
+        aria-label="Settings"
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen((current) => {
@@ -137,9 +137,9 @@ export function DisplaySettingsMenu({
       </button>
       {open && (
         <div
-          className="display-settings-popover"
+          className="settings-menu-popover"
           role="dialog"
-          aria-label="Display settings"
+          aria-label="Settings"
         >
           <section className="settings-section">
             <h3>Display</h3>
