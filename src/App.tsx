@@ -11,6 +11,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
+import { showcaseMetadata } from './algebra/algebraDefinition'
 import { type AlgebraEngine } from './algebra/algebraEngine'
 import { createBuiltinAlgebraRegistry } from './algebra/builtinAlgebras'
 import { evaluateDocument } from './application/evaluateDocument'
@@ -72,7 +73,8 @@ import {
   type ThemeMode,
 } from './document/canonicalDocument'
 import { browserDocumentStorage } from './document/documentStorage'
-import { createSceneLink, decodeSceneFragment, hasSceneFragment, sceneIframeCode, SHARE_URL_WARNING_LENGTH } from './document/sceneLink'
+import { selectDroppedDocument } from './document/droppedDocument'
+import { createSceneLink, decodeSceneFragment, hasSceneFragment, SHARE_URL_WARNING_LENGTH } from './document/sceneLink'
 import {
   formatDisplayMultivector,
   formatDisplayNumber,
@@ -403,6 +405,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const [viewportLocked, setViewportLocked] = useState(() => sharedSession ? false : restoredViewportLock())
   const [shareResult, setShareResult] = useState<{ content: string; label: string; message: string } | null>(null)
   const [sharing, setSharing] = useState(false)
+  const [fileDragActive, setFileDragActive] = useState(false)
   const [activePlaybacks, setActivePlaybacks] = useState<
     ReadonlyMap<string, ActiveScalarPlayback>
   >(() => new Map())
@@ -1649,6 +1652,15 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     const file = event.target.files?.[0]
     event.target.value = ''
     if (!file) return
+    await importDocumentFile(file)
+  }
+
+  /**
+   * Opens a chosen or dropped document file: size limit, parsing, migration,
+   * validation, the replace or duplicate choice, and diagnostics. A temporary
+   * scene-link session stays temporary.
+   */
+  const importDocumentFile = async (file: File) => {
     if (activePlaybacks.size > 0) stopAllPlaybacks()
     try {
       const parsed = parseCanonicalDocumentBytes(new Uint8Array(await file.arrayBuffer()))
@@ -1677,17 +1689,62 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     }
   }
 
-  const copyScene = async (iframe: boolean) => {
+  // Dropping a document file anywhere on the window opens it through the
+  // import path. Only drags that carry files are handled, so text dragged
+  // into an editor and the pointer-driven reordering and viewport drags are
+  // unaffected.
+  const importDroppedFile = useRef(importDocumentFile)
+  useEffect(() => { importDroppedFile.current = importDocumentFile })
+  useEffect(() => {
+    let depth = 0
+    const carriesFiles = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes('Files')
+    const enter = (event: DragEvent) => {
+      if (!carriesFiles(event)) return
+      event.preventDefault()
+      depth += 1
+      setFileDragActive(true)
+    }
+    const over = (event: DragEvent) => {
+      if (!carriesFiles(event)) return
+      event.preventDefault()
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+    }
+    const leave = (event: DragEvent) => {
+      if (!carriesFiles(event)) return
+      depth = Math.max(0, depth - 1)
+      if (depth === 0) setFileDragActive(false)
+    }
+    const drop = (event: DragEvent) => {
+      if (!carriesFiles(event)) return
+      event.preventDefault()
+      depth = 0
+      setFileDragActive(false)
+      const dropped = selectDroppedDocument(event.dataTransfer?.files ?? [])
+      if (dropped.status === 'rejected') setDocumentDiagnostic(dropped.diagnostic)
+      else if (dropped.status === 'file') void importDroppedFile.current(dropped.file)
+    }
+    window.addEventListener('dragenter', enter)
+    window.addEventListener('dragover', over)
+    window.addEventListener('dragleave', leave)
+    window.addEventListener('drop', drop)
+    return () => {
+      window.removeEventListener('dragenter', enter)
+      window.removeEventListener('dragover', over)
+      window.removeEventListener('dragleave', leave)
+      window.removeEventListener('drop', drop)
+    }
+  }, [])
+
+  const copyScene = async () => {
     setSharing(true)
     setShareResult(null)
     try {
       const url = await createSceneLink(toCanonicalDocument(expressionDoc, theme, resolvedStyles), new URL(import.meta.env.BASE_URL, window.location.href).href)
-      const content = iframe ? sceneIframeCode(url) : url
       let copied = false
-      try { await navigator.clipboard.writeText(content); copied = true } catch { /* The selectable text remains available when clipboard access is blocked. */ }
+      try { await navigator.clipboard.writeText(url); copied = true } catch { /* The selectable text remains available when clipboard access is blocked. */ }
       setShareResult({
-        content,
-        label: iframe ? 'Scene iframe code' : 'Scene link',
+        content: url,
+        label: 'Scene link',
         message: (copied ? 'Copied.' : 'Select and copy the text below.') + (url.length > SHARE_URL_WARNING_LENGTH
           ? ' This link exceeds 8 KiB and some presentation tools may reject it. JSON export is also available.' : ''),
       })
@@ -1785,6 +1842,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       },
       interpretation: { interpretationId: definition.standardInterpretationId, interpretationVersion: 1 },
       visualizerId: definition.standardVisualizerId,
+      ...showcaseMetadata(definition),
     })
     // The algebra's showcase makes the switch land on a working example.
     showcaseItems(definition.showcase).forEach((item) => executeCommand({ kind: 'insert-item', item }))
@@ -1880,17 +1938,15 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           aria-label="Import document file"
           onChange={importDocument}
         />
-        <button type="button" className="document-command document-import-command" onClick={() => importInputRef.current?.click()}>
-          Import
-        </button>
-        <button type="button" className="document-command" onClick={exportDocument}>
-          Export
-        </button>
-        <button type="button" className="document-command" disabled={sharing} onClick={() => void copyScene(false)}>Copy link</button>
-        <button type="button" className="document-command" disabled={sharing} onClick={() => void copyScene(true)}>Copy iframe code</button>
         <DisplaySettingsMenu
           display={expressionDoc.view.display}
           theme={theme}
+          documentCommands={{
+            onImport: () => importInputRef.current?.click(),
+            onExport: exportDocument,
+            onCopyLink: () => void copyScene(),
+            sharing,
+          }}
           onDisplayChange={updateDisplay}
           onThemeChange={setTheme}
         />
@@ -2104,7 +2160,11 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                               appearance: { visible: !visible },
                             })}
                           >
-                            <span aria-hidden="true">{visible ? '◉' : '⊘'}</span>
+                            <svg className="visibility-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                              <path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8z" />
+                              <circle cx="8" cy="8" r="2" />
+                              {!visible && <path className="visibility-icon-slash" d="M2.5 13.5 13.5 2.5" />}
+                            </svg>
                           </button>
                       )}
                       {valid && !drawable &&
@@ -2852,8 +2912,18 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       <output className="visually-hidden" aria-live="polite">
         {reorderAnnouncement}
       </output>
+      <div className="file-drop-status" role="status">
+        {fileDragActive && (
+          <div className="file-drop-overlay">
+            <p>Drop a JSON document to open it</p>
+          </div>
+        )}
+      </div>
       {infoDialog === 'expressions' && (
         <ExpressionReferenceDialog
+          algebraName={algebraDefinition.info(algebraResolution.parameters).name}
+          algebraBadge={algebraDefinition.badge}
+          sections={algebraDefinition.expressionReference}
           returnFocusRef={expressionReferenceButtonRef}
           onClose={closeInfoDialog}
         />

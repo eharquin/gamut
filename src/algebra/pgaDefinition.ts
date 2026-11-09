@@ -1,5 +1,6 @@
 import { type AlgebraDefinition } from './algebraDefinition'
 import { PGA_2_INFO } from './pga2Info'
+import { PGA_2_REFERENCE } from './pgaReference'
 import { createPga2Engine } from './pgaEngine'
 
 /**
@@ -53,12 +54,16 @@ export const PGA_DEFINITION: AlgebraDefinition = Object.freeze({
   },
   standardInterpretationId: 'org.multivector.pga-2d',
   standardVisualizerId: 'org.multivector.pga-2d',
+  showcaseTitle: 'PGA 2D Triangle Example',
+  showcaseDescription:
+    'A triangle of points and its joined sides, with distances, angles, height, area, a movable line, and a motor sweeping a vertex.',
   // A triangle whose sides are joins: distances are norms of joins, the
   // angle at A comes from the inner product and the meet of two sides, the
   // height from the outer product of a side and the opposite vertex, and the
   // area from the triple join. N is a literal line, movable from the viewport.
   // R, the square root of the product of the two unit sides through A, turns
   // L onto M about A; S interpolates it with exp(t log R) and sweeps B onto M.
+  expressionReference: PGA_2_REFERENCE,
   showcase: [
     { source: 'A = point(-2, 1)' },
     { source: 'B = point(2, 2)' },

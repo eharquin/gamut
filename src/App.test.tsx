@@ -7,6 +7,7 @@ import {
   waitFor,
   within,
 } from '@testing-library/react'
+import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import {
@@ -29,6 +30,12 @@ function openDisplaySettings(): HTMLElement {
   const trigger = screen.getByRole('button', { name: 'Display settings' })
   fireEvent.click(trigger)
   return trigger
+}
+
+/** Runs a document command from the settings menu, as a user would. */
+function runDocumentCommand(name: 'Import' | 'Export' | 'Copy link'): void {
+  openDisplaySettings()
+  fireEvent.click(within(screen.getByRole('dialog', { name: 'Display settings' })).getByRole('button', { name }))
 }
 
 function viewportCanvas(): SVGSVGElement {
@@ -69,10 +76,35 @@ describe('VGA 2D vertical slice', () => {
     })
     render(<App />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+    runDocumentCommand('Export')
 
     expect(clickedLinks).toHaveLength(1)
     expect(clickedLinks[0].download).toBe('Untitled-document.gamut.json')
+  })
+
+  it('offers Import, Export, and Copy link in the settings menu instead of the header', () => {
+    const fileDialogs = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => undefined)
+    render(<App />)
+    const header = document.querySelector('header.app-header') as HTMLElement
+    for (const name of ['Import', 'Export', 'Copy link', 'Copy iframe code'])
+      expect(within(header).queryByRole('button', { name })).not.toBeInTheDocument()
+
+    const trigger = openDisplaySettings()
+    const menu = screen.getByRole('dialog', { name: 'Display settings' })
+    const section = within(menu).getByRole('region', { name: 'Document' })
+    expect(within(section).getAllByRole('button').map((button) => button.textContent?.trim()))
+      .toEqual(['Import', 'Export', 'Copy link'])
+    expect(within(menu).queryByRole('button', { name: 'Copy iframe code' })).not.toBeInTheDocument()
+
+    // Import opens the existing file input, closes the menu, and returns focus.
+    const importButton = within(section).getByRole('button', { name: 'Import' })
+    importButton.focus()
+    expect(importButton).toHaveFocus()
+    fireEvent.click(importButton)
+    expect(fileDialogs).toHaveBeenCalledOnce()
+    expect(fileDialogs.mock.contexts[0]).toBe(screen.getByLabelText('Import document file'))
+    expect(screen.queryByRole('dialog', { name: 'Display settings' })).not.toBeInTheDocument()
+    expect(trigger).toHaveFocus()
   })
 
   it('imports a version 0.1 document with the historical filename suffix', async () => {
@@ -1916,6 +1948,38 @@ describe('VGA 2D vertical slice', () => {
     expect(screen.getByRole('img')).toHaveTextContent('No spatial objects are visible')
   })
 
+  it('shows the visibility eye on row hover or focus, and always for a hidden object', () => {
+    render(<App />)
+    const hide = screen.getByRole('button', { name: 'Hide Vector' })
+    expect(hide).toHaveAttribute('aria-pressed', 'true')
+    expect(hide.querySelector('svg.visibility-icon')).not.toBeNull()
+    expect(hide.querySelector('.visibility-icon-slash')).toBeNull()
+    hide.focus()
+    expect(hide).toHaveFocus()
+
+    fireEvent.click(hide)
+    const show = screen.getByRole('button', { name: 'Show Vector' })
+    expect(show).toHaveAttribute('aria-pressed', 'false')
+    expect(show.querySelector('.visibility-icon-slash')).not.toBeNull()
+    expect(show.closest('.expression-item')).toHaveClass('is-hidden')
+
+    // jsdom does not evaluate :hover, :focus-within, or media queries, so the
+    // reveal rules are checked in the stylesheet. Opacity, not visibility or
+    // display, hides the eye so that it stays in the tab order.
+    const appStyles = readFileSync(`${import.meta.dirname}/App.css`, 'utf8')
+    const rule = (selector: string) => [...appStyles.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .find(([, selectors]) => selectors.replace(/\/\*[\s\S]*?\*\//g, '').trim().split(/,\s*/).join(', ') === selector)
+      ?.[0] ?? ''
+    expect(rule('.visibility-toggle')).toMatch(/opacity: 0;/)
+    expect(rule('.visibility-toggle')).not.toMatch(/visibility:|display:/)
+    expect(rule([
+      '.expression-item:hover .visibility-toggle',
+      '.expression-item:focus-within .visibility-toggle',
+      '.expression-item.is-hidden .visibility-toggle',
+    ].join(', '))).toMatch(/opacity: 1;/)
+    expect(appStyles).toMatch(/@media \(hover: none\) \{\s*\.visibility-toggle \{\s*opacity: 1;/)
+  })
+
   it('applies deterministic default styles per semantic object kind', () => {
     render(<App />)
     const expression = screen.getByRole('textbox', { name: 'Expression 1' })
@@ -2398,6 +2462,34 @@ describe('VGA 2D vertical slice', () => {
     confirm.mockRestore()
   })
 
+  it('names the document and its export after the example of the selected algebra', () => {
+    const downloads: string[] = []
+    class TestURL extends URL {
+      static createObjectURL = vi.fn((_blob: Blob) => 'blob:gamut-document')
+      static revokeObjectURL = vi.fn((_url: string) => undefined)
+    }
+    vi.stubGlobal('URL', TestURL)
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      downloads.push(this.download)
+    })
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<App />)
+    const switchTo = (current: string, index: number) => {
+      fireEvent.click(screen.getByRole('button', { name: `${current}. Change algebra` }))
+      fireEvent.click(within(screen.getByRole('menu')).getAllByRole('menuitemradio')[index])
+    }
+
+    switchTo('VGA · 2D', 1)
+    runDocumentCommand('Export')
+    switchTo('PGA · 2D', 0)
+    runDocumentCommand('Export')
+
+    expect(downloads).toEqual([
+      'PGA-2D-Triangle-Example.gamut.json',
+      'VGA-2D-Rotation-Example.gamut.json',
+    ])
+  })
+
   it('navigates the algebra menu by keyboard and closes it with Escape', () => {
     render(<App />)
     const badge = screen.getByRole('button', { name: 'VGA · 2D. Change algebra' })
@@ -2506,6 +2598,7 @@ describe('VGA 2D vertical slice', () => {
     const dialog = screen.getByRole('dialog', {
       name: 'Expression Reference',
     })
+    expect(dialog).toHaveTextContent('Syntax for Vector Geometric Algebra (VGA · 2D) documents.')
     expect(dialog).toHaveTextContent('Operators')
     expect(dialog).toHaveTextContent('A & B')
     expect(dialog).toHaveTextContent('a % m')
@@ -2520,6 +2613,102 @@ describe('VGA 2D vertical slice', () => {
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(trigger).toHaveFocus()
+  })
+})
+
+describe('expression reference of a PGA(2) document', () => {
+  it('shows the PGA constructors, blades, norms, and motor functions, and no VGA-only syntax', () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'VGA · 2D. Change algebra' }))
+    fireEvent.click(within(screen.getByRole('menu')).getAllByRole('menuitemradio')[1])
+    fireEvent.click(screen.getByRole('button', { name: 'Expression reference' }))
+
+    const dialog = screen.getByRole('dialog', { name: 'Expression Reference' })
+    expect(dialog).toHaveTextContent('Syntax for Projective Geometric Algebra (PGA · 2D) documents.')
+    for (const syntax of [
+      'point(x, y)', 'point(x, y, w)', 'ipoint(x, y)', 'line(a, b, c)',
+      'e0, e1, e2, e01, e02, e12, e012', 'A.inorm', 'A.e012', 'log(M), sqrt(M)', 'I.head',
+      'position point(x, y)', 'L[[2, 0, 2]]', 'a % m',
+    ]) expect(dialog).toHaveTextContent(syntax)
+    expect(dialog).not.toHaveTextContent('VGA')
+    expect(dialog).not.toHaveTextContent('vector(2, 1)')
+    expect(dialog).not.toHaveTextContent('V = (2, 1)')
+  })
+})
+
+describe('opening a document by dropping a file onto the window', () => {
+  const documentFile = (name: string, contents: string, type = 'application/json') => {
+    const bytes = new TextEncoder().encode(contents)
+    return { name, type, arrayBuffer: async () => bytes.slice().buffer } as unknown as File
+  }
+  const droppedDocument = () => JSON.stringify(toCanonicalDocument(expressionDocument(
+    [{ id: 'dropped-vector', source: 'Dropped = vector(5, 6)' }], {}, { id: 'dropped-document', title: 'Dropped' },
+  ), 'dark'))
+  const fileTransfer = (files: File[]) => ({ types: ['Files'], files, dropEffect: 'none' })
+  const overlay = () => screen.queryByText('Drop a JSON document to open it')
+
+  it('shows an announced overlay while a file is dragged, and hides it on leave', () => {
+    render(<App />)
+    const target = screen.getByRole('textbox', { name: 'Expression 1' })
+    expect(overlay()).not.toBeInTheDocument()
+    fireEvent.dragEnter(document.body, { dataTransfer: fileTransfer([]) })
+    fireEvent.dragEnter(target, { dataTransfer: fileTransfer([]) })
+    expect(overlay()).toBeInTheDocument()
+    expect(overlay()!.closest('[role="status"]')).not.toBeNull()
+    // Leaving a child keeps the overlay; leaving the window hides it.
+    fireEvent.dragLeave(target, { dataTransfer: fileTransfer([]) })
+    expect(overlay()).toBeInTheDocument()
+    fireEvent.dragLeave(document.body, { dataTransfer: fileTransfer([]) })
+    expect(overlay()).not.toBeInTheDocument()
+  })
+
+  it('opens a dropped document exactly as Import would', async () => {
+    render(<App />)
+    fireEvent.dragEnter(document.body, { dataTransfer: fileTransfer([]) })
+    const dropped = fireEvent.drop(document.body, {
+      dataTransfer: fileTransfer([documentFile('dropped.gamut.json', droppedDocument())]),
+    })
+    expect(dropped).toBe(false)
+    expect(overlay()).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('Dropped = vector(5, 6)'))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    // Like an import, the opened document starts a fresh history.
+    expect(screen.getByRole('button', { name: 'Undo document change' })).toBeDisabled()
+  })
+
+  it('reports an invalid, a non-JSON, or several dropped files and keeps the document', async () => {
+    render(<App />)
+    const source = screen.getByRole('textbox', { name: 'Expression 1' })
+
+    fireEvent.drop(document.body, { dataTransfer: fileTransfer([documentFile('broken.json', '{"formatVersion":')]) })
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/^DOCUMENT_/))
+    expect(source).toHaveValue('vector(2, 1)')
+
+    fireEvent.drop(document.body, { dataTransfer: fileTransfer([documentFile('notes.txt', droppedDocument(), 'text/plain')]) })
+    expect(screen.getByRole('alert')).toHaveTextContent('DOCUMENT_DROP_TYPE: “notes.txt” is not a JSON document.')
+
+    fireEvent.drop(document.body, {
+      dataTransfer: fileTransfer([documentFile('a.json', droppedDocument()), documentFile('b.json', droppedDocument())]),
+    })
+    expect(screen.getByRole('alert')).toHaveTextContent('DOCUMENT_DROP_MULTIPLE: 2 files were dropped.')
+    await act(async () => {})
+    expect(source).toHaveValue('vector(2, 1)')
+  })
+
+  it('leaves drags that carry no file to the page', () => {
+    render(<App />)
+    const source = screen.getByRole('textbox', { name: 'Expression 1' })
+    const text = { types: ['text/plain'], files: [], getData: () => 'e1' }
+    expect(fireEvent.dragEnter(source, { dataTransfer: text })).toBe(true)
+    expect(fireEvent.dragOver(source, { dataTransfer: text })).toBe(true)
+    expect(overlay()).not.toBeInTheDocument()
+    expect(fireEvent.drop(source, { dataTransfer: text })).toBe(true)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(source).toHaveValue('vector(2, 1)')
+    // A file drag whose drop holds no file is ignored without a diagnostic.
+    fireEvent.drop(document.body, { dataTransfer: fileTransfer([]) })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })
 

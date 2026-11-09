@@ -9,8 +9,16 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Scene sharing
 
-- Added self-contained scene links and iframe snippets carrying the canonical
-  document, including sources, appearance, algebra, theme, and viewport.
+- Added self-contained scene links carrying the canonical document, including
+  sources, appearance, algebra, theme, and viewport.
+- **Import**, **Export**, and **Copy link** moved from the header to a
+  Document section of the settings menu. **Copy iframe code** and its iframe
+  snippet were removed: Slides.com accepts the plain HTTPS link in its iframe
+  source field.
+- A document opens by dropping its `.json` file anywhere on the window, through
+  the same path as **Import**. An announced overlay shows while a file is
+  dragged over the window; several files or a non-JSON file are rejected with
+  a diagnostic and leave the current document unchanged.
 - Shared scenes open as temporary sessions without reading or writing browser
   storage. An explicit **Save local copy** creates a new document identity;
   JSON export remains available when storage is blocked or a link is too large.
@@ -87,6 +95,16 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Creation, drags, arrow-key moves, and their announcements share the rule;
   line coefficients keep a ten times finer step. Existing documents are
   unchanged until an object is moved.
+- The expression reference follows the document's algebra and names it. A
+  PGA(2) document lists `point(x, y)`, `point(x, y, w)`, `ipoint(x, y)`,
+  `line(a, b, c)`, the blades `e0` to `e012` with the null `e0`, `A.inorm`,
+  every coefficient extraction, `log(M)` and `sqrt(M)` for unit motors, and
+  ideal-point positions and heads, and no longer shows VGA tuples, `vector`,
+  or VGA norms. Every documented entry is evaluated by a test in its algebra.
+- The visibility control is a grey eye that appears while its row is hovered
+  or holds keyboard focus. A hidden object keeps its crossed eye visible, and
+  touch screens always show the eye. The button keeps its accessible name and
+  pressed state.
 - A list of points can be connected as an open polyline or a closed loop
   from its appearance menu. Links join consecutive points in evaluated list
   order: a segment between two finite points, and the ray from a finite point
@@ -180,6 +198,9 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   positions are built in the active algebra's basis.
 - List inspections name the blades of the active algebra, so a PGA list reads
   `[2e01 - e02 + e12, e12]` instead of showing `undefined` terms.
+- Switching algebra gives the document the title and description of the
+  example it loads, so a PGA(2) document no longer keeps the *VGA 2D Rotation
+  Example* title or exports as `VGA-2D-Rotation-Example.gamut.json`.
 
 ## 0.1.0 - 2026-09-13
 

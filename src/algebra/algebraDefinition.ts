@@ -1,3 +1,4 @@
+import { type ReferenceSection } from '../language/expressionReference'
 import { type AlgebraEngine } from './algebraEngine'
 
 /** Presentation-neutral description of a definition for the algebra dialog. */
@@ -58,4 +59,24 @@ export type AlgebraDefinition = Readonly<{
   standardInterpretationId: string
   standardVisualizerId: string
   showcase: readonly ShowcaseItem[]
+  /** The expression reference shown for documents of this algebra: shared sections plus its own syntax. */
+  expressionReference: readonly ReferenceSection[]
+  /** Title of the showcase document; `showcaseMetadata` supplies a neutral one when absent. */
+  showcaseTitle?: string
+  /** Description of the showcase document. */
+  showcaseDescription?: string
 }>
+
+/**
+ * The title and description a document takes when an algebra switch loads
+ * this definition's showcase, so neither the title nor the exported file name
+ * keeps describing the previous algebra's example.
+ */
+export function showcaseMetadata(
+  definition: Pick<AlgebraDefinition, 'badge' | 'showcaseTitle' | 'showcaseDescription'>,
+): Readonly<{ title: string; description: string }> {
+  return {
+    title: definition.showcaseTitle ?? `${definition.badge} example`,
+    description: definition.showcaseDescription ?? '',
+  }
+}
