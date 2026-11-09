@@ -34,10 +34,14 @@ function copyLink() {
   fireEvent.click(within(screen.getByRole('dialog', { name: 'Settings' })).getByRole('button', { name: 'Copy link' }))
 }
 
-async function openSharedScene() {
+/** `timeout` widens the wait on slow CI runners; the default is Testing Library's 1 s. */
+async function openSharedScene(timeout?: number) {
   window.history.replaceState(null, '', '/' + await encodeSceneFragment(shared))
   render(<App />)
-  await waitFor(() => expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('Shared = vector(3, 4)'))
+  await waitFor(
+    () => expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('Shared = vector(3, 4)'),
+    { timeout },
+  )
 }
 
 describe('scene sharing in the application', () => {
@@ -74,17 +78,22 @@ describe('scene sharing in the application', () => {
     expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('Shared = vector(3, 4)')
   })
 
-  it('keeps a document dropped into a temporary session temporary', async () => {
+  // Opening a scene and then importing a dropped one evaluates two documents,
+  // which can exceed the default 1 s wait on a loaded runner.
+  it('keeps a document dropped into a temporary session temporary', { timeout: 15_000 }, async () => {
     const source = serializeCanonicalDocument(saved)
     window.localStorage.setItem(ACTIVE_DOCUMENT_KEY, source)
     const writes = vi.spyOn(Storage.prototype, 'setItem')
-    await openSharedScene()
+    await openSharedScene(5000)
     const bytes = new TextEncoder().encode(serializeCanonicalDocument(toCanonicalDocument(expressionDocument(
       [{ id: 'dropped-vector', source: 'Dropped = vector(1, 1)' }], {}, { id: 'dropped-document' },
     ), 'light')))
     const file = { name: 'dropped.gamut.json', type: 'application/json', arrayBuffer: async () => bytes.slice().buffer } as unknown as File
     fireEvent.drop(document.body, { dataTransfer: { types: ['Files'], files: [file] } })
-    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('Dropped = vector(1, 1)'))
+    await waitFor(
+      () => expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('Dropped = vector(1, 1)'),
+      { timeout: 5000 },
+    )
     expect(screen.getByRole('button', { name: 'Save local copy' })).toBeInTheDocument()
     expect(writes).not.toHaveBeenCalled()
     expect(window.localStorage.getItem(ACTIVE_DOCUMENT_KEY)).toBe(source)
