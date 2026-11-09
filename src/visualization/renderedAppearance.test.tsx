@@ -117,7 +117,7 @@ describe('stroked glyphs', () => {
   it('fade the drawn marks only, never the handles or the keyboard focus ring', () => {
     const focused = { ...controller, focusRingKey: 'v:head' }
     const markup = vector({ opacity: 0, headMovable: true, itemPresent: true, baseMovable: true, label: 'V', controller: focused })
-    const faded = markup.slice(markup.indexOf('<g opacity="0">'), markup.indexOf('</g>', markup.indexOf('<g opacity="0">')))
+    const faded = markup.split('<g opacity="0">').slice(1).map((part) => part.slice(0, part.indexOf('</g>'))).join('')
     expect(faded).toContain('class="vector"')
     expect(faded).toContain('class="object-label"')
     for (const handle of ['manipulation-focus-ring', 'vector-head-target', 'manipulation-base-contour'])

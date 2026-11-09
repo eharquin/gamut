@@ -3368,8 +3368,9 @@ describe('stroke width and opacity from the appearance menu (#221)', () => {
     expect(dialog.querySelector('.appearance-error')).toHaveTextContent('Width: The name “zz” is not defined. Default used.')
 
     fireEvent.change(within(dialog).getByRole('textbox', { name: 'Opacity' }), { target: { value: '25' } })
-    expect((shaft().parentElement as unknown as SVGGElement).style.opacity).toBe('0.25')
+    // Opacity fades the drawn marks only; handles stay fully visible.
+    expect(shaft().parentElement).toHaveAttribute('opacity', '0.25')
     fireEvent.change(within(dialog).getByRole('textbox', { name: 'Opacity' }), { target: { value: '' } })
-    expect((shaft().parentElement as unknown as SVGGElement).style.opacity).toBe('')
+    expect(shaft().parentElement).not.toHaveAttribute('opacity')
   })
 })

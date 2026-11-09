@@ -176,7 +176,6 @@ export function OrientedSegmentGlyph({
       r={1.25 * scale}
       aria-hidden="true"
     />}
-    {label && <text className="object-label" x={end.x + 8} y={end.y - 8}>{label}</text>}
     </Marks>
     {headMovable && <>
       {controller.focusRingKey === headKey && <circle
@@ -214,6 +213,7 @@ export function OrientedSegmentGlyph({
       controller={controller}
       yieldToHead={headMovable && headAndBaseCoincide}
     />}
+    {label && <Marks opacity={opacity}><text className="object-label" x={end.x + 8} y={end.y - 8}>{label}</text></Marks>}
   </g>
 }
 
@@ -302,7 +302,6 @@ export function OrientedAreaGlyph({
       direction={primitive.orientation === 'counterclockwise' ? 1 : -1}
       scale={scale}
     />}
-    {label && <text className="object-label" x={labelPoint.x + 8} y={labelPoint.y - 8}>{label}</text>}
     </Marks>
     {itemPresent && <BaseHandle
       itemId={id}
@@ -313,6 +312,7 @@ export function OrientedAreaGlyph({
       scale={scale}
       controller={controller}
     />}
+    {label && <Marks opacity={opacity}><text className="object-label" x={labelPoint.x + 8} y={labelPoint.y - 8}>{label}</text></Marks>}
   </g>
 }
 
@@ -342,7 +342,6 @@ export function PointMarkerGlyph({
       cx={point.x} cy={point.y} r={4.5 * scale}
       aria-label={primitive.accessibleName}
     />}
-    {label && <text className="object-label" x={point.x + 8} y={point.y - 8}>{label}</text>}
     </Marks>
     {itemPresent && <BaseHandle
       itemId={id}
@@ -354,6 +353,7 @@ export function PointMarkerGlyph({
       scale={scale}
       controller={controller}
     />}
+    {label && <Marks opacity={opacity}><text className="object-label" x={point.x + 8} y={point.y - 8}>{label}</text></Marks>}
   </g>
 }
 
@@ -445,7 +445,6 @@ export function UnboundedLineGlyph({
       style={strokeStyle === 'solid' ? undefined : strokePattern(strokeStyle, width)}
       aria-label={primitive.accessibleName}
     />
-    {label && <text className="object-label" x={layout.labelPoint.x + 8} y={layout.labelPoint.y - 8}>{label}</text>}
     </Marks>
     {itemPresent && movable && <line
       className="manipulation-hit-target unbounded-line-hit"
@@ -512,6 +511,7 @@ export function UnboundedLineGlyph({
         onKeyDown={(event) => controller.keyDown(event, id, 'normal', selection.mathematicalAnchor)}
       />
     </g>}
+    {label && <Marks opacity={opacity}><text className="object-label" x={layout.labelPoint.x + 8} y={layout.labelPoint.y - 8}>{label}</text></Marks>}
   </g>
 }
 
