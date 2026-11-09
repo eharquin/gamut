@@ -159,10 +159,19 @@ describe('semantic document commands', () => {
       algebra: { algebraId: 'org.multivector.pga', definitionVersion: 1, conventionVersion: 1, parameters: { dimension: 2 } },
       interpretation: { interpretationId: 'org.multivector.pga-2d', interpretationVersion: 1 },
       visualizerId: 'org.multivector.pga-2d',
+      title: 'PGA 2D Triangle Example',
+      description: 'A triangle.',
     }
-    const empty = expressionDocument([{ id: 'item-1', source: '' }, { id: 'item-2', source: '   ' }])
+    const empty = expressionDocument(
+      [{ id: 'item-1', source: '' }, { id: 'item-2', source: '   ' }],
+      {},
+      { id: 'kept-identity', title: 'VGA 2D Rotation Example', description: 'A rotation.' },
+    )
     const applied = executeDocumentCommand(empty, selection)
     expect(applied.status).toBe('applied')
+    expect(applied.document.id).toBe('kept-identity')
+    expect(applied.document.title).toBe('PGA 2D Triangle Example')
+    expect(applied.document.description).toBe('A triangle.')
     expect(applied.document.algebra).toEqual(selection.algebra)
     expect(applied.document.interpretation).toEqual(selection.interpretation)
     expect(applied.document.view.visualizerId).toBe('org.multivector.pga-2d')

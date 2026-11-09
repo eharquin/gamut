@@ -2396,6 +2396,34 @@ describe('VGA 2D vertical slice', () => {
     confirm.mockRestore()
   })
 
+  it('names the document and its export after the example of the selected algebra', () => {
+    const downloads: string[] = []
+    class TestURL extends URL {
+      static createObjectURL = vi.fn((_blob: Blob) => 'blob:gamut-document')
+      static revokeObjectURL = vi.fn((_url: string) => undefined)
+    }
+    vi.stubGlobal('URL', TestURL)
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      downloads.push(this.download)
+    })
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<App />)
+    const switchTo = (current: string, index: number) => {
+      fireEvent.click(screen.getByRole('button', { name: `${current}. Change algebra` }))
+      fireEvent.click(within(screen.getByRole('menu')).getAllByRole('menuitemradio')[index])
+    }
+
+    switchTo('VGA · 2D', 1)
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+    switchTo('PGA · 2D', 0)
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+
+    expect(downloads).toEqual([
+      'PGA-2D-Triangle-Example.gamut.json',
+      'VGA-2D-Rotation-Example.gamut.json',
+    ])
+  })
+
   it('navigates the algebra menu by keyboard and closes it with Escape', () => {
     render(<App />)
     const badge = screen.getByRole('button', { name: 'VGA · 2D. Change algebra' })

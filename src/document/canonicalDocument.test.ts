@@ -307,6 +307,8 @@ describe('canonical document format', () => {
       algebra: { algebraId: 'org.multivector.pga', definitionVersion: 1, conventionVersion: 1, parameters: { dimension: 2 } },
       interpretation: { interpretationId: 'org.multivector.pga-2d', interpretationVersion: 1 },
       visualizerId: 'org.multivector.pga-2d',
+      title: 'PGA 2D Triangle Example',
+      description: '',
     })
     expect(selected.status).toBe('applied')
     const withPoint = executeDocumentCommand(selected.document, { kind: 'update-source', itemId: 'p', source: 'P = point(1, 2)' })
