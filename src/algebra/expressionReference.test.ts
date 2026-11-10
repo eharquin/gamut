@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { evaluateDocument } from '../application/evaluateDocument'
 import type { EvaluationState } from '../application/evaluateSource'
 import { expressionDocument } from '../document/expressionDocument'
-import type { ReferenceEntry } from '../language/expressionReference'
+import { MAX_REFERENCE_EXAMPLES, STYLE_REFERENCE, type ReferenceEntry } from '../language/expressionReference'
 import { createBuiltinAlgebraRegistry } from './builtinAlgebras'
 
 const registry = createBuiltinAlgebraRegistry()
@@ -64,6 +64,24 @@ describe('expression reference', () => {
         },
       )
 
+      it('keeps every entry to one short line and at most two examples', () => {
+        for (const section of definition.expressionReference) {
+          for (const entry of section.entries) {
+            expect(entry.examples.length, entry.syntax).toBeLessThanOrEqual(MAX_REFERENCE_EXAMPLES)
+            expect(entry.meaning, entry.syntax).not.toMatch(/;/)
+            expect(entry.meaning.length, entry.syntax).toBeLessThanOrEqual(90)
+          }
+        }
+      })
+
+      it('supplies its own Algebra section, ending with normalization, without default colors', () => {
+        const topics = definition.algebraReference
+        expect(topics.length).toBeGreaterThan(1)
+        expect(topics.at(-1)).toMatchObject({ name: 'Normalization', syntax: 'norm button' })
+        const text = topics.map(({ name, syntax, meaning }) => `${name} ${syntax} ${meaning ?? ''}`).join('\n')
+        expect(text).not.toMatch(/colou?r|#[0-9a-f]{3,6}\b|green|yellow|red|blue|neutral/i)
+      })
+
       it('has unique section titles and entry syntax', () => {
         const titles = definition.expressionReference.map((section) => section.title)
         expect(new Set(titles).size).toBe(titles.length)
@@ -87,5 +105,26 @@ describe('expression reference', () => {
     const text = pga.expressionReference
       .flatMap((section) => section.entries.map((entry) => `${entry.syntax} ${entry.meaning}`)).join('\n')
     expect(text).not.toMatch(/VGA|vector\(|\(2, 1\)|V\.head|bivector row/)
+  })
+
+  it('names the primitives and normalization choices of each algebra', () => {
+    const topics = (algebraId: string) => registry.definitions()
+      .find((definition) => definition.algebraId === algebraId)!.algebraReference
+    expect(topics('org.multivector.vga').map((topic) => topic.name)).toEqual([
+      'Scalar', 'Vector', 'Bivector', 'Rotor', 'Mixed multivector', 'List', 'Normalization',
+    ])
+    expect(topics('org.multivector.vga').at(-1)?.meaning).toBe('off · auto')
+    expect(topics('org.multivector.pga').map((topic) => topic.name)).toEqual([
+      'Point', 'Ideal point', 'Line', 'Line at infinity', 'Translator', 'Motor', 'Reflection', 'List', 'Normalization',
+    ])
+    expect(topics('org.multivector.pga').find((topic) => topic.name === 'Line')?.syntax).toBe('line(a, b, c), A & B')
+    expect(topics('org.multivector.pga').at(-1)?.meaning).toBe('off · auto · norm · inorm')
+  })
+
+  it('lists only the values of each style setting', () => {
+    expect(STYLE_REFERENCE.map((topic) => topic.name)).toEqual([
+      'Color', 'Opacity', 'Stroke', 'Point', 'Label', 'Visibility', 'Values',
+    ])
+    expect(STYLE_REFERENCE.every((topic) => topic.meaning === undefined)).toBe(true)
   })
 })
