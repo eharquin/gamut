@@ -2871,6 +2871,11 @@ function openReference() {
   return { band, reference: screen.getByRole('region', { name: 'Expression reference' }) }
 }
 
+/** Shows one category of the open reference: `General`, `VGA` or `PGA`. */
+function showReferenceTab(name: string) {
+  fireEvent.click(screen.getByRole('tab', { name }))
+}
+
 describe('expression reference docked in the expression panel', () => {
   it('opens and closes under its band, never as a modal, and closes with Escape', () => {
     render(<App />)
@@ -2888,8 +2893,9 @@ describe('expression reference docked in the expression panel', () => {
     expect(screen.getByRole('complementary', { name: 'Expressions' })).toContainElement(reference)
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(viewportCanvas()).toBeInTheDocument()
-    expect(reference).toHaveTextContent('V = (2, 1)')
     expect(reference).toHaveTextContent('L[[2, 0, 2]]')
+    showReferenceTab('VGA')
+    expect(reference).toHaveTextContent('V = (2, 1)')
     expect(reference).toHaveTextContent('position (0, 0)')
     expect(reference).not.toHaveTextContent('@')
 
@@ -2904,24 +2910,35 @@ describe('expression reference docked in the expression panel', () => {
     expect(band).toHaveFocus()
   })
 
-  it('shows the general expressions, then the algebra expressions, with no search, chips or tags', () => {
+  it('shows one category at a time from the General | algebra tabs, with no search, chips or tags', () => {
     render(<App />)
     const { reference } = openReference()
-    expect(within(reference).getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent))
-      .toEqual(['General expressions', 'VGA expressions'])
-    const [general, algebra] = within(reference).getAllByRole('heading', { level: 2 })
-      .map((heading) => heading.closest('section') as HTMLElement)
-    expect(within(general).getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent))
-      .toEqual(['Values and names', 'Lists and ranges', 'Operators', 'Properties', 'Functions', 'Precedence', 'Style'])
-    expect(within(algebra).getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent))
-      .toEqual(['Primitives', 'Values', 'Properties', 'Positioning'])
-    // General entries hold in every algebra; the algebra's own syntax stays in its category.
-    expect(general).toHaveTextContent('A ^ B')
-    expect(general).toHaveTextContent('Color 9 hues × 6 shades')
-    expect(general).not.toHaveTextContent('vector(2, 1)')
-    expect(algebra).toHaveTextContent('Rotor exp(a/2*e12)')
-    expect(algebra).toHaveTextContent('Normalization norm buttonoff · auto')
-    expect(algebra).toHaveTextContent('vector(2, 1)')
+    const tabs = within(reference).getAllByRole('tab')
+    expect(within(reference).getByRole('tablist', { name: 'Expression categories' })).toBeInTheDocument()
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['General', 'VGA'])
+    expect(tabs[0]).toHaveAttribute('aria-selected', 'true')
+    const panel = () => within(reference).getByRole('tabpanel')
+    const titles = () => within(panel()).getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent)
+
+    // General: true in every algebra, ending with Style.
+    expect(panel()).toHaveAccessibleName('General')
+    expect(titles()).toEqual(['Values and names', 'Lists and ranges', 'Operators', 'Properties', 'Functions', 'Precedence', 'Style'])
+    expect(panel()).toHaveTextContent('A ^ B')
+    expect(panel()).toHaveTextContent('Color 9 hues × 6 shades')
+    expect(panel()).not.toHaveTextContent('vector(2, 1)')
+
+    // The algebra's own syntax, from its tab or with the arrow keys.
+    fireEvent.keyDown(tabs[0], { key: 'ArrowRight' })
+    expect(tabs[1]).toHaveAttribute('aria-selected', 'true')
+    expect(tabs[1]).toHaveFocus()
+    expect(titles()).toEqual(['Primitives', 'Values', 'Properties', 'Positioning'])
+    expect(panel()).toHaveTextContent('Rotor exp(a/2*e12)')
+    expect(panel()).toHaveTextContent('Normalization norm buttonoff · auto')
+    expect(panel()).toHaveTextContent('vector(2, 1)')
+    expect(panel()).not.toHaveTextContent('A ^ B')
+    fireEvent.keyDown(tabs[1], { key: 'ArrowRight' })
+    expect(tabs[0]).toHaveAttribute('aria-selected', 'true')
+
     expect(within(reference).queryByRole('searchbox')).not.toBeInTheDocument()
     expect(within(reference).queryByRole('group', { name: 'Reference sections' })).not.toBeInTheDocument()
     expect(reference).not.toHaveTextContent(/ only/)
@@ -2937,6 +2954,7 @@ describe('expression reference docked in the expression panel', () => {
     expect(added).toHaveFocus()
     expect(screen.getByRole('region', { name: 'Expression reference' })).toBeInTheDocument()
 
+    showReferenceTab('VGA')
     fireEvent.click(within(reference).getAllByRole('button', { name: 'Add V = vector(1, 0) as a new expression' })[0])
     expect(screen.getByRole('textbox', { name: 'Expression 3' })).toHaveValue('V = vector(1, 0)')
     expect(screen.getByRole('textbox', { name: 'Position 3' })).toHaveValue('(1, 2)')
@@ -3004,9 +3022,11 @@ describe('expression reference of a PGA(2) document', () => {
     const { band, reference } = openReference()
 
     expect(band).toHaveTextContent('PGA · 2D')
-    expect(within(reference).getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent))
-      .toEqual(['General expressions', 'PGA expressions'])
-    const algebra = within(reference).getByRole('heading', { level: 2, name: 'PGA expressions' }).closest('section') as HTMLElement
+    expect(within(reference).getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['General', 'PGA'])
+    // General expressions hold in PGA too, with PGA results for & and !.
+    for (const syntax of ['L[[2, 0, 2]]', 'a % m', 'point(0, 0) & point(1, 0)']) expect(reference).toHaveTextContent(syntax)
+    showReferenceTab('PGA')
+    const algebra = within(reference).getByRole('tabpanel')
     expect(within(algebra).getAllByRole('heading', { level: 3 })[0]).toHaveTextContent('Primitives')
     expect(algebra).toHaveTextContent('point(x, y, w)')
     expect(algebra).toHaveTextContent('A.inorm')
@@ -3015,7 +3035,7 @@ describe('expression reference of a PGA(2) document', () => {
     for (const syntax of [
       'point(x, y)', 'point(x, y, w)', 'ipoint(x, y)', 'line(a, b, c)',
       'e0, e1, e2, e01, e02, e12, e012', 'A.inorm', 'A.e012', 'log(M), sqrt(M)', 'I.head',
-      'position point(x, y)', 'L[[2, 0, 2]]', 'a % m', 'log(M)', '-0.5e12',
+      'position point(x, y)', 'log(M)', '-0.5e12',
     ]) expect(reference).toHaveTextContent(syntax)
     expect(reference).not.toHaveTextContent('VGA')
     expect(reference).not.toHaveTextContent('vector(2, 1)')

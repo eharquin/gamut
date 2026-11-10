@@ -116,9 +116,10 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   handle above the band shares the panel height between the list and the
   reference, by pointer or Up and Down arrows; the height is a local
   preference. The clear-all cross moves to the bottom of the list.
-- The reference has two categories: **General expressions**, true in every
+- The reference has two categories, shown one at a time from a
+  **General | VGA** (or **General | PGA**) tab bar at its top: **General**, true in every
   algebra, ending with a **Style** section listing the values the appearance
-  menu takes; then **VGA expressions** or **PGA expressions**, opening on the
+  menu takes; then the algebra's own tab, opening on the
   algebra's **Primitives** (each with how it is written and one short line,
   then the row's normalization choices) followed by its own values,
   properties, functions and positioning. Every entry is reduced to its

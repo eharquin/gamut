@@ -646,17 +646,44 @@ h2 {
   padding: 0 12px 16px;
 }
 
-/* The two categories: general expressions, then the active algebra's. */
-.reference-category + .reference-category {
-  margin-top: 14px;
-  border-top: 1px solid var(--border);
+/* General | algebra: one category of the reference at a time. */
+.reference-tabs {
+  flex-shrink: 0;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 2px;
+  margin: 8px 12px 4px;
+  padding: 2px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
 }
 
-.reference-category-title {
-  margin: 0;
-  padding: 12px 0 2px;
+.reference-tabs button {
+  min-height: 26px;
+  padding: 2px 8px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  font: 600 0.74rem var(--font-sans);
+  cursor: pointer;
+}
+
+.reference-tabs button:hover {
   color: var(--text);
-  font: 700 0.8rem var(--font-sans);
+}
+
+.reference-tabs button[aria-selected='true'] {
+  color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+.reference-tabs button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .reference-section-title {

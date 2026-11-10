@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import {
   STYLE_REFERENCE,
   isSetupExample,
@@ -32,7 +32,7 @@ type DisplayEntry = Readonly<{
 }>
 
 type DisplaySection = Readonly<{ id: string; title: string; entries: readonly DisplayEntry[] }>
-type DisplayCategory = Readonly<{ id: string; title: string; sections: readonly DisplaySection[] }>
+type DisplayCategory = Readonly<{ id: string; tab: string; title: string; sections: readonly DisplaySection[] }>
 
 function slug(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -77,15 +77,33 @@ export function ExpressionReference({
   const categories = useMemo<readonly DisplayCategory[]>(() => [
     {
       id: 'reference-general',
+      tab: 'General',
       title: 'General expressions',
       sections: [...languageSections('general', generalSections), topicSection('general', 'Style', STYLE_REFERENCE)],
     },
     {
       id: 'reference-algebra',
+      tab: algebraName,
       title: `${algebraName} expressions`,
       sections: [topicSection('algebra', 'Primitives', algebraTopics), ...languageSections('algebra', algebraSections)],
     },
   ], [algebraName, algebraSections, algebraTopics, generalSections])
+  // One category at a time, chosen from the General | algebra tabs.
+  const [activeId, setActiveId] = useState('reference-general')
+  const active = categories.find((category) => category.id === activeId) ?? categories[0]
+  const tabRefs = useRef(new Map<string, HTMLButtonElement>())
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const select = (id: string) => {
+    setActiveId(id)
+    if (bodyRef.current) bodyRef.current.scrollTop = 0
+  }
+  const moveTab = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+    event.preventDefault()
+    const next = categories[(index + (event.key === 'ArrowRight' ? 1 : categories.length - 1)) % categories.length]
+    select(next.id)
+    tabRefs.current.get(next.id)?.focus()
+  }
 
   return (
     <div
@@ -96,10 +114,35 @@ export function ExpressionReference({
         onClose()
       }}
     >
-      <div className="reference-body" tabIndex={-1}>
-        {categories.map((category) => (
-          <section key={category.id} className="reference-category" aria-labelledby={category.id}>
-            <h2 className="reference-category-title" id={category.id}>{category.title}</h2>
+      <div className="reference-tabs" role="tablist" aria-label="Expression categories">
+        {categories.map((category, index) => (
+          <button
+            key={category.id}
+            ref={(element) => {
+              if (element) tabRefs.current.set(category.id, element)
+              else tabRefs.current.delete(category.id)
+            }}
+            type="button"
+            role="tab"
+            id={`${category.id}-tab`}
+            aria-selected={category.id === active.id}
+            aria-controls={`${category.id}-panel`}
+            tabIndex={category.id === active.id ? 0 : -1}
+            onClick={() => select(category.id)}
+            onKeyDown={(event) => moveTab(event, index)}
+          >{category.tab}</button>
+        ))}
+      </div>
+      <div ref={bodyRef} className="reference-body" tabIndex={-1}>
+        {[active].map((category) => (
+          <section
+            key={category.id}
+            className="reference-category"
+            role="tabpanel"
+            id={`${category.id}-panel`}
+            aria-labelledby={`${category.id}-tab`}
+          >
+            <h2 className="visually-hidden" id={category.id}>{category.title}</h2>
             {category.sections.map((section) => (
               <section key={section.id} aria-labelledby={section.id}>
                 <h3 className="reference-section-title" id={section.id}>{section.title}</h3>
