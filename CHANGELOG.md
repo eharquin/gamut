@@ -7,6 +7,13 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## 0.2.0 - 2026-11-10
+
+Release notes: [docs/releases/0.2.0.md](docs/releases/0.2.0.md); tag
+[`v0.2.0`](https://github.com/eharquin/gamut/releases/tag/v0.2.0); acceptance
+record: [PGA 2D Foundation](docs/acceptance/pga-2d-foundation.md) (manual
+validation pending, #192).
+
 ### Scene sharing
 
 - Added self-contained scene links carrying the canonical document, including

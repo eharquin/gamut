@@ -7,10 +7,10 @@ environment for writing multivector expressions and turning them into
 interactive geometric constructions. It is developed as part of PhD research
 and is intended for geometric-algebra research, exploration, and learning.
 
-> **Project status:** Release `0.1.0` shipped under the former product name
-> **MultiVector** and established the VGA(2) workflow and canonical document
-> contract. Current development introduces the GAMUT name and the first PGA(2)
-> workflow while preserving existing documents and browser sessions.
+> **Project status:** Release `0.2.0` is the first release shipped as GAMUT.
+> It adds the plane-based PGA(2) workflow, scene links and a local graph
+> library to the VGA(2) workflow of `0.1.0` (released under the former name
+> **MultiVector**), while preserving existing documents and browser sessions.
 
 [Open the public application](https://eharquin.github.io/gamut/)
 
@@ -86,6 +86,12 @@ may also deploy a chosen ref by hand, for browser testing before a release.
 
 ## Release status
 
+Release `0.2.0` is the first release shipped as GAMUT and the first with
+PGA(2); the [0.2.0 release notes](docs/releases/0.2.0.md) summarize its scope
+and known limitations, and the
+[PGA 2D Foundation acceptance record](docs/acceptance/pga-2d-foundation.md)
+tracks its remaining manual validation.
+
 Release `0.1.0` is the first stable VGA(2) release. The
 [VGA 2D Foundation](docs/acceptance/vga-2d-foundation.md) is accepted and the
 [VGA 2D Visual Workflow acceptance record](docs/acceptance/vga-2d-visual-workflow.md)
@@ -122,6 +128,6 @@ work, and the [changelog](CHANGELOG.md) for user-visible changes.
 GAMUT is open-source software under the [MIT License](LICENSE). Read the
 [contribution guide](CONTRIBUTING.md) before proposing substantial work. If you
 use GAMUT in research, citation metadata is available in
-[`CITATION.cff`](CITATION.cff). Its `0.1.0` entry intentionally retains the
-historical MultiVector name; the title, version, date, and repository metadata
-will change together for the first release shipped as GAMUT.
+[`CITATION.cff`](CITATION.cff); since `0.2.0` it carries the GAMUT name and
+repository, while the `0.1.0` release remains citable under its historical
+MultiVector name.
