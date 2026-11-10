@@ -3898,6 +3898,23 @@ describe('NoViz calculator mode (#55)', () => {
   const storedView = () => JSON.parse(window.localStorage.getItem(ACTIVE_DOCUMENT_KEY)!).view
   const canvas = () => screen.queryByRole('img', { name: /Two-dimensional [VP]GA viewport/ })
 
+  it('shows a hidden expression like the others, and hides it again with the canvas', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: 'V1 = vector(2, 1)' } })
+    const row = () => screen.getByRole('textbox', { name: 'Expression 1' }).closest('.expression-item')!
+    fireEvent.click(screen.getByRole('button', { name: 'Hide V1' }))
+    expect(row()).toHaveClass('is-hidden')
+
+    // Nothing is drawn in NoViz, so visibility does not apply there.
+    fireEvent.click(screen.getByRole('button', { name: 'Hide canvas (NoViz calculator)' }))
+    expect(row()).not.toHaveClass('is-hidden')
+
+    // The setting is kept and applies again with the canvas.
+    fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+    expect(row()).toHaveClass('is-hidden')
+    expect(screen.getByRole('button', { name: 'Show V1' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
   it('collapses the canvas into a full-width calculator and brings it back', () => {
     vi.stubEnv('MODE', 'development')
     render(<App />)

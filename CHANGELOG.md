@@ -116,6 +116,8 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The appearance swatch is centred on the object-kind line (Point, Line,
   Scalar…), and a hidden object's swatch is no longer crossed out: its
   crossed eye already shows the state.
+- In NoViz, where nothing is drawn, a hidden expression is shown like the
+  others; its hidden setting is kept and applies again with the canvas.
 - A NoViz calculator mode: a button at the top left of the canvas collapses
   the canvas to the right and leaves the expression panel full width, and a
   button at the right edge of the panel brings the canvas back at the view it

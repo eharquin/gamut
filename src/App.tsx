@@ -2878,7 +2878,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                   }}
                   onPointerEnter={() => setRowHoverId(item.id)}
                   onPointerLeave={() => setRowHoverId((current) => current === item.id ? null : current)}
-                  className={`expression-item${visible ? '' : ' is-hidden'}${
+                  className={`expression-item${visible || noViz ? '' : ' is-hidden'}${
                     empty ? ' is-empty-expression' : ''
                   }${dropBefore ? ' drop-before' : ''}${dropAfter ? ' drop-after' : ''} ${
                     invalid || invalidPosition ? 'has-error' : ''
