@@ -2248,7 +2248,7 @@ describe('VGA 2D vertical slice', () => {
   it('renders bivectors without a border by default and enables it from appearance', () => {
     const { container } = render(<App />)
     fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), {
-      target: { value: 'B = e1 ^ e2' },
+      target: { value: 'B = e12' },
     })
     const bivector = container.querySelector('.bivector')
     expect(bivector).not.toHaveClass('has-border')
@@ -2536,7 +2536,7 @@ describe('VGA 2D vertical slice', () => {
     expect(screen.getByText('Bivector')).toBeInTheDocument()
     expect(screen.getByText('e12', { selector: 'output' })).toBeInTheDocument()
     expect(screen.getByRole('img')).toHaveTextContent(
-      'Bivector 1 is an oriented loop with signed value 1, area 1, counterclockwise orientation, positioned at the origin.',
+      'Bivector 1 is an oriented parallelogram with signed value 1, area 1, counterclockwise orientation, positioned at the origin.',
     )
   })
 

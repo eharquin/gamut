@@ -139,8 +139,10 @@ it. Bare references target value nodes, `V.position` and
 the vector value and position. Missing or invalid position results use the
 origin without changing or invalidating a valid positioned value. Vectors and
 bivectors produce spatial primitives from their separately owned positions.
-Direct named-vector outer products may retain enough surface construction
-provenance to select a parallelogram without changing value-based interpretation.
+Outer products retain their two operands as construction provenance beside the
+owned value, outside its coefficients; references, indexing, and versor
+sandwiches carry it, so it can select a parallelogram without changing
+value-based interpretation.
 
 The in-memory document owns renderer-independent item appearance records keyed
 by stable item identity. Visibility, label visibility, label text, and semantic

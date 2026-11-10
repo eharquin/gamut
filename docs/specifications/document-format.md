@@ -525,4 +525,9 @@ preserve element order, derived identity, and position record-by-record. Binary
 list operations require corresponding positioned elements to have equal
 positions; one positioned and one unpositioned operand retains the positioned
 operand; conflicting positions produce a position diagnostic without changing
-the mathematical result. These rules do not alter algebra-engine operations.
+the mathematical result. A list-literal element computed from single values,
+such as `V ^ W` in `[V, W, V ^ W]`, follows the same rule over the identities
+of its operands. A single item computed by an operation keeps its own position
+source: without one it renders at the origin and inherits nothing, while a
+plain reference or an index keeps the selected identity and its position.
+These rules do not alter algebra-engine operations.

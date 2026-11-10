@@ -11,6 +11,7 @@ import {
 import {
   elementIdentity,
   inspectLanguageValue,
+  outerConstruction,
   ownedList,
   retainElementIdentity,
   type LanguageValue,
@@ -626,29 +627,15 @@ export function evaluateDocument(
     return { position: conflict ? null : first, conflict }
   }
 
-  const directOuterProductConstruction = (
-    item: ExpressionItem,
+  // Outer-product provenance travels with the evaluated value, whatever the
+  // operand syntax (#85, #87); the interpretation decides whether it applies.
+  const constructionOf = (
+    value: OwnedMultivector,
   ): PrimitiveConstruction<InterpretedEntity> | undefined => {
-    const node = nodes.get(nodeKey(item.id, 'value'))
-    if (
-      node?.expression.kind !== 'binary-expression' ||
-      node.expression.operator !== '^' ||
-      node.expression.left.kind !== 'reference' ||
-      node.expression.left.property !== null ||
-      node.expression.right.kind !== 'reference' ||
-      node.expression.right.property !== null
-    ) return undefined
-
-    const left = declarations.get(node.expression.left.name)
-    const right = declarations.get(node.expression.right.name)
-    if (left?.length !== 1 || right?.length !== 1) return undefined
-    const leftResult = results.get(left[0].key)
-    const rightResult = results.get(right[0].key)
-    if (
-      leftResult?.status !== 'valid' || leftResult.valueType !== 'single' ||
-      rightResult?.status !== 'valid' || rightResult.valueType !== 'single'
-    ) return undefined
-    return { operator: '^', operands: [leftResult.entity, rightResult.entity] }
+    const sides = outerConstruction(value)
+    return sides
+      ? { operator: '^', operands: sides.map((side) => interpretation.interpret(side)) }
+      : undefined
   }
 
   return document.items.map((item, index) => {
@@ -711,7 +698,11 @@ export function evaluateDocument(
           ...element,
           position: positionState.position,
           positionConflict: positionState.conflict,
-          primitive: interpretation.toPrimitive(element.entity, { accessibleName: name, position }),
+          primitive: interpretation.toPrimitive(element.entity, {
+            accessibleName: name,
+            position,
+            construction: constructionOf(element.value),
+          }),
         }
       })
       const allVectors = elements.every((element) => interpretation.supportsHead(element.entity))
@@ -787,7 +778,7 @@ export function evaluateDocument(
           primitive: interpretation.toPrimitive(valueEvaluation.entity, {
             accessibleName,
             position: positionPoint,
-            construction: directOuterProductConstruction(item),
+            construction: constructionOf(valueEvaluation.value),
           }),
         },
       }
