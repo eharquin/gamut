@@ -26,6 +26,18 @@ dimensions:
 - versioned conventions, numerical policy, examples, and acceptance evidence;
 - a documented installation, verification, and release process.
 
+## 0.3 — Library and expression organisation
+
+Make documents easier to organise, find and teach with
+([scope](docs/releases/0.3.0.md), [milestone](https://github.com/eharquin/gamut/milestone/4)):
+
+- a library panel with personal graphs and shipped example scenes, in folders,
+  exportable and importable as a `.zip`;
+- expression folders, comment rows, and a setting that hides multivector values;
+- coordinate tuples owned by the active algebra, as points in PGA(2);
+- `App.tsx` reduced to a composition shell;
+- the completed PGA(2) foundation acceptance of 0.2.0.
+
 ## 0.5 — Multi-algebra foundation
 
 Demonstrate that the architecture is not a VGA-specific application:
