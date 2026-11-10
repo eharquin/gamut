@@ -106,6 +106,31 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Interface and accessibility
 
+- **? Expression reference** opens the reference under its band, inside the
+  expression panel, instead of a modal dialog, so an example sits right
+  under the rows being written and the canvas stays usable (#259). The band
+  shows a chevron and the algebra badge and reports its state. The
+  reference has sticky section titles and examples with their results and a
+  **+** button that adds the example as a new expression. Escape inside it
+  closes it. A
+  handle above the band shares the panel height between the list and the
+  reference, by pointer or Up and Down arrows; the height is a local
+  preference. The clear-all cross moves to the bottom of the list.
+- The reference has two categories, shown one at a time from a
+  **General | VGA** (or **General | PGA**) tab bar at its top: **General**, true in every
+  algebra, ending with a **Style** section listing the values the appearance
+  menu takes; then the algebra's own tab, opening on the
+  algebra's **Primitives** (each with how it is written, one short line and
+  one or two examples to add with **+**, then the row's normalization
+  choices) followed by its own values,
+  properties, functions and positioning. Every entry is reduced to its
+  syntax, one short line, and at most two examples; no default colors are
+  listed.
+- The algebra **i** dialog keeps only the algebra: signature, basis and
+  metric, Cayley table, the algebraic reading of each object, sub-algebras,
+  and mathematical notes. Default object colors, constructors, rendering
+  notes, normalization behavior, and source spellings now live in the
+  expression reference.
 - A slider's play and pause button sits at the start of its slider row, left
   of the bar, as a disc tinted with the scalar's color; while playing it is
   a solid disc of that color. The actions column keeps an empty slot, so the

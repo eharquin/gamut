@@ -15,8 +15,8 @@ export const VGA_2_INFO: AlgebraInfo = Object.freeze({
   ] as const,
   objects: [
     ['Scalar', 'a'],
-    ['Vector', 'a·e1 + b·e2 — positionable direction'],
-    ['Bivector', 's·e12 — signed oriented area with a separate position'],
+    ['Vector', 'a·e1 + b·e2 — direction'],
+    ['Bivector', 's·e12 — signed oriented area'],
     ['Rotor', 'a + b·e12 — even multivector'],
     ['Mixed multivector', 'multiple grades without one standard geometric reading'],
   ] as const,
@@ -27,6 +27,5 @@ export const VGA_2_INFO: AlgebraInfo = Object.freeze({
   notes: [
     'The even sub-algebra {1, e12} is isomorphic to the complex numbers ℂ, with e12 playing the role of the imaginary unit.',
     'VGA has no projective representation: it encodes directions and oriented areas, not points or lines.',
-    'Bivectors render as positioned oriented-area loops; direct named-vector outer products may render as parallelograms with the same area.',
   ] as const,
 })

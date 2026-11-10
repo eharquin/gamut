@@ -2766,24 +2766,30 @@ describe('VGA 2D vertical slice', () => {
     expect(badge).toHaveFocus()
   })
 
-  it('names every default object color in text, not only as a swatch', () => {
+  it('keeps only the algebra in the algebra dialog, without colors, constructors, or source spellings', () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
     render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: 'Algebra information' }))
-    const dialog = screen.getByRole('dialog', {
-      name: 'Vector Geometric Algebra ℝ(2,0,0)',
-    })
-
-    expect(dialog).toHaveTextContent('Object colors')
-    for (const [, style] of DEFAULT_OBJECT_STYLES) {
-      const entry = paletteEntry(style)
-      expect(entry).toBeDefined()
-      expect(dialog).toHaveTextContent(entry?.name ?? style)
+    const vga = () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Algebra information' }))
+      return screen.getByRole('dialog', { name: 'Vector Geometric Algebra ℝ(2,0,0)' })
     }
+    let dialog = vga()
+    expect(dialog).toHaveTextContent('a·e1 + b·e2')
+    expect(dialog).not.toHaveTextContent('Object colors')
+    expect(dialog).not.toHaveTextContent(/render|parallelogram|positionable|separate position/i)
+    for (const [, style] of DEFAULT_OBJECT_STYLES)
+      expect(dialog).not.toHaveTextContent(paletteEntry(style)?.name ?? style)
+    expect(dialog.querySelector('.object-color-swatch')).toBeNull()
+    fireEvent.keyDown(document, { key: 'Escape' })
 
-    const listRow = screen.getByRole('rowheader', { name: 'List' }).closest('tr')
-    expect(listRow).toHaveTextContent('green 3')
-    expect(listRow?.querySelector('.object-color-swatch'))
-      .toHaveAttribute('aria-hidden', 'true')
+    fireEvent.click(screen.getByRole('button', { name: 'VGA · 2D. Change algebra' }))
+    fireEvent.click(within(screen.getByRole('menu')).getAllByRole('menuitemradio')[1])
+    fireEvent.click(screen.getByRole('button', { name: 'Algebra information' }))
+    dialog = screen.getByRole('dialog', { name: 'Projective Geometric Algebra ℝ(2,0,1)' })
+    expect(dialog).toHaveTextContent('w·e12 − x·e02 + y·e01')
+    expect(dialog).toHaveTextContent('y·e01 − x·e02')
+    expect(dialog).toHaveTextContent('A ∨ B = J(J(A) ∧ J(B))')
+    expect(dialog).not.toHaveTextContent(/ipoint|point\(|line\(|A & B|e20|normalization|Object colors/)
   })
 
   it('clears every expression after the clear control is held', () => {
@@ -2846,53 +2852,211 @@ describe('VGA 2D vertical slice', () => {
     }
   })
 
-  it('opens the expression reference from the bottom of the panel', () => {
+  it('places the clear-all cross at the bottom of the list, outside the reference band', () => {
     render(<App />)
+    const clear = screen.getByRole('button', { name: 'Clear all expressions' })
+    const band = screen.getByRole('button', { name: /Expression reference/ })
+    expect(clear.closest('.expression-list-footer')).not.toBeNull()
+    expect(clear.closest('.expression-panel-footer')).toBeNull()
+    const list = document.querySelector('.expression-list')!
+    expect(list.compareDocumentPosition(clear) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(clear.compareDocumentPosition(band) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+})
 
-    const trigger = screen.getByRole('button', {
-      name: 'Expression reference',
-    })
-    fireEvent.click(trigger)
+/** Opens the reference from its band and returns the band and the reference region. */
+function openReference() {
+  const band = screen.getByRole('button', { name: /Expression reference/ })
+  fireEvent.click(band)
+  return { band, reference: screen.getByRole('region', { name: 'Expression reference' }) }
+}
 
-    const dialog = screen.getByRole('dialog', {
-      name: 'Expression Reference',
-    })
-    expect(dialog).toHaveTextContent('Syntax for Vector Geometric Algebra (VGA · 2D) documents.')
-    expect(dialog).toHaveTextContent('Operators')
-    expect(dialog).toHaveTextContent('A & B')
-    expect(dialog).toHaveTextContent('a % m')
-    expect(dialog).toHaveTextContent('A.dual')
-    expect(dialog).toHaveTextContent('V = (2, 1)')
-    expect(dialog).toHaveTextContent('L[[2, 0, 2]]')
-    // The position field is labelled "position"; "@" was its original prefix.
-    expect(dialog).toHaveTextContent('position (0, 0)')
-    expect(dialog).not.toHaveTextContent('@')
+/** Shows one category of the open reference: `General`, `VGA` or `PGA`. */
+function showReferenceTab(name: string) {
+  fireEvent.click(screen.getByRole('tab', { name }))
+}
 
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+describe('expression reference docked in the expression panel', () => {
+  it('opens and closes under its band, never as a modal, and closes with Escape', () => {
+    render(<App />)
+    const band = screen.getByRole('button', { name: /Expression reference/ })
+    expect(band).toHaveAttribute('aria-expanded', 'false')
+    expect(band).toHaveAttribute('aria-controls', 'expression-reference')
+    expect(band).toHaveTextContent('VGA · 2D')
+    expect(screen.queryByRole('region', { name: 'Expression reference' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('separator', { name: 'Resize the expression reference' })).not.toBeInTheDocument()
 
+    fireEvent.click(band)
+    const reference = screen.getByRole('region', { name: 'Expression reference' })
+    expect(band).toHaveAttribute('aria-expanded', 'true')
+    expect(reference).toHaveAttribute('id', 'expression-reference')
+    expect(screen.getByRole('complementary', { name: 'Expressions' })).toContainElement(reference)
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(trigger).toHaveFocus()
+    expect(viewportCanvas()).toBeInTheDocument()
+    expect(reference).toHaveTextContent('L[[2, 0, 2]]')
+    showReferenceTab('VGA')
+    expect(reference).toHaveTextContent('V = (2, 1)')
+    expect(reference).toHaveTextContent('position (0, 0)')
+    expect(reference).not.toHaveTextContent('@')
+
+    fireEvent.click(band)
+    expect(screen.queryByRole('region', { name: 'Expression reference' })).not.toBeInTheDocument()
+
+    fireEvent.click(band)
+    const reopened = screen.getByRole('region', { name: 'Expression reference' })
+    fireEvent.keyDown(within(reopened).getAllByRole('button', { name: /^Add / })[0], { key: 'Escape' })
+    expect(screen.queryByRole('region', { name: 'Expression reference' })).not.toBeInTheDocument()
+    expect(band).toHaveAttribute('aria-expanded', 'false')
+    expect(band).toHaveFocus()
+  })
+
+  it('shows one category at a time from the General | algebra tabs, with no search, chips or tags', () => {
+    render(<App />)
+    const { reference } = openReference()
+    const tabs = within(reference).getAllByRole('tab')
+    expect(within(reference).getByRole('tablist', { name: 'Expression categories' })).toBeInTheDocument()
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['General', 'VGA'])
+    expect(tabs[0]).toHaveAttribute('aria-selected', 'true')
+    const panel = () => within(reference).getByRole('tabpanel')
+    const titles = () => within(panel()).getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent)
+
+    // General: true in every algebra, ending with Style.
+    expect(panel()).toHaveAccessibleName('General')
+    expect(titles()).toEqual(['Values and names', 'Lists and ranges', 'Operators', 'Properties', 'Functions', 'Precedence', 'Style'])
+    expect(panel()).toHaveTextContent('A ^ B')
+    expect(panel()).toHaveTextContent('Color 9 hues × 6 shades')
+    expect(panel()).not.toHaveTextContent('vector(2, 1)')
+
+    // The algebra's own syntax, from its tab or with the arrow keys.
+    fireEvent.keyDown(tabs[0], { key: 'ArrowRight' })
+    expect(tabs[1]).toHaveAttribute('aria-selected', 'true')
+    expect(tabs[1]).toHaveFocus()
+    expect(titles()).toEqual(['Primitives', 'Values', 'Properties', 'Positioning'])
+    expect(panel()).toHaveTextContent('Rotor exp(a/2*e12)')
+    expect(panel()).toHaveTextContent('Normalization norm buttonoff · auto')
+    expect(panel()).toHaveTextContent('vector(2, 1)')
+    expect(panel()).not.toHaveTextContent('A ^ B')
+    fireEvent.keyDown(tabs[1], { key: 'ArrowRight' })
+    expect(tabs[0]).toHaveAttribute('aria-selected', 'true')
+
+    expect(within(reference).queryByRole('searchbox')).not.toBeInTheDocument()
+    expect(within(reference).queryByRole('group', { name: 'Reference sections' })).not.toBeInTheDocument()
+    expect(reference).not.toHaveTextContent(/ only/)
+    expect(reference).not.toHaveTextContent(/default colou?r|green 4|yellow 4|red 4|blue 4/i)
+  })
+
+  it('adds an example as a new focused expression with its position', () => {
+    render(<App />)
+    const { reference } = openReference()
+    fireEvent.click(within(reference).getByRole('button', { name: 'Add [1...5] as a new expression' }))
+    const added = screen.getByRole('textbox', { name: 'Expression 2' })
+    expect(added).toHaveValue('[1...5]')
+    expect(added).toHaveFocus()
+    expect(screen.getByRole('region', { name: 'Expression reference' })).toBeInTheDocument()
+
+    showReferenceTab('VGA')
+    fireEvent.click(within(reference).getAllByRole('button', { name: 'Add V = vector(1, 0) as a new expression' })[0])
+    expect(screen.getByRole('textbox', { name: 'Expression 3' })).toHaveValue('V = vector(1, 0)')
+    expect(screen.getByRole('textbox', { name: 'Position 3' })).toHaveValue('(1, 2)')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
+    expect(screen.queryByRole('textbox', { name: 'Expression 3' })).not.toBeInTheDocument()
+  })
+
+  it('adds the examples of a primitive, including a rotation shown without its float result', () => {
+    render(<App />)
+    const { reference } = openReference()
+    showReferenceTab('VGA')
+    const primitives = within(reference).getByRole('heading', { level: 3, name: 'Primitives' }).closest('section') as HTMLElement
+    const rotor = within(primitives).getByText('Rotor').closest('article') as HTMLElement
+    expect(rotor).toHaveTextContent('with R = exp(pi/4*e12)')
+    expect(rotor).toHaveTextContent('R >>> e1')
+    expect(rotor).not.toHaveTextContent('E-16')
+    expect(within(primitives).queryAllByRole('button', { name: /^Add / })).toHaveLength(9)
+    expect(within(primitives).getByText('Normalization').closest('article')).not.toHaveTextContent('+')
+
+    fireEvent.click(within(primitives).getByRole('button', { name: 'Add U = vector(1, 2) as a new expression' }))
+    expect(screen.getByRole('textbox', { name: 'Expression 2' })).toHaveValue('U = vector(1, 2)')
+    expect(screen.getByRole('textbox', { name: 'Expression 2' })).toHaveFocus()
+  })
+
+  it('resizes the reference from its handle with the keyboard and remembers the height', () => {
+    const { unmount } = render(<App />)
+    const { reference } = openReference()
+    const handle = screen.getByRole('separator', { name: 'Resize the expression reference' })
+    expect(handle).toHaveAttribute('aria-valuenow', '58')
+    expect(reference).toHaveStyle({ flexBasis: '58%' })
+
+    fireEvent.keyDown(handle, { key: 'ArrowUp' })
+    fireEvent.keyDown(handle, { key: 'ArrowUp' })
+    expect(handle).toHaveAttribute('aria-valuenow', '68')
+    expect(reference).toHaveStyle({ flexBasis: '68%' })
+    fireEvent.keyDown(handle, { key: 'ArrowDown' })
+    expect(handle).toHaveAttribute('aria-valuenow', '63')
+    expect(window.localStorage.getItem('gamut.expressionReferenceHeight')).toBe('0.63')
+    for (let step = 0; step < 20; step += 1) fireEvent.keyDown(handle, { key: 'ArrowDown' })
+    expect(handle).toHaveAttribute('aria-valuenow', '25')
+
+    unmount()
+    window.localStorage.setItem('gamut.expressionReferenceHeight', '0.7')
+    render(<App />)
+    openReference()
+    expect(screen.getByRole('separator', { name: 'Resize the expression reference' }))
+      .toHaveAttribute('aria-valuenow', '70')
+  })
+
+  it('falls back to the default height for a corrupt stored value', () => {
+    window.localStorage.setItem('gamut.expressionReferenceHeight', 'tall')
+    render(<App />)
+    openReference()
+    expect(screen.getByRole('separator', { name: 'Resize the expression reference' }))
+      .toHaveAttribute('aria-valuenow', '58')
+  })
+
+  it('resizes the reference by dragging its handle', () => {
+    render(<App />)
+    const { reference } = openReference()
+    const panel = screen.getByRole('complementary', { name: 'Expressions' })
+    vi.spyOn(panel, 'getBoundingClientRect').mockReturnValue({
+      x: 0, y: 0, width: 400, height: 1000, top: 0, right: 400, bottom: 1000, left: 0, toJSON: () => ({}),
+    })
+    const handle = screen.getByRole('separator', { name: 'Resize the expression reference' })
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 1, clientY: 420 })
+    fireEvent.pointerMove(handle, { pointerId: 1, clientY: 300 })
+    fireEvent.pointerUp(handle, { pointerId: 1, clientY: 300 })
+    expect(handle).toHaveAttribute('aria-valuenow', '70')
+    expect(reference).toHaveStyle({ flexBasis: '70%' })
+    expect(window.localStorage.getItem('gamut.expressionReferenceHeight')).toBe('0.7')
   })
 })
 
 describe('expression reference of a PGA(2) document', () => {
-  it('shows the PGA constructors, blades, norms, and motor functions, and no VGA-only syntax', () => {
+  it('shows the PGA expressions category, constructors, blades, norms, and motor functions, and no VGA-only syntax', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     render(<App />)
     fireEvent.click(screen.getByRole('button', { name: 'VGA · 2D. Change algebra' }))
     fireEvent.click(within(screen.getByRole('menu')).getAllByRole('menuitemradio')[1])
-    fireEvent.click(screen.getByRole('button', { name: 'Expression reference' }))
+    const { band, reference } = openReference()
 
-    const dialog = screen.getByRole('dialog', { name: 'Expression Reference' })
-    expect(dialog).toHaveTextContent('Syntax for Projective Geometric Algebra (PGA · 2D) documents.')
+    expect(band).toHaveTextContent('PGA · 2D')
+    expect(within(reference).getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['General', 'PGA'])
+    // General expressions hold in PGA too, with PGA results for & and !.
+    for (const syntax of ['L[[2, 0, 2]]', 'a % m', 'point(0, 0) & point(1, 0)']) expect(reference).toHaveTextContent(syntax)
+    showReferenceTab('PGA')
+    const algebra = within(reference).getByRole('tabpanel')
+    expect(within(algebra).getAllByRole('heading', { level: 3 })[0]).toHaveTextContent('Primitives')
+    expect(algebra).toHaveTextContent('point(x, y, w)')
+    expect(algebra).toHaveTextContent('A.inorm')
+    expect(reference).toHaveTextContent('Line line(a, b, c), A & Ba·x + b·y + c = 0, or the line through A and B')
+    expect(reference).toHaveTextContent('off · auto · norm · inorm')
     for (const syntax of [
       'point(x, y)', 'point(x, y, w)', 'ipoint(x, y)', 'line(a, b, c)',
       'e0, e1, e2, e01, e02, e12, e012', 'A.inorm', 'A.e012', 'log(M), sqrt(M)', 'I.head',
-      'position point(x, y)', 'L[[2, 0, 2]]', 'a % m',
-    ]) expect(dialog).toHaveTextContent(syntax)
-    expect(dialog).not.toHaveTextContent('VGA')
-    expect(dialog).not.toHaveTextContent('vector(2, 1)')
-    expect(dialog).not.toHaveTextContent('V = (2, 1)')
+      'position point(x, y)', 'log(M)', '-0.5e12',
+    ]) expect(reference).toHaveTextContent(syntax)
+    expect(reference).not.toHaveTextContent('VGA')
+    expect(reference).not.toHaveTextContent('vector(2, 1)')
+    expect(reference).not.toHaveTextContent('V = (2, 1)')
   })
 })
 

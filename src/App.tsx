@@ -19,7 +19,8 @@ import { evaluateDocument } from './application/evaluateDocument'
 import { AlgebraInfoDialog } from './components/AlgebraInfoDialog'
 import { AlgebraMenu } from './components/AlgebraMenu'
 import { DocumentCommands, GraphNameField, LibraryCommands } from './components/DocumentCommands'
-import { ExpressionReferenceDialog } from './components/ExpressionReferenceDialog'
+import { ExpressionReference } from './components/ExpressionReference'
+import type { ReferenceExample } from './language/expressionReference'
 import { AppearancePopover } from './components/AppearancePopover'
 import { ClearExpressionsButton } from './components/ClearExpressionsButton'
 import { ZoomLevelField } from './components/ZoomLevelField'
@@ -263,6 +264,37 @@ function persistPanelCollapsed(collapsed: boolean): void {
     window.localStorage.setItem(PANEL_COLLAPSED_STORAGE_KEY, String(collapsed))
   } catch {
     // The panel still collapses for this session when browser storage is unavailable.
+  }
+}
+
+/**
+ * Share of the expression panel's height that the open expression reference
+ * takes, a local view preference kept like the viewport lock (#259).
+ */
+const REFERENCE_HEIGHT_STORAGE_KEY = 'gamut.expressionReferenceHeight'
+const DEFAULT_REFERENCE_HEIGHT = 0.58
+const MIN_REFERENCE_HEIGHT = 0.25
+const MAX_REFERENCE_HEIGHT = 0.85
+const REFERENCE_HEIGHT_STEP = 0.05
+
+function clampedReferenceHeight(height: number): number {
+  return Math.round(Math.min(MAX_REFERENCE_HEIGHT, Math.max(MIN_REFERENCE_HEIGHT, height)) * 100) / 100
+}
+
+function restoredReferenceHeight(): number {
+  try {
+    const stored = Number(window.localStorage.getItem(REFERENCE_HEIGHT_STORAGE_KEY) ?? Number.NaN)
+    return Number.isFinite(stored) ? clampedReferenceHeight(stored) : DEFAULT_REFERENCE_HEIGHT
+  } catch {
+    return DEFAULT_REFERENCE_HEIGHT
+  }
+}
+
+function persistReferenceHeight(height: number): void {
+  try {
+    window.localStorage.setItem(REFERENCE_HEIGHT_STORAGE_KEY, String(height))
+  } catch {
+    // The height still applies for this session when browser storage is unavailable.
   }
 }
 
@@ -558,9 +590,9 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const [reducedMotion, setReducedMotion] = useState(
     () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
   )
-  const [infoDialog, setInfoDialog] = useState<
-    'algebra' | 'expressions' | null
-  >(null)
+  const [infoDialog, setInfoDialog] = useState<'algebra' | null>(null)
+  const [referenceOpen, setReferenceOpen] = useState(false)
+  const [referenceHeight, setReferenceHeight] = useState(() => sharedSession ? DEFAULT_REFERENCE_HEIGHT : restoredReferenceHeight())
   const closeInfoDialog = useCallback(() => setInfoDialog(null), [])
   const closeAppearance = useCallback(() => {
     setAppearanceItemId(null)
@@ -1972,6 +2004,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const insertExpression = (
     anchorId?: string,
     placement: 'before' | 'after' = 'after',
+    content: Readonly<{ source: string; positionSource?: string }> = { source: '' },
   ) => {
     if (expressionDoc.items.length >= MAX_EXPRESSION_ITEMS) return
     let id = `item-${nextId.current++}`
@@ -1992,8 +2025,59 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     }
     pendingFocus.current = id
     executeCommand({
-      kind: 'insert-item', item: { id, source: '' }, anchorId, placement,
+      kind: 'insert-item', item: { id, ...content }, anchorId, placement,
     })
+  }
+
+  /** Adds a reference example as a new expression at the end of the list (#259). */
+  const addReferenceExample = (example: ReferenceExample) => insertExpression(undefined, 'after', {
+    source: example.source,
+    ...(example.positionSource === undefined ? {} : { positionSource: example.positionSource }),
+  })
+
+  const closeReference = () => {
+    setReferenceOpen(false)
+    expressionReferenceButtonRef.current?.focus()
+  }
+
+  const changeReferenceHeight = (height: number) => {
+    const next = clampedReferenceHeight(height)
+    setReferenceHeight(next)
+    if (!ephemeral) persistReferenceHeight(next)
+  }
+
+  const resizeReferenceWithKeyboard = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
+    event.preventDefault()
+    changeReferenceHeight(referenceHeight + (event.key === 'ArrowUp' ? REFERENCE_HEIGHT_STEP : -REFERENCE_HEIGHT_STEP))
+  }
+
+  /** Dragging the handle shares the panel height between the list and the reference. */
+  const beginReferenceResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const panel = expressionPanelRef.current
+    if (!panel || event.button !== 0) return
+    event.preventDefault()
+    const handle = event.currentTarget
+    handle.setPointerCapture?.(event.pointerId)
+    const band = panel.querySelector<HTMLElement>('.expression-panel-footer')?.offsetHeight ?? 0
+    const heightAt = (clientY: number) => {
+      const box = panel.getBoundingClientRect()
+      return box.height > 0 ? (box.bottom - band - clientY) / box.height : referenceHeight
+    }
+    let latest = referenceHeight
+    const move = (moveEvent: PointerEvent) => {
+      latest = clampedReferenceHeight(heightAt(moveEvent.clientY))
+      setReferenceHeight(latest)
+    }
+    const end = () => {
+      handle.removeEventListener('pointermove', move)
+      handle.removeEventListener('pointerup', end)
+      handle.removeEventListener('pointercancel', end)
+      if (!ephemeral) persistReferenceHeight(latest)
+    }
+    handle.addEventListener('pointermove', move)
+    handle.addEventListener('pointerup', end)
+    handle.addEventListener('pointercancel', end)
   }
 
   const importDocument = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -2688,7 +2772,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           ref={expressionPanelRef}
           id="expression-panel"
           tabIndex={-1}
-          className={`expression-panel${panelHidden ? ' is-collapsed' : ''}${noViz ? ' is-full-width' : ''}`}
+          className={`expression-panel${panelHidden ? ' is-collapsed' : ''}${noViz ? ' is-full-width' : ''}${referenceOpen ? ' has-reference' : ''}`}
           aria-label="Expressions"
           style={noViz ? undefined : { width: panelWidth, '--panel-width': `${panelWidth}px` } as CSSProperties}
           inert={panelHidden}
@@ -3449,22 +3533,58 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
               )
             })}
           </div>
-          <div className="expression-panel-footer">
-            <button
-              ref={expressionReferenceButtonRef}
-              type="button"
-              className="expression-reference-button"
-              aria-haspopup="dialog"
-              onClick={() => setInfoDialog('expressions')}
-            >
-              <span aria-hidden="true">?</span>
-              <span>Expression reference</span>
-            </button>
+          <div className="expression-list-footer">
             <ClearExpressionsButton
               count={expressionDoc.items.length}
               onClear={clearAllExpressions}
             />
           </div>
+          {referenceOpen && <div
+            className="reference-resize"
+            role="separator"
+            aria-label="Resize the expression reference"
+            aria-orientation="horizontal"
+            aria-controls="expression-reference"
+            aria-valuemin={Math.round(MIN_REFERENCE_HEIGHT * 100)}
+            aria-valuemax={Math.round(MAX_REFERENCE_HEIGHT * 100)}
+            aria-valuenow={Math.round(referenceHeight * 100)}
+            aria-valuetext={`Reference ${Math.round(referenceHeight * 100)} % of the panel`}
+            tabIndex={0}
+            onPointerDown={beginReferenceResize}
+            onKeyDown={resizeReferenceWithKeyboard}
+          />}
+          <div className="expression-panel-footer">
+            <button
+              ref={expressionReferenceButtonRef}
+              type="button"
+              className="expression-reference-button"
+              aria-expanded={referenceOpen}
+              aria-controls="expression-reference"
+              onClick={() => setReferenceOpen((open) => !open)}
+            >
+              <span className="expression-reference-chevron" aria-hidden="true">▾</span>
+              <span aria-hidden="true">?</span>
+              <span>Expression reference</span>
+              <span className="expression-reference-badge">{algebraDefinition.badge}</span>
+            </button>
+          </div>
+          <section
+            id="expression-reference"
+            className="expression-reference"
+            aria-label="Expression reference"
+            hidden={!referenceOpen}
+            style={{ flexBasis: `${Math.round(referenceHeight * 100)}%` }}
+          >
+            {referenceOpen && <ExpressionReference
+              algebraBadge={algebraDefinition.badge}
+              generalSections={algebraDefinition.generalReference}
+              algebraSections={algebraDefinition.expressionReference}
+              algebraTopics={algebraDefinition.algebraReference}
+              canAdd={expressionDoc.items.length < MAX_EXPRESSION_ITEMS}
+              onAdd={addReferenceExample}
+              onClose={closeReference}
+            />}
+          </section>
         </aside>
 
         {!panelHidden && !noViz && <div
@@ -3836,15 +3956,6 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           </div>
         )}
       </div>
-      {infoDialog === 'expressions' && (
-        <ExpressionReferenceDialog
-          algebraName={algebraDefinition.info(algebraResolution.parameters).name}
-          algebraBadge={algebraDefinition.badge}
-          sections={algebraDefinition.expressionReference}
-          returnFocusRef={expressionReferenceButtonRef}
-          onClose={closeInfoDialog}
-        />
-      )}
     </div>
   )
 }

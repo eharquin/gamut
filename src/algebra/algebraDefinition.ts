@@ -1,4 +1,4 @@
-import { type ReferenceSection } from '../language/expressionReference'
+import { type ReferenceSection, type ReferenceTopic } from '../language/expressionReference'
 import { type AlgebraEngine } from './algebraEngine'
 
 /** Presentation-neutral description of a definition for the algebra dialog. */
@@ -60,7 +60,15 @@ export type AlgebraDefinition = Readonly<{
   standardVisualizerId: string
   showcase: readonly ShowcaseItem[]
   /** The expression reference shown for documents of this algebra: shared sections plus its own syntax. */
+  /** The general expressions, shared by every algebra; built with `generalReference`. */
+  generalReference: readonly ReferenceSection[]
+  /** The expressions specific to this algebra: its values, properties, functions and positioning. */
   expressionReference: readonly ReferenceSection[]
+  /**
+   * The reference's first section, `Algebra <badge>`: each primitive of the
+   * algebra with how it is written and one short line, then normalization.
+   */
+  algebraReference: readonly ReferenceTopic[]
   /** Title of the showcase document; `showcaseMetadata` supplies a neutral one when absent. */
   showcaseTitle?: string
   /** Description of the showcase document. */

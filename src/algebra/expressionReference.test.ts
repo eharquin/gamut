@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { evaluateDocument } from '../application/evaluateDocument'
 import type { EvaluationState } from '../application/evaluateSource'
 import { expressionDocument } from '../document/expressionDocument'
-import type { ReferenceEntry } from '../language/expressionReference'
+import { MAX_REFERENCE_EXAMPLES, STYLE_REFERENCE, type ReferenceEntry } from '../language/expressionReference'
 import { createBuiltinAlgebraRegistry } from './builtinAlgebras'
 
 const registry = createBuiltinAlgebraRegistry()
@@ -42,8 +42,14 @@ function evaluateEntry(algebraId: string, entry: ReferenceEntry) {
 describe('expression reference', () => {
   for (const definition of registry.definitions()) {
     describe(definition.badge, () => {
-      const entries = definition.expressionReference.flatMap((section) =>
-        section.entries.map((entry) => [section.title, entry] as const))
+      // Both categories: the general expressions and those of this algebra.
+      const allSections = [...definition.generalReference, ...definition.expressionReference]
+      const entries = [
+        ...allSections.flatMap((section) => section.entries.map((entry) => [section.title, entry] as const)),
+        // The primitives' addable examples are checked the same way.
+        ...definition.algebraReference.filter((topic) => topic.examples !== undefined).map((topic) =>
+          ['Primitives', { syntax: topic.name, meaning: topic.meaning ?? '', examples: topic.examples! }] as const),
+      ]
 
       it.each(entries.map(([title, entry]) => [`${title}: ${entry.syntax}`, entry] as const))(
         '%s evaluates as documented',
@@ -64,16 +70,54 @@ describe('expression reference', () => {
         },
       )
 
-      it('has unique section titles and entry syntax', () => {
-        const titles = definition.expressionReference.map((section) => section.title)
-        expect(new Set(titles).size).toBe(titles.length)
-        for (const section of definition.expressionReference) {
+      it('keeps every entry to one short line and at most two examples', () => {
+        for (const section of allSections) {
+          for (const entry of section.entries) {
+            expect(entry.examples.length, entry.syntax).toBeLessThanOrEqual(MAX_REFERENCE_EXAMPLES)
+            expect(entry.meaning, entry.syntax).not.toMatch(/;/)
+            expect(entry.meaning.length, entry.syntax).toBeLessThanOrEqual(90)
+          }
+        }
+      })
+
+      it('supplies its own Algebra section, ending with normalization, without default colors', () => {
+        const topics = definition.algebraReference
+        expect(topics.length).toBeGreaterThan(1)
+        expect(topics.at(-1)).toMatchObject({ name: 'Normalization', syntax: 'norm button' })
+        // Every primitive but normalization has one or two addable examples.
+        for (const topic of topics.slice(0, -1)) {
+          expect(topic.examples?.length, topic.name).toBeGreaterThan(0)
+          expect(topic.examples!.length, topic.name).toBeLessThanOrEqual(MAX_REFERENCE_EXAMPLES)
+        }
+        expect(topics.at(-1)?.examples).toBeUndefined()
+        const text = topics.map(({ name, syntax, meaning }) => `${name} ${syntax} ${meaning ?? ''}`).join('\n')
+        expect(text).not.toMatch(/colou?r|#[0-9a-f]{3,6}\b|green|yellow|red|blue|neutral/i)
+      })
+
+      it('has unique section titles and entries, and keeps general expressions out of the algebra sections', () => {
+        for (const category of [definition.generalReference, definition.expressionReference]) {
+          const titles = category.map((section) => section.title)
+          expect(new Set(titles).size).toBe(titles.length)
+        }
+        for (const section of allSections) {
           const syntax = section.entries.map((entry) => entry.syntax)
           expect(new Set(syntax).size, section.title).toBe(syntax.length)
         }
+        // The algebra's own sections never repeat a general expression.
+        const general = new Set(definition.generalReference.flatMap((section) => section.entries.map((entry) => entry.syntax)))
+        const repeated = definition.expressionReference.flatMap((section) => section.entries)
+          .filter((entry) => general.has(entry.syntax)).map((entry) => entry.syntax)
+        expect(repeated).toEqual([])
       })
     })
   }
+
+  it('shares the general expressions: same syntax and meaning in every algebra', () => {
+    const general = registry.definitions().map((definition) => definition.generalReference
+      .flatMap((section) => section.entries.map((entry) => `${section.title} | ${entry.syntax} | ${entry.meaning}`)))
+    for (const other of general.slice(1)) expect(other).toEqual(general[0])
+    expect(general[0].length).toBeGreaterThan(20)
+  })
 
   it('documents the PGA(2) constructors, blades, norms, and motor functions without VGA-only syntax', () => {
     const pga = registry.definitions().find((definition) => definition.algebraId === 'org.multivector.pga')!
@@ -87,5 +131,26 @@ describe('expression reference', () => {
     const text = pga.expressionReference
       .flatMap((section) => section.entries.map((entry) => `${entry.syntax} ${entry.meaning}`)).join('\n')
     expect(text).not.toMatch(/VGA|vector\(|\(2, 1\)|V\.head|bivector row/)
+  })
+
+  it('names the primitives and normalization choices of each algebra', () => {
+    const topics = (algebraId: string) => registry.definitions()
+      .find((definition) => definition.algebraId === algebraId)!.algebraReference
+    expect(topics('org.multivector.vga').map((topic) => topic.name)).toEqual([
+      'Scalar', 'Vector', 'Bivector', 'Rotor', 'Mixed multivector', 'List', 'Normalization',
+    ])
+    expect(topics('org.multivector.vga').at(-1)?.meaning).toBe('off · auto')
+    expect(topics('org.multivector.pga').map((topic) => topic.name)).toEqual([
+      'Point', 'Ideal point', 'Line', 'Line at infinity', 'Translator', 'Motor', 'Reflection', 'List', 'Normalization',
+    ])
+    expect(topics('org.multivector.pga').find((topic) => topic.name === 'Line')?.syntax).toBe('line(a, b, c), A & B')
+    expect(topics('org.multivector.pga').at(-1)?.meaning).toBe('off · auto · norm · inorm')
+  })
+
+  it('lists only the values of each style setting', () => {
+    expect(STYLE_REFERENCE.map((topic) => topic.name)).toEqual([
+      'Color', 'Opacity', 'Stroke', 'Point', 'Label', 'Visibility', 'Values',
+    ])
+    expect(STYLE_REFERENCE.every((topic) => topic.meaning === undefined)).toBe(true)
   })
 })

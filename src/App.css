@@ -522,12 +522,27 @@ h2 {
   padding: 0;
 }
 
+.expression-list-footer {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  padding: 2px 8px 2px 0;
+}
+
+.expression-list-footer .clear-expressions {
+  margin: 2px 0;
+}
+
 .expression-panel-footer {
   flex-shrink: 0;
   display: flex;
   align-items: stretch;
   background: var(--surface);
   border-top: 1px solid var(--border);
+}
+
+.expression-panel.has-reference .expression-panel-footer {
+  border-bottom: 1px solid var(--border);
 }
 
 .expression-reference-button {
@@ -546,9 +561,247 @@ h2 {
   transition: color 120ms ease, background 120ms ease;
 }
 
-.expression-reference-button:hover {
+.expression-reference-button:hover,
+.expression-reference-button[aria-expanded='true'] {
   color: var(--text-strong);
   background: var(--surface-hover);
+}
+
+.expression-reference-chevron {
+  display: inline-block;
+  transition: transform 120ms ease;
+}
+
+.expression-reference-button[aria-expanded='false'] .expression-reference-chevron {
+  transform: rotate(-90deg);
+}
+
+.expression-reference-badge {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.66rem;
+}
+
+/* Shares the panel height between the list and the open reference. */
+.reference-resize {
+  flex-shrink: 0;
+  height: 10px;
+  margin-bottom: -5px;
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  cursor: row-resize;
+  touch-action: none;
+}
+
+.reference-resize::after {
+  content: '';
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-strong);
+}
+
+.reference-resize:hover::after,
+.reference-resize:focus-visible::after {
+  background: var(--accent);
+}
+
+.reference-resize:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Docked under its band; it scrolls on its own, apart from the list. */
+.expression-reference {
+  flex: 0 0 58%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+
+.expression-reference[hidden] {
+  display: none;
+}
+
+.expression-reference-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.reference-add:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.reference-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 12px 16px;
+}
+
+/* General | algebra: one category of the reference at a time. */
+.reference-tabs {
+  flex-shrink: 0;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 2px;
+  margin: 8px 12px 4px;
+  padding: 2px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.reference-tabs button {
+  min-height: 26px;
+  padding: 2px 8px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  font: 600 0.74rem var(--font-sans);
+  cursor: pointer;
+}
+
+.reference-tabs button:hover {
+  color: var(--text);
+}
+
+.reference-tabs button[aria-selected='true'] {
+  color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+.reference-tabs button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.reference-section-title {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 10px 0 6px;
+  color: var(--muted);
+  background: var(--surface);
+  font: 700 0.66rem var(--font-sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.reference-entry {
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.reference-entry-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.reference-syntax {
+  min-width: 0;
+  color: var(--text);
+  font: 600 0.82rem var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.reference-code {
+  margin-left: 6px;
+  color: var(--text-strong);
+  font-size: 0.74rem;
+  font-weight: 400;
+}
+
+.reference-meaning {
+  margin: 2px 0 4px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.reference-examples {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reference-example {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 2px 8px;
+  border-radius: 5px;
+  font: 0.72rem var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.reference-example:hover {
+  background: var(--surface-hover);
+}
+
+.reference-example code {
+  font: inherit;
+}
+
+.reference-example.is-setup .reference-source,
+.reference-position,
+.reference-result {
+  color: var(--muted);
+}
+
+.reference-with {
+  color: var(--muted);
+  font: 0.68rem var(--font-sans);
+}
+
+.reference-arrow {
+  color: var(--text-dim);
+}
+
+.reference-add {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: var(--accent);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  font-weight: 700;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.reference-example:hover .reference-add,
+.reference-add:focus-visible {
+  opacity: 1;
+}
+
+.reference-add:disabled {
+  cursor: default;
+}
+
+@media (hover: none) {
+  .reference-add {
+    opacity: 1;
+  }
 }
 
 /* Registered so the hold progress can be animated as a real number. */
@@ -2715,16 +2968,6 @@ body.canvas-gesture .expression-panel {
   color: var(--muted);
 }
 
-.object-color-swatch {
-  width: 12px;
-  height: 12px;
-  display: inline-block;
-  margin-right: 8px;
-  vertical-align: -1px;
-  border: 1px solid var(--object-stroke);
-  border-radius: 50%;
-}
-
 /* The Cayley and basis grids are matrices: they keep real gridlines. */
 .algebra-grid {
   border-collapse: collapse;
@@ -2797,6 +3040,13 @@ body.canvas-gesture .expression-panel {
   .expression-panel.is-full-width {
     max-height: none;
     border-bottom: 0;
+  }
+
+  /* With the reference open, the panel grows so the reference keeps its
+     place under the list, at full width (#259). */
+  .expression-panel.has-reference {
+    height: 85svh;
+    max-height: none;
   }
 
   .panel-resize {

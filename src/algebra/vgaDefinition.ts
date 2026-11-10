@@ -1,6 +1,6 @@
 import { type AlgebraDefinition } from './algebraDefinition'
 import { VGA_2_INFO } from './vga2Info'
-import { VGA_2_REFERENCE } from './vgaReference'
+import { VGA_2_ALGEBRA_REFERENCE, VGA_2_GENERAL_REFERENCE, VGA_2_REFERENCE } from './vgaReference'
 import { createVga2Engine } from './vgaEngine'
 
 /**
@@ -44,7 +44,9 @@ export const VGA_DEFINITION: AlgebraDefinition = Object.freeze({
   },
   standardInterpretationId: 'org.multivector.vga-2d',
   standardVisualizerId: 'org.multivector.vga-2d',
+  generalReference: VGA_2_GENERAL_REFERENCE,
   expressionReference: VGA_2_REFERENCE,
+  algebraReference: VGA_2_ALGEBRA_REFERENCE,
   showcaseTitle: 'VGA 2D Rotation Example',
   showcaseDescription: 'A vector, a looping angle, its rotor, the rotated vector, and their bivector.',
   showcase: [

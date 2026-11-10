@@ -1,6 +1,5 @@
 import type { RefObject } from 'react'
 import { type AlgebraInfo } from '../algebra/algebraDefinition'
-import { DEFAULT_OBJECT_STYLES, paletteEntry } from './appearancePalette'
 import { DefinitionTable } from './DefinitionTable'
 import { InfoDialog } from './InfoDialog'
 
@@ -11,35 +10,11 @@ type AlgebraInfoDialogProps = Readonly<{
 }>
 
 /**
- * Documents the presentation defaults applied to items without stored
- * appearance. Colour is decorative here: the palette name carries the identity
- * so the section survives greyscale and assistive technology (A11Y-002).
+ * The algebra only (#259): signature, basis and metric, Cayley table, the
+ * algebraic reading of each object, sub-algebras, and mathematical notes.
+ * How objects are written, drawn, colored, and normalized lives in the
+ * expression reference.
  */
-function ObjectColorTable() {
-  return (
-    <table className="info-table">
-      <tbody>
-        {DEFAULT_OBJECT_STYLES.map(([kind, style]) => {
-          const entry = paletteEntry(style)
-          return (
-            <tr key={kind}>
-              <th scope="row">
-                <span
-                  className="object-color-swatch"
-                  style={{ backgroundColor: entry?.hex }}
-                  aria-hidden="true"
-                />
-                {kind}
-              </th>
-              <td title={entry?.hex}>{entry?.name}</td>
-            </tr>
-          )
-        })}
-      </tbody>
-    </table>
-  )
-}
-
 export function AlgebraInfoDialog({
   info,
   returnFocusRef,
@@ -84,15 +59,6 @@ export function AlgebraInfoDialog({
       <section className="info-section">
         <h3>Geometric interpretation</h3>
         <DefinitionTable rows={info.objects} codeTerms={false} />
-      </section>
-
-      <section className="info-section">
-        <h3>Object colors</h3>
-        <ObjectColorTable />
-        <p className="info-footnote">
-          Defaults. Any item can override its color from the appearance popover
-          in the expression panel.
-        </p>
       </section>
 
       <section className="info-section">
