@@ -2766,24 +2766,30 @@ describe('VGA 2D vertical slice', () => {
     expect(badge).toHaveFocus()
   })
 
-  it('names every default object color in text, not only as a swatch', () => {
+  it('keeps only the algebra in the algebra dialog, without colors, constructors, or source spellings', () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
     render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: 'Algebra information' }))
-    const dialog = screen.getByRole('dialog', {
-      name: 'Vector Geometric Algebra ℝ(2,0,0)',
-    })
-
-    expect(dialog).toHaveTextContent('Object colors')
-    for (const [, style] of DEFAULT_OBJECT_STYLES) {
-      const entry = paletteEntry(style)
-      expect(entry).toBeDefined()
-      expect(dialog).toHaveTextContent(entry?.name ?? style)
+    const vga = () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Algebra information' }))
+      return screen.getByRole('dialog', { name: 'Vector Geometric Algebra ℝ(2,0,0)' })
     }
+    let dialog = vga()
+    expect(dialog).toHaveTextContent('a·e1 + b·e2')
+    expect(dialog).not.toHaveTextContent('Object colors')
+    expect(dialog).not.toHaveTextContent(/render|parallelogram|positionable|separate position/i)
+    for (const [, style] of DEFAULT_OBJECT_STYLES)
+      expect(dialog).not.toHaveTextContent(paletteEntry(style)?.name ?? style)
+    expect(dialog.querySelector('.object-color-swatch')).toBeNull()
+    fireEvent.keyDown(document, { key: 'Escape' })
 
-    const listRow = screen.getByRole('rowheader', { name: 'List' }).closest('tr')
-    expect(listRow).toHaveTextContent('green 3')
-    expect(listRow?.querySelector('.object-color-swatch'))
-      .toHaveAttribute('aria-hidden', 'true')
+    fireEvent.click(screen.getByRole('button', { name: 'VGA · 2D. Change algebra' }))
+    fireEvent.click(within(screen.getByRole('menu')).getAllByRole('menuitemradio')[1])
+    fireEvent.click(screen.getByRole('button', { name: 'Algebra information' }))
+    dialog = screen.getByRole('dialog', { name: 'Projective Geometric Algebra ℝ(2,0,1)' })
+    expect(dialog).toHaveTextContent('w·e12 − x·e02 + y·e01')
+    expect(dialog).toHaveTextContent('y·e01 − x·e02')
+    expect(dialog).toHaveTextContent('A ∨ B = J(J(A) ∧ J(B))')
+    expect(dialog).not.toHaveTextContent(/ipoint|point\(|line\(|A & B|e20|normalization|Object colors/)
   })
 
   it('clears every expression after the clear control is held', () => {

@@ -2715,16 +2715,6 @@ body.canvas-gesture .expression-panel {
   color: var(--muted);
 }
 
-.object-color-swatch {
-  width: 12px;
-  height: 12px;
-  display: inline-block;
-  margin-right: 8px;
-  vertical-align: -1px;
-  border: 1px solid var(--object-stroke);
-  border-radius: 50%;
-}
-
 /* The Cayley and basis grids are matrices: they keep real gridlines. */
 .algebra-grid {
   border-collapse: collapse;

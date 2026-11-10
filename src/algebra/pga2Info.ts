@@ -36,7 +36,7 @@ export const PGA_2_INFO: AlgebraInfo = Object.freeze<AlgebraInfo>({
   objects: [
     ['Line', 'a·e1 + b·e2 + c·e0 — the line a·x + b·y + c = 0; the line at infinity when a = b = 0'],
     ['Point', 'w·e12 − x·e02 + y·e01 — the point (x/w, y/w) with weight w'],
-    ['Ideal point', 'ipoint(x, y) — the direction (x, y), a point with weight 0'],
+    ['Ideal point', 'y·e01 − x·e02 — the direction (x, y), a point with weight 0'],
     ['Motor', 'even versor — a rotation, translation, or their product'],
     ['Reflection', 'odd versor — a reflection or glide reflection; reflected points carry weight −1'],
     ['Mixed multivector', 'multiple grades without one standard geometric reading'],
@@ -49,8 +49,7 @@ export const PGA_2_INFO: AlgebraInfo = Object.freeze<AlgebraInfo>({
   ],
   notes: [
     'The pseudoscalar e012 is null: duality is the explicit Hodge complement J, never multiplication by e012.',
-    'The meet of two lines is their outer product; the join of two points is the regressive product A & B = J(J(A) ^ J(B)).',
-    'norm(X) is the Euclidean norm and inorm(X) the ideal norm; normalization divides by the one that classification selected and keeps the sign of the weight.',
-    'e20 may be written in source as −e02; display uses the canonical name e02.',
+    'The meet of two lines is their outer product; the join of two points is the regressive product A ∨ B = J(J(A) ∧ J(B)).',
+    'The Euclidean norm ignores every component on a blade containing e0; the ideal norm is the Euclidean norm of the complement J.',
   ],
 })
