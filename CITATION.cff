@@ -1,13 +1,13 @@
 cff-version: 1.2.0
-message: "If you use MultiVector in your research, please cite the software using the metadata below."
+message: "If you use GAMUT in your research, please cite the software using the metadata below."
 type: software
-title: "MultiVector"
-version: "0.1.0"
-date-released: "2026-09-13"
+title: "GAMUT: Geometric Algebra Multivector Unveiling Tool"
+version: "0.2.0"
+date-released: "2026-11-10"
 abstract: "A web environment for creating, visualizing, saving, and sharing reproducible geometric algebra constructions."
 authors:
   - family-names: "Harquin"
     given-names: "Enzo"
     orcid: "https://orcid.org/0009-0000-7281-1708"
-repository-code: "https://github.com/eharquin/multivector"
+repository-code: "https://github.com/eharquin/gamut"
 license: MIT
