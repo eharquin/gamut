@@ -97,7 +97,7 @@ export function LibraryMenu({
     const returnFocusTarget = returnFocusRef.current
     const anchor = anchorRef.current
     ref.current?.querySelector<HTMLElement>('input, button:not(.appearance-close)')?.focus()
-    const onPointerDown = (event: MouseEvent) => {
+    const onPointerDown = (event: PointerEvent) => {
       if (ref.current?.contains(event.target as Node)) return
       if (anchor?.contains(event.target as Node)) return
       if (returnFocusTarget?.contains(event.target as Node)) return
@@ -108,10 +108,12 @@ export function LibraryMenu({
       if (pendingRef.current) setPending(null)
       else onClose()
     }
-    document.addEventListener('mousedown', onPointerDown)
+    // Pointer events, in the capture phase: the canvas prevents the default of
+    // its pointerdown, which suppresses the mousedown that would follow.
+    document.addEventListener('pointerdown', onPointerDown, true)
     document.addEventListener('keydown', onKeyDown)
     return () => {
-      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('pointerdown', onPointerDown, true)
       document.removeEventListener('keydown', onKeyDown)
       returnFocusTarget?.focus()
     }

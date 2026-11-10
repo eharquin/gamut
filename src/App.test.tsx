@@ -1343,6 +1343,10 @@ describe('VGA 2D vertical slice', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
     expect(source).toHaveValue('a = ((2))')
 
+    // Pressing the row's slider closes the menu, as any press outside it does.
+    expect(screen.queryByRole('dialog', { name: 'Scalar' })).not.toBeInTheDocument()
+    fireEvent.click(trigger)
+
     // Turning Animate off makes it a number field.
     fireEvent.click(screen.getByRole('switch', { name: 'Animate' }))
     expect(screen.getByRole('switch', { name: 'Animate' })).not.toBeChecked()
@@ -3713,6 +3717,25 @@ describe('documents whose positions are turned off', () => {
 })
 
 describe('normalization chosen from the expression row (#185)', () => {
+  it('closes the normalization popover and the library menu on a press on the canvas', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: 'VGA · 2D. Change algebra' }))
+    fireEvent.click(within(screen.getByRole('menu')).getAllByRole('menuitemradio')[1])
+    // The canvas prevents the default of its pointerdown, so no mousedown follows.
+    const pressCanvas = () => fireEvent.pointerDown(viewportCanvas(), { button: 0, pointerId: 1, clientX: 400, clientY: 300 })
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Normalization: off' })[0])
+    expect(screen.getByRole('dialog', { name: 'Normalize' })).toBeInTheDocument()
+    pressCanvas()
+    expect(screen.queryByRole('dialog', { name: 'Normalize' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Library' }))
+    expect(screen.getByRole('dialog', { name: 'Library' })).toBeInTheDocument()
+    pressCanvas()
+    expect(screen.queryByRole('dialog', { name: 'Library' })).not.toBeInTheDocument()
+  })
+
   it('opens the choice in a popover that closes on Escape, a click outside, or its close button', () => {
     render(<App />)
     fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: '' } })
@@ -3733,9 +3756,9 @@ describe('normalization chosen from the expression row (#185)', () => {
     expect(toggle).toHaveFocus()
 
     fireEvent.click(toggle)
-    fireEvent.mouseDown(within(popover()!).getByRole('group', { name: 'Normalize with' }))
+    fireEvent.pointerDown(within(popover()!).getByRole('group', { name: 'Normalize with' }))
     expect(popover()).toBeInTheDocument()
-    fireEvent.mouseDown(document.body)
+    fireEvent.pointerDown(document.body)
     expect(popover()).not.toBeInTheDocument()
 
     fireEvent.click(toggle)

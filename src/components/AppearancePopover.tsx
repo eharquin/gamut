@@ -148,7 +148,7 @@ export function AppearancePopover({
   useEffect(() => {
     const returnFocusTarget = anchorRef.current
     ;(visibilityRef.current ?? closeRef.current)?.focus()
-    const onPointerDown = (event: MouseEvent) => {
+    const onPointerDown = (event: PointerEvent) => {
       if (ref.current?.contains(event.target as Node)) return
       if (returnFocusTarget?.contains(event.target as Node)) return
       onClose()
@@ -156,10 +156,12 @@ export function AppearancePopover({
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key === 'Escape') onClose()
     }
-    document.addEventListener('mousedown', onPointerDown)
+    // Pointer events, in the capture phase: the canvas prevents the default of
+    // its pointerdown, which suppresses the mousedown that would follow.
+    document.addEventListener('pointerdown', onPointerDown, true)
     document.addEventListener('keydown', onKeyDown)
     return () => {
-      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('pointerdown', onPointerDown, true)
       document.removeEventListener('keydown', onKeyDown)
       returnFocusTarget?.focus()
     }
