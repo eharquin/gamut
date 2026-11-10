@@ -2290,15 +2290,16 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
    * temporary scene-link session it is Save local copy: the graph takes a new
    * identity and the session ends.
    */
-  const commitLibrarySave = (name: string): boolean => {
-    const candidate = ephemeral ? crypto.randomUUID() : expressionDoc.id
+  const commitLibrarySave = (name: string, asNew = false): boolean => {
+    // Save as new graph stores a fresh identity and leaves the bound graph as saved.
+    const candidate = ephemeral || asNew ? crypto.randomUUID() : expressionDoc.id
     let id: string
     try {
       const saved = saveToLibrary(
         browserLibraryStorage(),
         toCanonicalDocument({ ...expressionDoc, id: candidate, title: name }, theme, resolvedStyles, resolvedOrientation),
         name,
-        { ...libraryOptions(), boundId: ephemeral ? null : boundId },
+        { ...libraryOptions(), boundId: ephemeral || asNew ? null : boundId },
       )
       reportLibrary(saved.entries, null)
       id = saved.id
@@ -2877,7 +2878,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                   }}
                   onPointerEnter={() => setRowHoverId(item.id)}
                   onPointerLeave={() => setRowHoverId((current) => current === item.id ? null : current)}
-                  className={`expression-item${visible ? '' : ' is-hidden'}${
+                  className={`expression-item${visible || noViz ? '' : ' is-hidden'}${
                     empty ? ' is-empty-expression' : ''
                   }${dropBefore ? ' drop-before' : ''}${dropAfter ? ' drop-after' : ''} ${
                     invalid || invalidPosition ? 'has-error' : ''
@@ -3804,7 +3805,9 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           naming={libraryNaming}
           diagnostic={library?.diagnostic ?? null}
           unsavedChanges={unsavedChanges}
-          onSaveAs={commitLibrarySave}
+          onSaveAs={(name) => { commitLibrarySave(name) }}
+          onSaveAsNew={(name) => { commitLibrarySave(name, true) }}
+          currentName={expressionDoc.title.trim() || 'Untitled graph'}
           onNew={newLibraryGraph}
           onOpen={openLibraryEntry}
           onRename={(entry, name) => { renameLibraryEntry(entry.id, name) }}

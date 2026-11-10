@@ -1343,6 +1343,10 @@ describe('VGA 2D vertical slice', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
     expect(source).toHaveValue('a = ((2))')
 
+    // Pressing the row's slider closes the menu, as any press outside it does.
+    expect(screen.queryByRole('dialog', { name: 'Scalar' })).not.toBeInTheDocument()
+    fireEvent.click(trigger)
+
     // Turning Animate off makes it a number field.
     fireEvent.click(screen.getByRole('switch', { name: 'Animate' }))
     expect(screen.getByRole('switch', { name: 'Animate' })).not.toBeChecked()
@@ -3713,6 +3717,25 @@ describe('documents whose positions are turned off', () => {
 })
 
 describe('normalization chosen from the expression row (#185)', () => {
+  it('closes the normalization popover and the library menu on a press on the canvas', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: 'VGA · 2D. Change algebra' }))
+    fireEvent.click(within(screen.getByRole('menu')).getAllByRole('menuitemradio')[1])
+    // The canvas prevents the default of its pointerdown, so no mousedown follows.
+    const pressCanvas = () => fireEvent.pointerDown(viewportCanvas(), { button: 0, pointerId: 1, clientX: 400, clientY: 300 })
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Normalization: off' })[0])
+    expect(screen.getByRole('dialog', { name: 'Normalize' })).toBeInTheDocument()
+    pressCanvas()
+    expect(screen.queryByRole('dialog', { name: 'Normalize' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Library' }))
+    expect(screen.getByRole('dialog', { name: 'Library' })).toBeInTheDocument()
+    pressCanvas()
+    expect(screen.queryByRole('dialog', { name: 'Library' })).not.toBeInTheDocument()
+  })
+
   it('opens the choice in a popover that closes on Escape, a click outside, or its close button', () => {
     render(<App />)
     fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: '' } })
@@ -3733,9 +3756,9 @@ describe('normalization chosen from the expression row (#185)', () => {
     expect(toggle).toHaveFocus()
 
     fireEvent.click(toggle)
-    fireEvent.mouseDown(within(popover()!).getByRole('group', { name: 'Normalize with' }))
+    fireEvent.pointerDown(within(popover()!).getByRole('group', { name: 'Normalize with' }))
     expect(popover()).toBeInTheDocument()
-    fireEvent.mouseDown(document.body)
+    fireEvent.pointerDown(document.body)
     expect(popover()).not.toBeInTheDocument()
 
     fireEvent.click(toggle)
@@ -3897,6 +3920,23 @@ describe('NoViz calculator mode (#55)', () => {
   })
   const storedView = () => JSON.parse(window.localStorage.getItem(ACTIVE_DOCUMENT_KEY)!).view
   const canvas = () => screen.queryByRole('img', { name: /Two-dimensional [VP]GA viewport/ })
+
+  it('shows a hidden expression like the others, and hides it again with the canvas', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: 'V1 = vector(2, 1)' } })
+    const row = () => screen.getByRole('textbox', { name: 'Expression 1' }).closest('.expression-item')!
+    fireEvent.click(screen.getByRole('button', { name: 'Hide V1' }))
+    expect(row()).toHaveClass('is-hidden')
+
+    // Nothing is drawn in NoViz, so visibility does not apply there.
+    fireEvent.click(screen.getByRole('button', { name: 'Hide canvas (NoViz calculator)' }))
+    expect(row()).not.toHaveClass('is-hidden')
+
+    // The setting is kept and applies again with the canvas.
+    fireEvent.click(screen.getByRole('button', { name: 'Show canvas' }))
+    expect(row()).toHaveClass('is-hidden')
+    expect(screen.getByRole('button', { name: 'Show V1' })).toHaveAttribute('aria-pressed', 'false')
+  })
 
   it('collapses the canvas into a full-width calculator and brings it back', () => {
     vi.stubEnv('MODE', 'development')
@@ -4119,6 +4159,31 @@ describe('local library of named graphs (#212)', () => {
   const nameField = () => screen.getByRole('textbox', { name: 'Open graph name' })
   const index = () => JSON.parse(window.localStorage.getItem('gamut.library.v1')!).entries as { id: string; name: string }[]
   const stored = (id: string) => JSON.parse(window.localStorage.getItem(`gamut.library.v1.document.${id}`)!)
+
+  it('saves the open graph as a new graph, leaving the saved one untouched', () => {
+    vi.stubEnv('MODE', 'development')
+    render(<App />)
+    saveAs('Rotation talk')
+    const original = index().find((entry) => entry.name === 'Rotation talk')!
+    const originalSource = stored(original.id).items[0].source
+
+    fireEvent.change(source(), { target: { value: 'V1 = vector(9, 9)' } })
+    const menu = openLibrary()
+    fireEvent.click(within(menu).getByRole('button', { name: 'Save as new graph…' }))
+    const name = within(menu).getByRole('textbox', { name: 'Graph name' })
+    expect(name).toHaveValue('Rotation talk copy')
+    fireEvent.change(name, { target: { value: 'Rotation variant' } })
+    fireEvent.click(within(menu).getByRole('button', { name: 'Save' }))
+
+    // Two graphs: the original keeps its saved content, the new one has the edit and is open.
+    expect(index().map((entry) => entry.name).sort()).toEqual(['Rotation talk', 'Rotation variant'])
+    const variant = index().find((entry) => entry.name === 'Rotation variant')!
+    expect(variant.id).not.toBe(original.id)
+    expect(stored(original.id).items[0].source).toBe(originalSource)
+    expect(stored(variant.id).items[0].source).toBe('V1 = vector(9, 9)')
+    expect(nameField()).toHaveValue('Rotation variant')
+    expect(saveButton()).toHaveAccessibleName('Save')
+  })
 
   it('groups the header: graph name, Save, and Library; the document file; the display', () => {
     render(<App />)
