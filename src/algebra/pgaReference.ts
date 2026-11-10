@@ -1,11 +1,5 @@
 import {
-  FUNCTIONS,
-  INVERSE,
-  LISTS_AND_RANGES,
-  NAME_REFERENCE,
-  PRECEDENCE,
-  SCALAR_LITERALS,
-  operatorsSection,
+  generalReference,
   pseudoscalarEntry,
   referenceEntry as entry,
   referenceTopic as topic,
@@ -29,16 +23,17 @@ export const PGA_2_ALGEBRA_REFERENCE: readonly ReferenceTopic[] = [
   topic('Normalization', 'norm button', 'off · auto · norm · inorm'),
 ]
 
-/**
- * The expression reference of PGA(2) documents: shared sections plus the
- * constructors, blades, norms, motor functions, and ideal-point positions of
- * PGA convention version 1.
- */
+/** The general expressions in a PGA(2) document. */
+export const PGA_2_GENERAL_REFERENCE: readonly ReferenceSection[] = generalReference({
+  regressive: { source: 'point(0, 0) & point(1, 0)', inspection: 'e2' },
+  dual: { source: '!e1', inspection: '-e02' },
+})
+
+/** The PGA(2) expressions: blades, constructors, PGA properties, motor functions and positioning. */
 export const PGA_2_REFERENCE: readonly ReferenceSection[] = [
   {
-    title: 'Values and names',
+    title: 'Values',
     entries: [
-      SCALAR_LITERALS,
       entry('e0, e1, e2, e01, e02, e12, e012', 'canonical PGA(2) basis blades',
         { source: 'e012', inspection: 'e012' }, { source: 'e20', inspection: '-e02' }),
       entry('e0 * e0', 'e0 is the degenerate direction', { source: 'e0 * e0', inspection: '0' }),
@@ -48,19 +43,12 @@ export const PGA_2_REFERENCE: readonly ReferenceSection[] = [
         { source: 'point(2, 4, 2)', inspection: '4e01 - 2e02 + 2e12' }),
       entry('ipoint(x, y)', 'ideal point in direction (x, y)', { source: 'ipoint(1, 1)', inspection: 'e01 - e02' }),
       entry('line(a, b, c)', 'the line a x + b y + c = 0', { source: 'line(1, 0, -1)', inspection: '-e0 + e1' }),
-      NAME_REFERENCE,
     ],
   },
-  LISTS_AND_RANGES,
-  operatorsSection({
-    regressive: { source: 'point(0, 0) & point(1, 0)', inspection: 'e2' },
-    dual: { source: '!e1', inspection: '-e02' },
-  }),
   {
     title: 'Properties',
     entries: [
       entry('A.g0, A.g1, A.g2, A.g3', 'project onto one grade', 'A = 1 + e1 + e12 + e012', { source: 'A.g3', inspection: 'e012' }),
-      INVERSE,
       entry('A.norm', 'Euclidean norm', { source: 'point(2, 4, 2).norm', inspection: '2' }, { source: 'line(3, 4, 1).norm', inspection: '5' }),
       entry('A.inorm', 'ideal norm', { source: 'ipoint(3, 4).inorm', inspection: '5' }, { source: 'line(0, 0, 2).inorm', inspection: '2' }),
       entry('A.e, A.e0, A.e1, A.e2, A.e01, A.e02, A.e12, A.e012', 'extract one coefficient as a scalar',
@@ -76,12 +64,10 @@ export const PGA_2_REFERENCE: readonly ReferenceSection[] = [
   {
     title: 'Functions',
     entries: [
-      ...FUNCTIONS,
       entry('log(M), sqrt(M)', 'principal logarithm and square root of a unit motor',
         'M = exp(-0.5 * e12)', { source: 'log(M)', inspection: '-0.5e12' }),
     ],
   },
-  PRECEDENCE,
   {
     title: 'Positioning',
     entries: [

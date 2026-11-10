@@ -110,17 +110,18 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   expression panel, instead of a modal dialog, so an example sits right
   under the rows being written and the canvas stays usable (#259). The band
   shows a chevron and the algebra badge and reports its state. The
-  reference has a search over syntax and meaning with highlighted matches
-  (`/` focuses it), section chips, sticky section titles, "PGA only" or
-  "VGA only" tags, and examples with their results and a **+** button that
-  adds the example as a new expression. Escape inside it closes it. A
+  reference has sticky section titles and examples with their results and a
+  **+** button that adds the example as a new expression. Escape inside it
+  closes it. A
   handle above the band shares the panel height between the list and the
   reference, by pointer or Up and Down arrows; the height is a local
   preference. The clear-all cross moves to the bottom of the list.
-- The reference opens on an **Algebra VGA · 2D** or **Algebra PGA · 2D**
-  section, each primitive with how it is written and one short line, then
-  the row's normalization choices, and ends with a **Style** section listing
-  the values the appearance menu takes. Every entry is reduced to its
+- The reference has two categories: **General expressions**, true in every
+  algebra, ending with a **Style** section listing the values the appearance
+  menu takes; then **VGA expressions** or **PGA expressions**, opening on the
+  algebra's **Primitives** (each with how it is written and one short line,
+  then the row's normalization choices) followed by its own values,
+  properties, functions and positioning. Every entry is reduced to its
   syntax, one short line, and at most two examples; no default colors are
   listed.
 - The algebra **i** dialog keeps only the algebra: signature, basis and

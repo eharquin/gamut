@@ -147,6 +147,21 @@ export const PRECEDENCE: ReferenceSection = {
 }
 
 /**
+ * The general expressions, true in every algebra (#259). Only the examples of
+ * the regressive product and the dual depend on the algebra.
+ */
+export function generalReference(examples: Readonly<{ regressive: ReferenceExample; dual: ReferenceExample }>): readonly ReferenceSection[] {
+  return [
+    { title: 'Values and names', entries: [SCALAR_LITERALS, NAME_REFERENCE] },
+    LISTS_AND_RANGES,
+    operatorsSection(examples),
+    { title: 'Properties', entries: [INVERSE] },
+    { title: 'Functions', entries: FUNCTIONS },
+    PRECEDENCE,
+  ]
+}
+
+/**
  * What the appearance menu sets: values only, never a default color (#259).
  */
 export const STYLE_REFERENCE: readonly ReferenceTopic[] = [

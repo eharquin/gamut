@@ -42,7 +42,9 @@ function evaluateEntry(algebraId: string, entry: ReferenceEntry) {
 describe('expression reference', () => {
   for (const definition of registry.definitions()) {
     describe(definition.badge, () => {
-      const entries = definition.expressionReference.flatMap((section) =>
+      // Both categories: the general expressions and those of this algebra.
+      const allSections = [...definition.generalReference, ...definition.expressionReference]
+      const entries = allSections.flatMap((section) =>
         section.entries.map((entry) => [section.title, entry] as const))
 
       it.each(entries.map(([title, entry]) => [`${title}: ${entry.syntax}`, entry] as const))(
@@ -65,7 +67,7 @@ describe('expression reference', () => {
       )
 
       it('keeps every entry to one short line and at most two examples', () => {
-        for (const section of definition.expressionReference) {
+        for (const section of allSections) {
           for (const entry of section.entries) {
             expect(entry.examples.length, entry.syntax).toBeLessThanOrEqual(MAX_REFERENCE_EXAMPLES)
             expect(entry.meaning, entry.syntax).not.toMatch(/;/)
@@ -82,16 +84,30 @@ describe('expression reference', () => {
         expect(text).not.toMatch(/colou?r|#[0-9a-f]{3,6}\b|green|yellow|red|blue|neutral/i)
       })
 
-      it('has unique section titles and entry syntax', () => {
-        const titles = definition.expressionReference.map((section) => section.title)
-        expect(new Set(titles).size).toBe(titles.length)
-        for (const section of definition.expressionReference) {
+      it('has unique section titles and entries, and keeps general expressions out of the algebra sections', () => {
+        for (const category of [definition.generalReference, definition.expressionReference]) {
+          const titles = category.map((section) => section.title)
+          expect(new Set(titles).size).toBe(titles.length)
+        }
+        for (const section of allSections) {
           const syntax = section.entries.map((entry) => entry.syntax)
           expect(new Set(syntax).size, section.title).toBe(syntax.length)
         }
+        // The algebra's own sections never repeat a general expression.
+        const general = new Set(definition.generalReference.flatMap((section) => section.entries.map((entry) => entry.syntax)))
+        const repeated = definition.expressionReference.flatMap((section) => section.entries)
+          .filter((entry) => general.has(entry.syntax)).map((entry) => entry.syntax)
+        expect(repeated).toEqual([])
       })
     })
   }
+
+  it('shares the general expressions: same syntax and meaning in every algebra', () => {
+    const general = registry.definitions().map((definition) => definition.generalReference
+      .flatMap((section) => section.entries.map((entry) => `${section.title} | ${entry.syntax} | ${entry.meaning}`)))
+    for (const other of general.slice(1)) expect(other).toEqual(general[0])
+    expect(general[0].length).toBeGreaterThan(20)
+  })
 
   it('documents the PGA(2) constructors, blades, norms, and motor functions without VGA-only syntax', () => {
     const pga = registry.definitions().find((definition) => definition.algebraId === 'org.multivector.pga')!

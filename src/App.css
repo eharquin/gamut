@@ -633,82 +633,6 @@ h2 {
   flex-direction: column;
 }
 
-.reference-tools {
-  display: grid;
-  gap: 8px;
-  padding: 8px 12px 10px;
-  border-bottom: 1px solid var(--border);
-}
-
-.reference-search {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 10px;
-  color: var(--muted);
-  background: var(--background);
-  border: 1px solid var(--border-strong);
-  border-radius: 7px;
-}
-
-.reference-search:focus-within {
-  border-color: var(--accent);
-}
-
-.reference-search input {
-  flex: 1;
-  min-width: 0;
-  color: var(--text);
-  background: transparent;
-  border: 0;
-  font: 0.8rem var(--font-sans);
-}
-
-.reference-search input:focus {
-  outline: none;
-}
-
-.reference-search kbd {
-  padding: 1px 5px;
-  color: var(--muted);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  font: 500 0.66rem var(--font-mono);
-}
-
-.reference-chips {
-  display: flex;
-  gap: 4px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  padding-bottom: 2px;
-}
-
-.reference-chips button {
-  flex: none;
-  padding: 3px 9px;
-  color: var(--muted);
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  font: 0.7rem var(--font-sans);
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.reference-chips button:hover {
-  color: var(--text);
-  border-color: var(--border-strong);
-}
-
-.reference-chips button[aria-pressed='true'] {
-  color: var(--text-strong);
-  background: var(--accent-soft);
-  border-color: var(--accent);
-}
-
-.reference-chips button:focus-visible,
 .reference-add:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
@@ -720,6 +644,19 @@ h2 {
   min-height: 0;
   overflow: auto;
   padding: 0 12px 16px;
+}
+
+/* The two categories: general expressions, then the active algebra's. */
+.reference-category + .reference-category {
+  margin-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.reference-category-title {
+  margin: 0;
+  padding: 12px 0 2px;
+  color: var(--text);
+  font: 700 0.8rem var(--font-sans);
 }
 
 .reference-section-title {
@@ -759,16 +696,6 @@ h2 {
   color: var(--text-strong);
   font-size: 0.74rem;
   font-weight: 400;
-}
-
-.reference-tag {
-  flex: none;
-  padding: 1px 6px;
-  color: var(--text-strong);
-  background: var(--accent-soft);
-  border-radius: 999px;
-  font: 600 0.6rem var(--font-sans);
-  letter-spacing: 0.04em;
 }
 
 .reference-meaning {
@@ -848,20 +775,6 @@ h2 {
   .reference-add {
     opacity: 1;
   }
-}
-
-.reference-empty {
-  padding: 24px 4px;
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.8rem;
-  line-height: 1.5;
-}
-
-.reference-body mark {
-  color: inherit;
-  background: color-mix(in srgb, var(--accent) 22%, transparent);
-  border-radius: 2px;
 }
 
 /* Registered so the hold progress can be animated as a real number. */

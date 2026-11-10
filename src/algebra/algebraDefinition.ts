@@ -60,6 +60,9 @@ export type AlgebraDefinition = Readonly<{
   standardVisualizerId: string
   showcase: readonly ShowcaseItem[]
   /** The expression reference shown for documents of this algebra: shared sections plus its own syntax. */
+  /** The general expressions, shared by every algebra; built with `generalReference`. */
+  generalReference: readonly ReferenceSection[]
+  /** The expressions specific to this algebra: its values, properties, functions and positioning. */
   expressionReference: readonly ReferenceSection[]
   /**
    * The reference's first section, `Algebra <badge>`: each primitive of the

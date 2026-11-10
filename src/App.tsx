@@ -396,15 +396,6 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     throw new Error(`${algebraResolution.code}: ${algebraResolution.message}`)
   }
   const { engine, definition: algebraDefinition } = algebraResolution
-  /** Reference syntax that no other registered algebra documents, tagged “… only”. */
-  const ownReferenceSyntax = useMemo(() => {
-    const elsewhere = new Set(algebraRegistry.definitions()
-      .filter((definition) => definition.algebraId !== algebraDefinition.algebraId)
-      .flatMap((definition) => definition.expressionReference.flatMap((section) => section.entries.map((entry) => entry.syntax))))
-    return new Set(algebraDefinition.expressionReference
-      .flatMap((section) => section.entries.map((entry) => entry.syntax))
-      .filter((syntax) => !elsewhere.has(syntax)))
-  }, [algebraDefinition])
   // The interpretation may be unavailable without blocking evaluation: values
   // still evaluate and inspect, only geometry and visualization are withheld.
   const interpretationResolution = useMemo(
@@ -3586,9 +3577,9 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           >
             {referenceOpen && <ExpressionReference
               algebraBadge={algebraDefinition.badge}
-              sections={algebraDefinition.expressionReference}
+              generalSections={algebraDefinition.generalReference}
+              algebraSections={algebraDefinition.expressionReference}
               algebraTopics={algebraDefinition.algebraReference}
-              ownSyntax={ownReferenceSyntax}
               canAdd={expressionDoc.items.length < MAX_EXPRESSION_ITEMS}
               onAdd={addReferenceExample}
               onClose={closeReference}

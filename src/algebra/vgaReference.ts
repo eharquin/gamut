@@ -1,11 +1,5 @@
 import {
-  FUNCTIONS,
-  INVERSE,
-  LISTS_AND_RANGES,
-  NAME_REFERENCE,
-  PRECEDENCE,
-  SCALAR_LITERALS,
-  operatorsSection,
+  generalReference,
   pseudoscalarEntry,
   referenceEntry as entry,
   referenceTopic as topic,
@@ -27,30 +21,28 @@ export const VGA_2_ALGEBRA_REFERENCE: readonly ReferenceTopic[] = [
   topic('Normalization', 'norm button', 'off · auto'),
 ]
 
-/** The expression reference of VGA(2) documents: shared sections plus VGA syntax. */
+/** The general expressions in a VGA(2) document. */
+export const VGA_2_GENERAL_REFERENCE: readonly ReferenceSection[] = generalReference({
+  regressive: { source: 'e1 & e2', inspection: '-1' },
+  dual: { source: '!e1', inspection: 'e2' },
+})
+
+/** The VGA(2) expressions: blades, vector syntax, VGA properties and positioning. */
 export const VGA_2_REFERENCE: readonly ReferenceSection[] = [
   {
-    title: 'Values and names',
+    title: 'Values',
     entries: [
-      SCALAR_LITERALS,
       entry('e1, e2, e12', 'canonical VGA(2) basis blades',
         { source: 'e12', inspection: 'e12' }, { source: 'e21', inspection: '-e12' }),
       pseudoscalarEntry('e12'),
       entry('V = (2, 1)', 'named vector declaration using tuple syntax', { source: 'V = (2, 1)', inspection: '2e1 + e2' }),
       entry('vector(2, 1)', 'explicit vector constructor', { source: 'vector(2, 1)', inspection: '2e1 + e2' }),
-      NAME_REFERENCE,
     ],
   },
-  LISTS_AND_RANGES,
-  operatorsSection({
-    regressive: { source: 'e1 & e2', inspection: '-1' },
-    dual: { source: '!e1', inspection: 'e2' },
-  }),
   {
     title: 'Properties',
     entries: [
       entry('A.g0, A.g1, A.g2', 'project onto one grade', 'A = 1 + e1 + e12', { source: 'A.g1', inspection: 'e1' }),
-      INVERSE,
       entry('A.norm', 'primary VGA norm', { source: '(3e1 + 4e2).norm', inspection: '5' }),
       entry('A.e, A.e1, A.e2, A.e12', 'extract one coefficient as a scalar',
         'A = 1 + 2e1 + 3e2 + 4e12', { source: 'A.e2', inspection: '3' }),
@@ -62,8 +54,6 @@ export const VGA_2_REFERENCE: readonly ReferenceSection[] = [
         { source: 'V = vector(1, 0)', positionSource: '(1, 2)', inspection: 'e1' }, { source: 'V.head', inspection: '2e1 + 2e2' }),
     ],
   },
-  { title: 'Functions', entries: FUNCTIONS },
-  PRECEDENCE,
   {
     title: 'Positioning',
     entries: [

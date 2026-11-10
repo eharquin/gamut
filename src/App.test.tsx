@@ -2897,84 +2897,35 @@ describe('expression reference docked in the expression panel', () => {
     expect(screen.queryByRole('region', { name: 'Expression reference' })).not.toBeInTheDocument()
 
     fireEvent.click(band)
-    const search = screen.getByRole('searchbox', { name: 'Search the expression reference' })
-    fireEvent.keyDown(search, { key: 'Escape' })
+    const reopened = screen.getByRole('region', { name: 'Expression reference' })
+    fireEvent.keyDown(within(reopened).getAllByRole('button', { name: /^Add / })[0], { key: 'Escape' })
     expect(screen.queryByRole('region', { name: 'Expression reference' })).not.toBeInTheDocument()
     expect(band).toHaveAttribute('aria-expanded', 'false')
     expect(band).toHaveFocus()
   })
 
-  it('starts with the Algebra section, ends with Style, and shows no default colors', () => {
+  it('shows the general expressions, then the algebra expressions, with no search, chips or tags', () => {
     render(<App />)
     const { reference } = openReference()
-    const titles = within(reference).getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent)
-    expect(titles[0]).toBe('Algebra VGA · 2D')
-    expect(titles.at(-1)).toBe('Style')
-    expect(within(reference).getByRole('group', { name: 'Reference sections' }))
-      .toHaveTextContent('AlgebraValuesListsOperatorsPropertiesFunctionsPrecedencePositioningStyle')
-    expect(reference).toHaveTextContent('Rotor exp(a/2*e12)')
-    expect(reference).toHaveTextContent('Normalization norm buttonoff · auto')
-    expect(reference).toHaveTextContent('Color 9 hues × 6 shades')
-    expect(reference).toHaveTextContent('VGA only')
+    expect(within(reference).getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent))
+      .toEqual(['General expressions', 'VGA expressions'])
+    const [general, algebra] = within(reference).getAllByRole('heading', { level: 2 })
+      .map((heading) => heading.closest('section') as HTMLElement)
+    expect(within(general).getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent))
+      .toEqual(['Values and names', 'Lists and ranges', 'Operators', 'Properties', 'Functions', 'Precedence', 'Style'])
+    expect(within(algebra).getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent))
+      .toEqual(['Primitives', 'Values', 'Properties', 'Positioning'])
+    // General entries hold in every algebra; the algebra's own syntax stays in its category.
+    expect(general).toHaveTextContent('A ^ B')
+    expect(general).toHaveTextContent('Color 9 hues × 6 shades')
+    expect(general).not.toHaveTextContent('vector(2, 1)')
+    expect(algebra).toHaveTextContent('Rotor exp(a/2*e12)')
+    expect(algebra).toHaveTextContent('Normalization norm buttonoff · auto')
+    expect(algebra).toHaveTextContent('vector(2, 1)')
+    expect(within(reference).queryByRole('searchbox')).not.toBeInTheDocument()
+    expect(within(reference).queryByRole('group', { name: 'Reference sections' })).not.toBeInTheDocument()
+    expect(reference).not.toHaveTextContent(/ only/)
     expect(reference).not.toHaveTextContent(/default colou?r|green 4|yellow 4|red 4|blue 4/i)
-    expect(reference.querySelector('.object-color-swatch')).toBeNull()
-  })
-
-  it('filters entries by syntax or meaning, highlights the match, and explains an empty result', () => {
-    render(<App />)
-    const { reference } = openReference()
-    const search = within(reference).getByRole('searchbox', { name: 'Search the expression reference' })
-
-    fireEvent.change(search, { target: { value: 'outer' } })
-    expect(reference).toHaveTextContent('A ^ B')
-    expect(reference).not.toHaveTextContent('A.inverse')
-    expect(within(reference).getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent))
-      .toEqual(['Operators'])
-    expect(reference.querySelector('mark')).toHaveTextContent('outer')
-
-    fireEvent.change(search, { target: { value: 'L[[' } })
-    expect(reference).toHaveTextContent('L[[2, 0, 2]]')
-    expect(reference).not.toHaveTextContent('A ^ B')
-
-    fireEvent.change(search, { target: { value: 'zzz' } })
-    expect(within(reference).queryAllByRole('heading', { level: 3 })).toHaveLength(0)
-    expect(within(reference).getByRole('status')).toHaveTextContent('Nothing matches “zzz”. Try a name such as norm')
-  })
-
-  it('focuses the search with / unless an expression field has the focus', () => {
-    render(<App />)
-    const { band, reference } = openReference()
-    const search = within(reference).getByRole('searchbox', { name: 'Search the expression reference' })
-    band.focus()
-    fireEvent.keyDown(band, { key: '/' })
-    expect(search).toHaveFocus()
-
-    const source = screen.getByRole('textbox', { name: 'Expression 1' })
-    source.focus()
-    fireEvent.keyDown(source, { key: '/' })
-    expect(source).toHaveFocus()
-  })
-
-  it('jumps to a section from its chip, clearing the search, and scrolls only the reference', () => {
-    const frames = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
-      callback(0)
-      return 0
-    })
-    const scrollIntoView = vi.fn()
-    Element.prototype.scrollIntoView = scrollIntoView
-    render(<App />)
-    const { reference } = openReference()
-    const search = within(reference).getByRole('searchbox', { name: 'Search the expression reference' })
-    fireEvent.change(search, { target: { value: 'outer' } })
-
-    const chip = within(reference).getByRole('button', { name: 'Functions' })
-    expect(chip).toHaveAttribute('aria-pressed', 'false')
-    fireEvent.click(chip)
-    expect(chip).toHaveAttribute('aria-pressed', 'true')
-    expect(search).toHaveValue('')
-    expect(reference).toHaveTextContent('A.inverse')
-    expect(frames).toHaveBeenCalled()
-    expect(scrollIntoView).not.toHaveBeenCalled()
   })
 
   it('adds an example as a new focused expression with its position', () => {
@@ -3045,7 +2996,7 @@ describe('expression reference docked in the expression panel', () => {
 })
 
 describe('expression reference of a PGA(2) document', () => {
-  it('shows the PGA Algebra section, constructors, blades, norms, and motor functions, and no VGA-only syntax', () => {
+  it('shows the PGA expressions category, constructors, blades, norms, and motor functions, and no VGA-only syntax', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     render(<App />)
     fireEvent.click(screen.getByRole('button', { name: 'VGA · 2D. Change algebra' }))
@@ -3053,7 +3004,12 @@ describe('expression reference of a PGA(2) document', () => {
     const { band, reference } = openReference()
 
     expect(band).toHaveTextContent('PGA · 2D')
-    expect(within(reference).getAllByRole('heading', { level: 3 })[0]).toHaveTextContent('Algebra PGA · 2D')
+    expect(within(reference).getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent))
+      .toEqual(['General expressions', 'PGA expressions'])
+    const algebra = within(reference).getByRole('heading', { level: 2, name: 'PGA expressions' }).closest('section') as HTMLElement
+    expect(within(algebra).getAllByRole('heading', { level: 3 })[0]).toHaveTextContent('Primitives')
+    expect(algebra).toHaveTextContent('point(x, y, w)')
+    expect(algebra).toHaveTextContent('A.inorm')
     expect(reference).toHaveTextContent('Line line(a, b, c), A & Ba·x + b·y + c = 0, or the line through A and B')
     expect(reference).toHaveTextContent('off · auto · norm · inorm')
     for (const syntax of [
@@ -3061,8 +3017,6 @@ describe('expression reference of a PGA(2) document', () => {
       'e0, e1, e2, e01, e02, e12, e012', 'A.inorm', 'A.e012', 'log(M), sqrt(M)', 'I.head',
       'position point(x, y)', 'L[[2, 0, 2]]', 'a % m', 'log(M)', '-0.5e12',
     ]) expect(reference).toHaveTextContent(syntax)
-    const pointEntry = within(reference).getByText('point(x, y, w)', { selector: '.reference-syntax' }).closest('article')!
-    expect(pointEntry).toHaveTextContent('PGA only')
     expect(reference).not.toHaveTextContent('VGA')
     expect(reference).not.toHaveTextContent('vector(2, 1)')
     expect(reference).not.toHaveTextContent('V = (2, 1)')
