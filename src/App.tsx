@@ -2895,24 +2895,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                   </button>
                   <div className="expression-input-row">
                     <div className="expression-actions">
-                      {scalar && effectiveControl?.mode === 'slider' ? (
-                        <button
-                          type="button"
-                          className={`scalar-play-button${isPlaying ? ' is-playing' : ''}`}
-                          aria-label={isPlaying ? 'Pause scalar animation' : 'Play scalar animation'}
-                          disabled={!scalarEdit || !playbackParameters}
-                          onClick={() => isPlaying
-                            ? stopPlayback(item.id)
-                            : startPlayback(item, playbackParameters!, scalarEdit!.value)}
-                        >{isPlaying
-                          ? <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-                              <rect x="1.5" y="1" width="2.5" height="8" />
-                              <rect x="6" y="1" width="2.5" height="8" />
-                            </svg>
-                          : <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-                              <path d="M2.5 1.2 8.5 5 2.5 8.8z" />
-                            </svg>}</button>
-                      ) : drawable && valid && !noViz && (
+                      {drawable && valid && !noViz && (
                           <button
                             type="button"
                             className="visibility-toggle"
@@ -2930,8 +2913,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                             </svg>
                           </button>
                       )}
-                      {valid && (!drawable || noViz) &&
-                        !(scalar && effectiveControl?.mode === 'slider') && (
+                      {valid && (!drawable || noViz) && (
                         <span className="expression-action-spacer" aria-hidden="true" />
                       )}
                       {valid && noViz ? (
@@ -3169,6 +3151,24 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
 
                       {scalar && effectiveControl?.mode === 'slider' && controlEvaluation && (
                         <div className="scalar-slider-row">
+                          {/* Play and pause sit at the start of the slider they drive. */}
+                        <button
+                          type="button"
+                          className={`scalar-play-button${isPlaying ? ' is-playing' : ''}`}
+                          style={{ '--slider-color': color } as CSSProperties}
+                          aria-label={isPlaying ? 'Pause scalar animation' : 'Play scalar animation'}
+                          disabled={!scalarEdit || !playbackParameters}
+                          onClick={() => isPlaying
+                            ? stopPlayback(item.id)
+                            : startPlayback(item, playbackParameters!, scalarEdit!.value)}
+                        >{isPlaying
+                          ? <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+                              <rect x="1.5" y="1" width="2.5" height="8" />
+                              <rect x="6" y="1" width="2.5" height="8" />
+                            </svg>
+                          : <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+                              <path d="M2.5 1.2 8.5 5 2.5 8.8z" />
+                            </svg>}</button>
                           <span>{controlEvaluation.minimum == null
                             ? '—'
                             : displayedNumber(controlEvaluation.minimum)}</span>

@@ -1320,9 +1320,12 @@ describe('VGA 2D vertical slice', () => {
     const trigger = screen.getByRole('button', {
       name: 'Open Scalar menu for a',
     })
-    expect(within(trigger.parentElement as HTMLElement)
-      .getByRole('button', { name: 'Play scalar animation' }))
-      .toHaveClass('scalar-play-button')
+    // Play sits at the start of the slider row, left of the bar.
+    const play = screen.getByRole('button', { name: 'Play scalar animation' })
+    expect(play).toHaveClass('scalar-play-button')
+    expect(play.closest('.scalar-slider-row')).toBe(screen.getByRole('slider', { name: 'Value for a' }).closest('.scalar-slider-row'))
+    expect(play.compareDocumentPosition(screen.getByRole('slider', { name: 'Value for a' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(within(trigger.parentElement as HTMLElement).queryByRole('button', { name: 'Play scalar animation' })).toBeNull()
 
     fireEvent.click(trigger)
     expect(screen.getByRole('dialog', { name: 'Scalar' })).toBeInTheDocument()

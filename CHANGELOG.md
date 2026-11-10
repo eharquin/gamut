@@ -106,6 +106,10 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Interface and accessibility
 
+- A slider's play and pause button sits at the start of its slider row, left
+  of the bar, as a disc tinted with the scalar's color; while playing it is
+  a solid disc of that color. The actions column keeps an empty slot, so the
+  appearance swatch stays aligned with the object kind.
 - **Save as new graph…** in the Library menu saves the open graph as a new
   library graph under a new name, leaving the saved version of the open one
   untouched; the new graph becomes the open one.
