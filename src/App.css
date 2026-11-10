@@ -242,16 +242,15 @@
   position: relative;
 }
 
-/* Unsaved changes: a purple-4 dot on the floppy disk, ringed in the header colour. */
+/* Unsaved changes: a small dot in the text colour, in the free top-right corner of the floppy disk. */
 .unsaved-dot {
   position: absolute;
-  top: -4px;
-  right: -4px;
-  width: 8px;
-  height: 8px;
+  top: 3px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: #7b4bd0;
-  box-shadow: 0 0 0 1.5px var(--surface);
+  background: var(--text);
   pointer-events: none;
 }
 
