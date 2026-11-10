@@ -4,13 +4,15 @@
  * entry; `inspection` pins the canonical text of that value. A row with a
  * `positionSource` must also have a valid position, unless `positionInvalid`
  * documents a rejected one. A declaration without `inspection` is a setup row
- * that the reference shows as “with …”.
+ * that the reference shows as “with …”, unless `resultHidden` marks a valid
+ * row whose floating-point result is too long to show.
  */
 export type ReferenceExample = Readonly<{
   source: string
   positionSource?: string
   inspection?: string
   positionInvalid?: true
+  resultHidden?: true
 }>
 
 /**
@@ -30,14 +32,16 @@ export type ReferenceSection = Readonly<{
 }>
 
 /**
- * A named topic of the reference without examples: a primitive of the
- * algebra, its normalization, or a style setting. `syntax` is how it is
- * written or the values it takes; `meaning` is optional and one short line.
+ * A named topic of the reference: a primitive of the algebra, its
+ * normalization, or a style setting. `syntax` is how it is written or the
+ * values it takes; `meaning` is optional and one short line. A primitive may
+ * carry at most two addable examples, checked like those of an entry.
  */
 export type ReferenceTopic = Readonly<{
   name: string
   syntax: string
   meaning?: string
+  examples?: readonly ReferenceExample[]
 }>
 
 /** Largest number of example rows an entry shows. */
@@ -51,13 +55,22 @@ export function referenceEntry(syntax: string, meaning: string, ...examples: (st
   }
 }
 
-export function referenceTopic(name: string, syntax: string, meaning?: string): ReferenceTopic {
-  return meaning === undefined ? { name, syntax } : { name, syntax, meaning }
+export function referenceTopic(
+  name: string, syntax: string, meaning?: string, ...examples: (string | ReferenceExample)[]
+): ReferenceTopic {
+  return {
+    name,
+    syntax,
+    ...(meaning === undefined ? {} : { meaning }),
+    ...(examples.length === 0 ? {} : {
+      examples: examples.map((example) => typeof example === 'string' ? { source: example } : example),
+    }),
+  }
 }
 
 /** Whether a row only declares a name for the next row, shown as “with …”. */
 export function isSetupExample(example: ReferenceExample): boolean {
-  return example.inspection === undefined && example.positionSource === undefined
+  return example.inspection === undefined && example.positionSource === undefined && !example.resultHidden
     && /^\s*[A-Za-z_]\w*\s*=(?!=)/.test(example.source)
 }
 

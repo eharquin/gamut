@@ -42,8 +42,8 @@ function topicSection(category: string, title: string, topics: readonly Referenc
   return {
     id: `reference-${category}-${slug(title)}`,
     title,
-    entries: topics.map(({ name, syntax, meaning }) => ({
-      key: name, head: name, code: syntax, ...(meaning === undefined ? {} : { meaning }), examples: [],
+    entries: topics.map(({ name, syntax, meaning, examples }) => ({
+      key: name, head: name, code: syntax, ...(meaning === undefined ? {} : { meaning }), examples: examples ?? [],
     })),
   }
 }

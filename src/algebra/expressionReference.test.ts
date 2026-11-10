@@ -44,8 +44,12 @@ describe('expression reference', () => {
     describe(definition.badge, () => {
       // Both categories: the general expressions and those of this algebra.
       const allSections = [...definition.generalReference, ...definition.expressionReference]
-      const entries = allSections.flatMap((section) =>
-        section.entries.map((entry) => [section.title, entry] as const))
+      const entries = [
+        ...allSections.flatMap((section) => section.entries.map((entry) => [section.title, entry] as const)),
+        // The primitives' addable examples are checked the same way.
+        ...definition.algebraReference.filter((topic) => topic.examples !== undefined).map((topic) =>
+          ['Primitives', { syntax: topic.name, meaning: topic.meaning ?? '', examples: topic.examples! }] as const),
+      ]
 
       it.each(entries.map(([title, entry]) => [`${title}: ${entry.syntax}`, entry] as const))(
         '%s evaluates as documented',
@@ -80,6 +84,12 @@ describe('expression reference', () => {
         const topics = definition.algebraReference
         expect(topics.length).toBeGreaterThan(1)
         expect(topics.at(-1)).toMatchObject({ name: 'Normalization', syntax: 'norm button' })
+        // Every primitive but normalization has one or two addable examples.
+        for (const topic of topics.slice(0, -1)) {
+          expect(topic.examples?.length, topic.name).toBeGreaterThan(0)
+          expect(topic.examples!.length, topic.name).toBeLessThanOrEqual(MAX_REFERENCE_EXAMPLES)
+        }
+        expect(topics.at(-1)?.examples).toBeUndefined()
         const text = topics.map(({ name, syntax, meaning }) => `${name} ${syntax} ${meaning ?? ''}`).join('\n')
         expect(text).not.toMatch(/colou?r|#[0-9a-f]{3,6}\b|green|yellow|red|blue|neutral/i)
       })

@@ -12,14 +12,19 @@ import {
  * written, and one short line, then the normalization choices of a row.
  */
 export const PGA_2_ALGEBRA_REFERENCE: readonly ReferenceTopic[] = [
-  topic('Point', 'point(x, y), point(x, y, w)', 'point (x, y), weight w'),
-  topic('Ideal point', 'ipoint(x, y)', 'direction (x, y)'),
-  topic('Line', 'line(a, b, c), A & B', 'a·x + b·y + c = 0, or the line through A and B'),
-  topic('Line at infinity', 'e0', 'the line at infinity'),
-  topic('Translator', 'exp(t*e01)', 'translation, with T >>> X'),
-  topic('Motor', 'exp(a*e12)', 'rotation and translation, with M >>> X'),
-  topic('Reflection', 'L >>> X', 'reflection in L'),
-  topic('List', '[A, B, C]', 'list of values'),
+  topic('Point', 'point(x, y), point(x, y, w)', 'point (x, y), weight w',
+    { source: 'P = point(1, 2)', inspection: '2e01 - e02 + e12' }, { source: 'point(2, 4, 2)', inspection: '4e01 - 2e02 + 2e12' }),
+  topic('Ideal point', 'ipoint(x, y)', 'direction (x, y)', { source: 'D = ipoint(1, 1)', inspection: 'e01 - e02' }),
+  topic('Line', 'line(a, b, c), A & B', 'a·x + b·y + c = 0, or the line through A and B',
+    { source: 'L = line(1, -1, 0)', inspection: 'e1 - e2' }, { source: 'point(0, 1) & point(2, 1)', inspection: '-2e0 + 2e2' }),
+  topic('Line at infinity', 'e0', 'the line at infinity', { source: 'e0', inspection: 'e0' }),
+  topic('Translator', 'exp(t*e01)', 'translation, with T >>> X',
+    { source: 'T = exp(e01)', inspection: '1 + e01' }, { source: 'T >>> point(0, 0)', inspection: '2e02 + e12' }),
+  topic('Motor', 'exp(a*e12)', 'rotation and translation, with M >>> X',
+    { source: 'M = exp(pi/4*e12)' }, { source: 'M >>> point(1, 0)', resultHidden: true }),
+  topic('Reflection', 'L >>> X', 'reflection in L',
+    { source: 'L = line(1, 0, 0)' }, { source: 'L >>> point(1, 2)', inspection: '-2e01 - e02 - e12' }),
+  topic('List', '[A, B, C]', 'list of values', { source: '[point(0, 0), point(1, 0), point(0, 1)]', inspection: '[e12, -e02 + e12, e01 + e12]' }),
   topic('Normalization', 'norm button', 'off · auto · norm · inorm'),
 ]
 

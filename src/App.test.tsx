@@ -2963,6 +2963,23 @@ describe('expression reference docked in the expression panel', () => {
     expect(screen.queryByRole('textbox', { name: 'Expression 3' })).not.toBeInTheDocument()
   })
 
+  it('adds the examples of a primitive, including a rotation shown without its float result', () => {
+    render(<App />)
+    const { reference } = openReference()
+    showReferenceTab('VGA')
+    const primitives = within(reference).getByRole('heading', { level: 3, name: 'Primitives' }).closest('section') as HTMLElement
+    const rotor = within(primitives).getByText('Rotor').closest('article') as HTMLElement
+    expect(rotor).toHaveTextContent('with R = exp(pi/4*e12)')
+    expect(rotor).toHaveTextContent('R >>> e1')
+    expect(rotor).not.toHaveTextContent('E-16')
+    expect(within(primitives).queryAllByRole('button', { name: /^Add / })).toHaveLength(9)
+    expect(within(primitives).getByText('Normalization').closest('article')).not.toHaveTextContent('+')
+
+    fireEvent.click(within(primitives).getByRole('button', { name: 'Add U = vector(1, 2) as a new expression' }))
+    expect(screen.getByRole('textbox', { name: 'Expression 2' })).toHaveValue('U = vector(1, 2)')
+    expect(screen.getByRole('textbox', { name: 'Expression 2' })).toHaveFocus()
+  })
+
   it('resizes the reference from its handle with the keyboard and remembers the height', () => {
     const { unmount } = render(<App />)
     const { reference } = openReference()

@@ -12,12 +12,15 @@ import {
  * written, and one short line, then the normalization choices of a row.
  */
 export const VGA_2_ALGEBRA_REFERENCE: readonly ReferenceTopic[] = [
-  topic('Scalar', 'a = 2', 'number'),
-  topic('Vector', 'vector(x, y), (x, y)', 'direction (x, y)'),
-  topic('Bivector', 'V ^ W, s*e12', 'oriented area'),
-  topic('Rotor', 'exp(a/2*e12)', 'rotation by a, with R >>> V'),
-  topic('Mixed multivector', '1 + e1', 'several grades'),
-  topic('List', '[A, B, C]', 'list of values'),
+  topic('Scalar', 'a = 2', 'number', { source: 'a = 2', inspection: '2' }),
+  topic('Vector', 'vector(x, y), (x, y)', 'direction (x, y)',
+    { source: 'U = vector(1, 2)', inspection: 'e1 + 2e2' }, { source: 'W = (3, -1)', inspection: '3e1 - e2' }),
+  topic('Bivector', 'V ^ W, s*e12', 'oriented area',
+    { source: 'vector(1, 0) ^ vector(1, 2)', inspection: '2e12' }, { source: 'B = 0.5*e12', inspection: '0.5e12' }),
+  topic('Rotor', 'exp(a/2*e12)', 'rotation by a, with R >>> V',
+    { source: 'R = exp(pi/4*e12)' }, { source: 'R >>> e1', resultHidden: true }),
+  topic('Mixed multivector', '1 + e1', 'several grades', { source: 'M = 1 + e1 + e12', inspection: '1 + e1 + e12' }),
+  topic('List', '[A, B, C]', 'list of values', { source: '[e1, e2, e1 + e2]', inspection: '[e1, e2, e1 + e2]' }),
   topic('Normalization', 'norm button', 'off · auto'),
 ]
 

@@ -120,8 +120,9 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   **General | VGA** (or **General | PGA**) tab bar at its top: **General**, true in every
   algebra, ending with a **Style** section listing the values the appearance
   menu takes; then the algebra's own tab, opening on the
-  algebra's **Primitives** (each with how it is written and one short line,
-  then the row's normalization choices) followed by its own values,
+  algebra's **Primitives** (each with how it is written, one short line and
+  one or two examples to add with **+**, then the row's normalization
+  choices) followed by its own values,
   properties, functions and positioning. Every entry is reduced to its
   syntax, one short line, and at most two examples; no default colors are
   listed.
