@@ -28,6 +28,10 @@ type LibraryMenuProps = Readonly<{
   /** Whether the open graph differs from its last saved revision, or is unsaved content. */
   unsavedChanges: boolean
   onSaveAs(name: string): void
+  /** Saves the open graph as a new library graph, leaving its saved version untouched. */
+  onSaveAsNew(name: string): void
+  /** The open graph's name, the start of a Save as new graph name. */
+  currentName: string
   onNew(): void
   onOpen(entry: LibraryEntry): void
   onRename(entry: LibraryEntry, name: string): void
@@ -60,7 +64,7 @@ function formatDate(iso: string): string {
  */
 export function LibraryMenu({
   anchorRef, returnFocusRef, groups, openId, naming, diagnostic, unsavedChanges,
-  onSaveAs, onNew, onOpen, onRename, onDuplicate, onDelete, onClose,
+  onSaveAs, onSaveAsNew, currentName, onNew, onOpen, onRename, onDuplicate, onDelete, onClose,
 }: LibraryMenuProps) {
   const ref = useRef<HTMLDivElement>(null)
   const [pending, setPending] = useState<Pending | null>(null)
@@ -68,6 +72,9 @@ export function LibraryMenu({
   const pendingRef = useRef<Pending | null>(null)
   pendingRef.current = pending
   const [nameDraft, setNameDraft] = useState(naming?.initialName ?? '')
+  // Save as new graph asks for the copy's name in the same form as a first save.
+  const [savingAsNew, setSavingAsNew] = useState(false)
+  const showNaming = naming !== null || savingAsNew
   const [placement, setPlacement] = useState(() =>
     popoverPosition(anchorRef.current, POPOVER_WIDTH, ESTIMATED_POPOVER_HEIGHT))
   const place = useCallback(() => {
@@ -132,7 +139,9 @@ export function LibraryMenu({
   const submitName = (event: FormEvent) => {
     event.preventDefault()
     const name = nameDraft.trim()
-    if (name) onSaveAs(name)
+    if (!name) return
+    if (savingAsNew) onSaveAsNew(name)
+    else onSaveAs(name)
   }
   const submitRename = (event: FormEvent) => {
     event.preventDefault()
@@ -202,10 +211,12 @@ export function LibraryMenu({
           aria-label="Close Library menu" title="Close">×</button>
       </header>
       <div className="library-body">
-        {naming && (
+        {showNaming && (
           <form className="library-confirm library-naming" onSubmit={submitName}>
             <label>
-              <span>Name this graph to save it in the library</span>
+              <span>{savingAsNew
+                ? 'Name the new graph; the saved version of this one stays as it is'
+                : 'Name this graph to save it in the library'}</span>
               <input
                 value={nameDraft}
                 aria-label="Graph name"
@@ -214,13 +225,22 @@ export function LibraryMenu({
             </label>
             <div className="library-confirm-actions">
               <button type="submit" disabled={!nameDraft.trim()}>Save</button>
-              <button type="button" onClick={onClose}>Cancel</button>
+              <button type="button" onClick={() => { if (savingAsNew) setSavingAsNew(false); else onClose() }}>Cancel</button>
             </div>
           </form>
         )}
         {diagnostic && <p className="library-diagnostic" role="alert">{diagnostic}</p>}
         {confirmation}
-        <button type="button" className="library-new" onClick={requestNew}>+ New graph</button>
+        <div className="library-commands">
+          <button type="button" className="library-new" onClick={requestNew}>+ New graph</button>
+          {!naming && !savingAsNew && (
+            <button
+              type="button"
+              className="library-save-as"
+              onClick={() => { setNameDraft(`${currentName} copy`); setSavingAsNew(true) }}
+            >Save as new graph…</button>
+          )}
+        </div>
         {groups.length === 0 ? (
           <p className="library-empty">No saved graphs yet. Save keeps the open graph here.</p>
         ) : groups.map((group) => (

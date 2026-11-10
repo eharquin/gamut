@@ -193,6 +193,8 @@
   font: inherit;
   font-size: 0.85rem;
   font-weight: 600;
+  /* The name sits against the Save button it belongs to. */
+  text-align: right;
 }
 
 .graph-name:not(:focus) {
@@ -209,6 +211,7 @@
   line-height: 26px;
   white-space: nowrap;
   text-overflow: ellipsis;
+  text-align: right;
   pointer-events: none;
 }
 
@@ -371,6 +374,14 @@
   min-width: 0;
 }
 
+/*
+ * Its content sits in a centred column of reading width; the list still
+ * scrolls across the whole width, so the scrollbar stays at the window edge.
+ */
+.expression-panel.is-full-width > * {
+  padding-inline: max(8px, calc((100% - 760px) / 2));
+}
+
 .workspace-mode {
   margin-left: auto;
   padding: 2px 8px;
@@ -387,8 +398,6 @@
   top: 8px;
   left: 8px;
   z-index: 9;
-  background: var(--surface);
-  border: 1px solid var(--border);
 }
 
 /* Beside the expand button when the panel is collapsed. */
@@ -402,8 +411,20 @@
   top: 8px;
   left: 8px;
   z-index: 9;
-  background: var(--surface);
-  border: 1px solid var(--border);
+}
+
+/* On the canvas, like the viewport lock: no fill or border until hovered. */
+.panel-expand,
+.hide-canvas {
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+}
+
+.panel-expand:hover,
+.hide-canvas:hover {
+  color: var(--accent);
+  background: var(--surface-active);
 }
 
 .expression-toolbar {
@@ -662,7 +683,8 @@ h2 {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  /* Centres the appearance swatch on the object-kind line (Point, Line, Scalar…). */
+  gap: 1.4px;
 }
 
 .visibility-toggle,
@@ -799,29 +821,6 @@ body.reordering-items .reorder-handle {
 
 .expression-status-pastille.is-empty { background: var(--text-dim); }
 .expression-status-pastille.is-error { background: var(--error); }
-
-/* Hidden objects are crossed out so the state survives greyscale (A11Y-002). */
-.is-hidden .appearance-swatch-fill::after {
-  content: '';
-  position: absolute;
-  inset: -3px;
-  border-radius: 50%;
-  background:
-    linear-gradient(
-      to bottom right,
-      transparent 42%,
-      var(--axis-strong) 42%,
-      var(--axis-strong) 58%,
-      transparent 58%
-    ),
-    linear-gradient(
-      to bottom left,
-      transparent 42%,
-      var(--axis-strong) 42%,
-      var(--axis-strong) 58%,
-      transparent 58%
-    );
-}
 
 .expression-body {
   min-width: 0;
@@ -1112,6 +1111,8 @@ body.reordering-items .reorder-handle {
   display: flex;
   align-items: center;
   gap: 6px;
+  /* A wide panel (NoViz, or dragged wide) keeps sliders at a usable length. */
+  max-width: 440px;
   padding: 2px 8px 4px 0;
 }
 
@@ -1235,6 +1236,8 @@ body.reordering-items .reorder-handle {
 }
 
 .scalar-interval-row {
+  /* As wide as the slider above it, also in a wide panel. */
+  max-width: 440px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -3043,7 +3046,14 @@ line.manipulation-focus-ring {
   font-size: 0.78rem;
 }
 
-.library-new {
+.library-commands {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.library-new,
+.library-save-as {
   align-self: flex-start;
   padding: 4px 8px;
   color: var(--accent);
@@ -3054,7 +3064,8 @@ line.manipulation-focus-ring {
   cursor: pointer;
 }
 
-.library-new:hover {
+.library-new:hover,
+.library-save-as:hover {
   background: var(--accent-soft);
   border-color: var(--accent-border);
 }

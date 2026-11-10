@@ -106,6 +106,16 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Interface and accessibility
 
+- **Save as new graph…** in the Library menu saves the open graph as a new
+  library graph under a new name, leaving the saved version of the open one
+  untouched; the new graph becomes the open one.
+- The canvas buttons that collapse the panel or switch to NoViz have no fill
+  or border, like the viewport lock. In NoViz the expressions sit in a
+  centred column, and scalar sliders and their bounds keep a usable width in
+  a wide panel. The graph name sits against the Save button.
+- The appearance swatch is centred on the object-kind line (Point, Line,
+  Scalar…), and a hidden object's swatch is no longer crossed out: its
+  crossed eye already shows the state.
 - A NoViz calculator mode: a button at the top left of the canvas collapses
   the canvas to the right and leaves the expression panel full width, and a
   button at the right edge of the panel brings the canvas back at the view it

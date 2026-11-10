@@ -4120,6 +4120,31 @@ describe('local library of named graphs (#212)', () => {
   const index = () => JSON.parse(window.localStorage.getItem('gamut.library.v1')!).entries as { id: string; name: string }[]
   const stored = (id: string) => JSON.parse(window.localStorage.getItem(`gamut.library.v1.document.${id}`)!)
 
+  it('saves the open graph as a new graph, leaving the saved one untouched', () => {
+    vi.stubEnv('MODE', 'development')
+    render(<App />)
+    saveAs('Rotation talk')
+    const original = index().find((entry) => entry.name === 'Rotation talk')!
+    const originalSource = stored(original.id).items[0].source
+
+    fireEvent.change(source(), { target: { value: 'V1 = vector(9, 9)' } })
+    const menu = openLibrary()
+    fireEvent.click(within(menu).getByRole('button', { name: 'Save as new graph…' }))
+    const name = within(menu).getByRole('textbox', { name: 'Graph name' })
+    expect(name).toHaveValue('Rotation talk copy')
+    fireEvent.change(name, { target: { value: 'Rotation variant' } })
+    fireEvent.click(within(menu).getByRole('button', { name: 'Save' }))
+
+    // Two graphs: the original keeps its saved content, the new one has the edit and is open.
+    expect(index().map((entry) => entry.name).sort()).toEqual(['Rotation talk', 'Rotation variant'])
+    const variant = index().find((entry) => entry.name === 'Rotation variant')!
+    expect(variant.id).not.toBe(original.id)
+    expect(stored(original.id).items[0].source).toBe(originalSource)
+    expect(stored(variant.id).items[0].source).toBe('V1 = vector(9, 9)')
+    expect(nameField()).toHaveValue('Rotation variant')
+    expect(saveButton()).toHaveAccessibleName('Save')
+  })
+
   it('groups the header: graph name, Save, and Library; the document file; the display', () => {
     render(<App />)
     const groups = within(document.querySelector('.header-actions') as HTMLElement).getAllByRole('group')
