@@ -1066,40 +1066,43 @@ body.reordering-items .reorder-handle {
 }
 
 .scalar-play-button {
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  background: transparent;
-  border: 1px solid var(--border-input);
-  line-height: 1;
-  cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
-}
-
-.scalar-play-button {
-  color: var(--accent-2);
-  border-width: 2px;
-  border-radius: 50%;
+  --slider-color: var(--accent);
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
   /* The triangle's visual weight sits left; 1px recentres it in the circle. */
   padding: 0 0 0 1px;
+  color: var(--slider-color);
+  background: color-mix(in srgb, var(--slider-color) 14%, transparent);
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, transform 120ms ease;
 }
 
 .scalar-play-button svg {
   fill: currentColor;
 }
 
-.scalar-play-button:hover:not(:disabled, .is-playing) {
-  background: var(--surface-soft);
-  border-color: var(--accent-2);
+.scalar-play-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--slider-color) 26%, transparent);
 }
 
+.scalar-play-button:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+/* Playing: a solid disc in the scalar's color, with the pause bars cut out. */
 .scalar-play-button.is-playing {
   padding: 0;
-  background: color-mix(in srgb, var(--accent-2) 13%, transparent);
-  border-color: var(--accent-2);
+  color: var(--surface);
+  background: var(--slider-color);
+}
+
+.scalar-play-button.is-playing:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--slider-color) 85%, var(--text));
 }
 
 .scalar-play-button:disabled {
