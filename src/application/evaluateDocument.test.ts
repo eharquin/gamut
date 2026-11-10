@@ -542,6 +542,133 @@ describe('document dependency evaluation', () => {
     })
   })
 
+  describe('outer-product construction and lineage (#85, #87, #88)', () => {
+    const positioned = [
+      { id: 'v1', source: 'V1 = (1, 0)', positionSource: '(2, 1)' },
+      { id: 'v2', source: 'V2 = (0, 1)', positionSource: '(2, 1)' },
+    ]
+    const unitSquareAt = (x: number, y: number) => ({
+      kind: 'oriented-area',
+      area: 1,
+      shape: {
+        kind: 'parallelogram',
+        vertices: [{ x, y }, { x: x + 1, y }, { x: x + 1, y: y + 1 }, { x, y: y + 1 }],
+      },
+    })
+    const elementAt = (
+      result: ReturnType<typeof evaluateDocument>[number],
+      index: number,
+    ) => {
+      const evaluation = result.evaluation
+      if (evaluation?.status !== 'valid' || evaluation.valueType !== 'list') {
+        throw new Error('Expected a valid list')
+      }
+      return evaluation.elements[index]
+    }
+
+    it('draws an outer product of list elements as a parallelogram (#85)', () => {
+      const [, result] = evaluate('L2 = [(1, 0), (0, 1)]', 'B2 = L2[0] ^ L2[1]')
+      expect(result.evaluation).toMatchObject({
+        status: 'valid', primitive: unitSquareAt(0, 0),
+      })
+    })
+
+    it('keeps the construction through a reference to the bivector', () => {
+      const [,,, result] = evaluate('V = (1, 0)', 'W = (0, 1)', 'B = V ^ W', 'C = B')
+      expect(result.evaluation).toMatchObject({
+        status: 'valid', primitive: unitSquareAt(0, 0),
+      })
+    })
+
+    it('draws an inline outer product inside a list literal as a parallelogram at the shared inherited position (#87, #88)', () => {
+      const [,, list, selected] = evaluateItems([
+        ...positioned,
+        { id: 'l1', source: 'L1 = [V1, V2, V1 ^ V2]' },
+        { id: 'x', source: 'X = L1[2]' },
+      ])
+      expect(list.positionEvaluation).toBeNull()
+      expect(elementAt(list, 0)).toMatchObject({ position: { x: 2, y: 1 } })
+      expect(elementAt(list, 2)).toMatchObject({
+        entity: { kind: 'bivector-2d', value: 1 },
+        position: { x: 2, y: 1 },
+        positionConflict: false,
+        primitive: unitSquareAt(2, 1),
+      })
+      expect(selected.evaluation).toMatchObject({
+        status: 'valid', primitive: unitSquareAt(2, 1),
+      })
+    })
+
+    it('reports a conflict when the operands of a derived list element disagree (#88)', () => {
+      const [,, list] = evaluateItems([
+        { id: 'v1', source: 'V1 = (1, 0)', positionSource: '(2, 1)' },
+        { id: 'v2', source: 'V2 = (0, 1)', positionSource: '(0, 3)' },
+        { id: 'l', source: 'L = [V1 ^ V2]' },
+      ])
+      expect(list.positionEvaluation).toMatchObject({
+        status: 'invalid', diagnostic: { code: 'GEOM_POSITION_CONFLICT' },
+      })
+      expect(elementAt(list, 0)).toMatchObject({
+        position: null, positionConflict: true, entity: { value: 1 },
+      })
+    })
+
+    it('lets one positioned operand supply a derived element position', () => {
+      const [, list] = evaluateItems([
+        { id: 'v1', source: 'V1 = (1, 0)', positionSource: '(2, 1)' },
+        { id: 'l', source: 'L = [V1 ^ e2]' },
+      ])
+      expect(list.positionEvaluation).toBeNull()
+      expect(elementAt(list, 0)).toMatchObject({
+        position: { x: 2, y: 1 }, primitive: unitSquareAt(2, 1),
+      })
+    })
+
+    it('keeps a top-level outer product on its own position source', () => {
+      const [,, result] = evaluateItems([
+        ...positioned,
+        { id: 'b1', source: 'B1 = V1 ^ V2' },
+      ])
+      expect(result.positionEvaluation).toBeNull()
+      expect(result.evaluation).toMatchObject({
+        status: 'valid', primitive: unitSquareAt(0, 0),
+      })
+    })
+
+    it('rotates the spanning sides of a transformed bivector element (#87)', () => {
+      const [,,,, rotated] = evaluateItems([
+        ...positioned,
+        { id: 'l1', source: 'L1 = [V1, V2, V1 ^ V2]' },
+        { id: 'r', source: 'R = exp(0.5*pi/4*e12)' },
+        { id: 'l3', source: 'L3 = R >>> L1' },
+      ])
+      const element = elementAt(rotated, 2)
+      const side = elementAt(rotated, 0).entity as Vector2dEntity
+      expect(element).toMatchObject({
+        position: { x: 2, y: 1 },
+        primitive: { kind: 'oriented-area', shape: { kind: 'parallelogram' } },
+      })
+      if (element.primitive?.kind !== 'oriented-area' ||
+          element.primitive.shape.kind !== 'parallelogram') return
+      const [origin, first] = element.primitive.shape.vertices
+      expect(origin).toEqual({ x: 2, y: 1 })
+      expect(first.x - origin.x).toBeCloseTo(side.x, 12)
+      expect(first.y - origin.y).toBeCloseTo(side.y, 12)
+      expect(side.x).toBeCloseTo(Math.SQRT1_2, 12)
+      expect(element.primitive.area).toBeCloseTo(1, 12)
+    })
+
+    it('rotates the construction of a single transformed bivector', () => {
+      const [,, result] = evaluate(
+        'B = (2, 0) ^ (0, 1)', 'R = exp(0.5*pi/2*e12)', 'C = R >>> B',
+      )
+      expect(result.evaluation).toMatchObject({
+        status: 'valid',
+        primitive: { kind: 'oriented-area', shape: { kind: 'parallelogram' } },
+      })
+    })
+  })
+
   it('keeps independent branches valid after an unsupported property', () => {
     const results = evaluate('A = e1.unknown', 'B = ps')
 

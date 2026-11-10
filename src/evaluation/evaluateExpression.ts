@@ -2,10 +2,13 @@ import { AlgebraOperationError, type AlgebraEngine } from '../algebra/algebraEng
 import { permutedBlade } from '../domain/algebraBasis'
 import { ownedMultivector, type OwnedMultivector } from '../domain/multivector'
 import {
-  elementIdentity,
   MAX_GENERATED_VALUES,
+  outerConstruction,
   ownedList,
   retainElementIdentity,
+  retainOperationSources,
+  retainOuterConstruction,
+  valueLineage,
   type LanguageValue,
   type ListElement,
 } from '../domain/languageValue'
@@ -117,11 +120,13 @@ function evaluateExpressionUnchecked(
           )
         }
         const id = `${scope}:literal:${expression.elementOrigins[index].start}:${expression.elementOrigins[index].end}`
-        const sourceIdentity = elementIdentity(value)
+        // A referenced value keeps its identity; a computed one keeps the
+        // identities of its operands, so it inherits their positions (#88).
+        const lineage = valueLineage(value)
         elements.push({
           id,
           value,
-          sources: sourceIdentity ? [sourceIdentity] : [id],
+          sources: lineage.length > 0 ? lineage : [id],
         })
       })
       chargeElements(budget, elements.length, expression)
@@ -152,9 +157,12 @@ function evaluateExpressionUnchecked(
           indexElement.value, object.elements.length, expression.index, position,
         )
         const selected = object.elements[index]
+        const value = ownedMultivector(selected.value.coefficients, selected.value.basis)
+        const construction = outerConstruction(selected.value)
+        if (construction) retainOuterConstruction(value, construction)
         return {
           id: `${scope}:gather:${expression.origin.start}:${expression.origin.end}:${position}:${indexElement.id}:${selected.id}`,
-          value: ownedMultivector(selected.value.coefficients, selected.value.basis),
+          value,
           sources: [selected.id],
         }
       }))
@@ -174,13 +182,20 @@ function evaluateExpressionUnchecked(
         budget,
       )
     case 'sandwich':
-      return binary(expression, evaluate(expression.left), evaluate(expression.right), engine.sandwich, budget)
+      return binary(expression, evaluate(expression.left), evaluate(expression.right),
+        (versor, value) => transformedConstruction(engine, versor, value), budget)
     case 'power': {
       return binary(expression, evaluate(expression.base), evaluate(expression.exponent),
         (base, exponent) => engine.power(base, scalarMultivectorBoundary(exponent, expression.exponent, 'A geometric power exponent')), budget)
     }
     case 'outer':
-      return binary(expression, evaluate(expression.left), evaluate(expression.right), engine.outer, budget)
+      return binary(expression, evaluate(expression.left), evaluate(expression.right),
+        (left, right) => {
+          const result = engine.outer(left, right)
+          return result === left || result === right
+            ? result
+            : retainOuterConstruction(result, [left, right])
+        }, budget)
     case 'inner':
       return binary(expression, evaluate(expression.left), evaluate(expression.right), engine.inner, budget)
     case 'regressive':
@@ -321,13 +336,47 @@ function scalarModulo(
   return engine.scalar(remainder < 0 ? (remainder + modulus) % modulus : remainder)
 }
 
+/**
+ * Applies a versor sandwich and carries an outer-product construction through
+ * it: each spanning side goes through the same sandwich (#87). A side that
+ * cannot be transformed drops the construction; the interpretation still
+ * checks that the transformed sides span the transformed value.
+ */
+function transformedConstruction(
+  engine: AlgebraEngine,
+  versor: OwnedMultivector,
+  value: OwnedMultivector,
+): OwnedMultivector {
+  const result = engine.sandwich(versor, value)
+  const construction = outerConstruction(value)
+  if (!construction || result === value || result === versor) return result
+  try {
+    return retainOuterConstruction(result, [
+      engine.sandwich(versor, construction[0]),
+      engine.sandwich(versor, construction[1]),
+    ])
+  } catch (error) {
+    if (error instanceof AlgebraOperationError) return result
+    throw error
+  }
+}
+
+/** Records operand lineage on a freshly computed single value. */
+function withLineage(
+  result: OwnedMultivector,
+  operands: readonly OwnedMultivector[],
+): OwnedMultivector {
+  if (operands.includes(result)) return result
+  return retainOperationSources(result, operands.flatMap(valueLineage))
+}
+
 function unary(
   expression: CoreExpressionNode,
   value: LanguageValue,
   operation: (value: OwnedMultivector) => OwnedMultivector,
   budget: EvaluationBudget,
 ): LanguageValue {
-  if (value.kind === 'multivector') return operation(value)
+  if (value.kind === 'multivector') return withLineage(operation(value), [value])
   chargeElements(budget, value.elements.length, expression)
   return ownedList(value.elements.map((element, index) => {
     try {
@@ -355,7 +404,7 @@ function nary(
 ): LanguageValue {
   const lists = values.map((value) => (value.kind === 'list' ? value.elements : null))
   if (lists.every((elements) => elements === null)) {
-    return operation(values as OwnedMultivector[])
+    return withLineage(operation(values as OwnedMultivector[]), values as OwnedMultivector[])
   }
   const lengths = lists.flatMap((elements) => (elements ? [elements.length] : []))
   if (lengths.some((length) => length === 0)) {
@@ -406,7 +455,7 @@ function binary(
   budget: EvaluationBudget,
 ): LanguageValue {
   if (left.kind === 'multivector' && right.kind === 'multivector') {
-    return operation(left, right)
+    return withLineage(operation(left, right), [left, right])
   }
   if (left.kind === 'list' && right.kind === 'list') {
     if (left.elements.length === 0 && right.elements.length === 0) return ownedList([])

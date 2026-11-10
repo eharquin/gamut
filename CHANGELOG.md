@@ -349,6 +349,18 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Corrections
 
+- A VGA(2) bivector built as an outer product of two vectors is drawn as the
+  parallelogram they span whatever the operands are written as: list elements
+  such as `L[0] ^ L[1]`, inline operands such as `(1, 0) ^ (0, 1)`, an outer
+  product inside a list literal such as `[V1, V2, V1 ^ V2]`, and a reference
+  to or index of such a bivector. A versor sandwich such as `R >>> L` carries
+  the construction by transforming each side, so the parallelogram turns with
+  the transformed vectors. The **From vectors** shape is offered for these
+  rows (#85, #87).
+- A list element computed from single values, such as `V1 ^ V2` in
+  `[V1, V2, V1 ^ V2]`, inherits the position of its positioned operands like
+  any other list element: their common position, or a position conflict when
+  they disagree, instead of no position at the origin (#88).
 - Where base handles coincide, the handle of the selected object is on top and
   takes the press: the object whose expression row has focus or the pointer,
   otherwise the last object moved in the viewport. The order holds while a

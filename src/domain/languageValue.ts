@@ -29,6 +29,50 @@ export function elementIdentity(value: OwnedMultivector): string | null {
   return elementIdentities.get(value) ?? null
 }
 
+const operationSources = new WeakMap<OwnedMultivector, readonly string[]>()
+
+/**
+ * Records the identities a single value was computed from, so a list element
+ * built by an operation keeps its operands' lineage (position inheritance).
+ */
+export function retainOperationSources(
+  value: OwnedMultivector,
+  sources: readonly string[],
+): OwnedMultivector {
+  if (sources.length > 0) operationSources.set(value, Object.freeze([...new Set(sources)]))
+  return value
+}
+
+/** The identities a value stands for: its own identity, else its operands'. */
+export function valueLineage(value: OwnedMultivector): readonly string[] {
+  const identity = elementIdentity(value)
+  return identity ? [identity] : operationSources.get(value) ?? []
+}
+
+const outerConstructions = new WeakMap<
+  OwnedMultivector,
+  readonly [OwnedMultivector, OwnedMultivector]
+>()
+
+/**
+ * Records the two operands an outer product was built from. This is
+ * presentation provenance only (VIZ2D-007): it never changes the value, and
+ * the interpretation validates it against the value before drawing.
+ */
+export function retainOuterConstruction(
+  value: OwnedMultivector,
+  sides: readonly [OwnedMultivector, OwnedMultivector],
+): OwnedMultivector {
+  outerConstructions.set(value, Object.freeze([sides[0], sides[1]] as const))
+  return value
+}
+
+export function outerConstruction(
+  value: OwnedMultivector,
+): readonly [OwnedMultivector, OwnedMultivector] | null {
+  return outerConstructions.get(value) ?? null
+}
+
 export function ownedList(elements: readonly ListElement[]): OwnedList {
   if (elements.length > MAX_GENERATED_VALUES) {
     throw new RangeError('A list cannot contain more than 10,000 elements.')
