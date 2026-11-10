@@ -172,7 +172,7 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   first time; in a shared-link session it saves a local copy. **Library**
   lists the graphs grouped by algebra with their last update, and offers New,
   Open, Rename, Duplicate, and Delete, with confirmations inside the menu. The
-  header shows the open graph's name, editable in place, and a dot on Save
+  header shows the open graph's name, editable in place, and a small dot in the text colour on Save
   while the graph has unsaved changes; the browser tab shows the name too.
   Its buttons form three groups: the graph, the document file, the display.
   The previously saved document becomes the first graph of the library,
