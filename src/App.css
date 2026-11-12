@@ -76,6 +76,9 @@
 
 .app-title:focus-visible,
 .add-expression:focus-visible,
+.add-folder:focus-visible,
+.folder-toggle:focus-visible,
+.folder-action:focus-visible,
 .history-command:focus-visible,
 .delete-expression:focus-visible,
 .algebra-badge:focus-visible,
@@ -3621,4 +3624,144 @@ line.manipulation-focus-ring {
 .library-empty {
   margin: 0;
   color: var(--muted);
+}
+
+/* Expression and library folders (DOC-013, STORE-016). */
+.add-folder {
+  width: 30px;
+  height: 30px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.add-folder svg {
+  stroke: currentColor;
+  stroke-width: 1.4;
+}
+
+.add-folder:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.folder-member {
+  --folder-indent: 14px;
+  margin-inline-start: calc(var(--folder-depth, 0) * var(--folder-indent));
+}
+
+.folder-member[hidden] {
+  display: none;
+}
+
+.folder-row {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px 2px 4px;
+  background: var(--surface-soft);
+  border-bottom: 1px solid var(--border-subtle);
+  border-inline-start: 2px solid var(--accent-border);
+}
+
+.folder-row.drop-before {
+  box-shadow: inset 0 2px 0 0 var(--accent);
+}
+
+.folder-row.drop-into {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.folder-toggle {
+  flex: 1;
+  min-width: 0;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  font: 600 0.8rem var(--font-sans);
+  text-align: start;
+  cursor: pointer;
+}
+
+.folder-toggle:hover {
+  background: var(--surface-hover);
+}
+
+.folder-chevron {
+  width: 12px;
+  color: var(--muted);
+}
+
+.folder-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-count {
+  margin-inline-start: auto;
+  color: var(--muted);
+  font: 0.72rem var(--font-mono);
+}
+
+.folder-actions {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.folder-action {
+  width: 24px;
+  height: 24px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.folder-action:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.folder-rename {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.folder-name-input {
+  min-width: 0;
+  padding: 3px 6px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-input);
+  border-radius: 4px;
+  font: 600 0.8rem var(--font-sans);
+}
+
+.folder-name-input[aria-invalid='true'] {
+  border-color: var(--error-border);
+}
+
+.folder-error {
+  color: var(--error);
+  font-size: 0.72rem;
 }

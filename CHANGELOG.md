@@ -68,6 +68,20 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   saved, exported, and carried by scene links and library graphs; earlier
   documents open with their values shown. Release 0.2.0 cannot open a version
   8 document (#191).
+- Expression folders: **New folder** in the expression toolbar creates a
+  folder, named in place; folders can be renamed (F2 or ✎), collapsed,
+  expanded, nested, and removed, which keeps their rows at the folder's
+  position. Rows move into, within, and out of folders by dragging their
+  handle, or by Alt or Shift with the arrow keys, Home, and End on the handle
+  or in the editor; focus stays on the moved row and its new position and
+  folder are announced. Enter inserts the new row in the same folder.
+  Folders are structural only: values, appearance, and the draw order are
+  unchanged, and forward references stay valid. Folders are stored in
+  canonical format version 8 (`Item.folder`, the folder names from the root,
+  and `Document.folders`, each `{ path, collapsed }`); creating, renaming,
+  removing, and moving are undoable, and collapsing is saved with the
+  document and shows unsaved changes but is not an undo step. Earlier
+  documents open without folders (#83).
 
 ### Library
 

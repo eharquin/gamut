@@ -16,6 +16,7 @@ import {
   toCanonicalDocument,
   fromCanonicalDocument,
 } from './canonicalDocument'
+import { decodeSceneFragment, encodeSceneFragment } from './sceneLink'
 import { evaluateDocument } from '../application/evaluateDocument'
 import { createVga2Engine } from '../algebra/vgaEngine'
 import { VGA_2D_INTERPRETATION } from '../geometry/vga2Interpretation'
@@ -273,6 +274,13 @@ describe('canonical folders', () => {
     expect(restored.items.map(({ id, folder }) => [id, folder])).toEqual([['a', undefined], ['b', ['F']], ['c', ['F', 'G']], ['d', undefined]])
     expect(bytes).toContain('"folders":[{"collapsed":true,"path":["F"]}')
     expect(bytes).not.toContain('"folder":[]')
+  })
+
+  it('carries folders and their collapsed state in a scene link', async () => {
+    const document = { ...sample(), folders: [{ path: ['F'], collapsed: true }, { path: ['F', 'G'], collapsed: false }] }
+    const canonical = toCanonicalDocument(document, 'system')
+    const decoded = await decodeSceneFragment(await encodeSceneFragment(canonical))
+    expect(serializeCanonicalDocument(decoded)).toBe(serializeCanonicalDocument(canonical))
   })
 
   it('reads an empty item folder list as the top level', () => {
