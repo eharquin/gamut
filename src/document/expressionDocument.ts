@@ -118,6 +118,8 @@ export type ExpressionDocument = Readonly<{
       gridVisible: boolean
       objectScale: number
       showApproximatedResidue: boolean
+      /** Whether the multivector values are shown under the expressions (#191). */
+      valuesVisible: boolean
     }>
   }>
   items: readonly ExpressionItem[]
@@ -158,6 +160,7 @@ export function expressionDocument(
         gridVisible: true,
         objectScale: 1,
         showApproximatedResidue: false,
+        valuesVisible: true,
       },
     },
     items: retainedItems.map((item) => ({ ...item })),

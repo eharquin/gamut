@@ -15,7 +15,7 @@ export const MAX_DOCUMENT_BYTES = 4 * 1024 * 1024
 export const MAX_SOURCE_LENGTH = 65_536
 export const MAX_MIGRATION_STEPS = 32
 export type ThemeMode = 'system' | 'light' | 'dark'
-export const CURRENT_FORMAT_VERSION = 7
+export const CURRENT_FORMAT_VERSION = 8
 export type CanonicalPrimitiveStyles = Readonly<{ points: PointPrimitiveStyle; lines: LinePrimitiveStyle }>
 export type CanonicalAppearance = Readonly<{
   visible: boolean
@@ -54,7 +54,7 @@ export type CanonicalDocument = Readonly<{
     visualizerId: string | null
     positionEnabled: boolean
     viewport: CanonicalViewport
-    display: Readonly<{ decimalPlaces: number; axisLabelsVisible: boolean; graduationsVisible: boolean; gridVisible: boolean; objectScale: number; showApproximatedResidue: boolean; theme: ThemeMode }>
+    display: Readonly<{ decimalPlaces: number; axisLabelsVisible: boolean; graduationsVisible: boolean; gridVisible: boolean; objectScale: number; showApproximatedResidue: boolean; valuesVisible: boolean; theme: ThemeMode }>
   }>
 }>
 
@@ -285,6 +285,18 @@ export function migrateDocument(value: unknown): unknown {
       current = { ...document, formatVersion: 7, appearance: migrateVersion6Appearance(document.appearance) }
       continue
     }
+    if (version === 7) {
+      const view = document.view as Record<string, unknown>
+      const display = view.display as Record<string, unknown>
+      current = {
+        ...document,
+        formatVersion: 8,
+        // Format version 7 always showed the values under the expressions,
+        // since the setting did not exist yet (#191).
+        view: { ...view, display: { ...display, valuesVisible: true } },
+      }
+      continue
+    }
     fail('DOCUMENT_FORMAT_VERSION', 'Unsupported format version ' + String(version) + '.')
   }
   fail('DOCUMENT_FORMAT_VERSION', 'Migration exceeded the maximum number of steps.')
@@ -464,7 +476,7 @@ export function validateCanonicalDocument(value: unknown): CanonicalDocument {
   } else {
     fail('DOCUMENT_VIEWPORT', 'view.viewport.kind must be “none” or “two-dimensional”.')
   }
-  const display = record(view.display, 'view.display', ['decimalPlaces', 'axisLabelsVisible', 'graduationsVisible', 'gridVisible', 'objectScale', 'showApproximatedResidue', 'theme'])
+  const display = record(view.display, 'view.display', ['decimalPlaces', 'axisLabelsVisible', 'graduationsVisible', 'gridVisible', 'objectScale', 'showApproximatedResidue', 'valuesVisible', 'theme'])
   const decimalPlaces = finite(display.decimalPlaces, 'view.display.decimalPlaces')
   if (!Number.isInteger(decimalPlaces) || decimalPlaces < 0 || decimalPlaces > 15)
     fail('DOCUMENT_SCHEMA', 'decimalPlaces must be an integer from 0 through 15.')
@@ -481,7 +493,7 @@ export function validateCanonicalDocument(value: unknown): CanonicalDocument {
       visualizerId: view.visualizerId === null ? null : text(view.visualizerId, 'view.visualizerId', true),
       positionEnabled: truth(view.positionEnabled, 'view.positionEnabled'),
       viewport,
-      display: { decimalPlaces, axisLabelsVisible: truth(display.axisLabelsVisible, 'view.display.axisLabelsVisible'), graduationsVisible: truth(display.graduationsVisible, 'view.display.graduationsVisible'), gridVisible: truth(display.gridVisible, 'view.display.gridVisible'), objectScale: finite(display.objectScale, 'view.display.objectScale', true), showApproximatedResidue: truth(display.showApproximatedResidue, 'view.display.showApproximatedResidue'), theme: display.theme as ThemeMode },
+      display: { decimalPlaces, axisLabelsVisible: truth(display.axisLabelsVisible, 'view.display.axisLabelsVisible'), graduationsVisible: truth(display.graduationsVisible, 'view.display.graduationsVisible'), gridVisible: truth(display.gridVisible, 'view.display.gridVisible'), objectScale: finite(display.objectScale, 'view.display.objectScale', true), showApproximatedResidue: truth(display.showApproximatedResidue, 'view.display.showApproximatedResidue'), valuesVisible: truth(display.valuesVisible, 'view.display.valuesVisible'), theme: display.theme as ThemeMode },
     },
   }
 }
