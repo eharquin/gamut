@@ -245,7 +245,7 @@ function persistReferenceHeight(height: number): void {
 type SharedDocument = ReturnType<typeof fromCanonicalDocument>
 
 function SharedScene({ embed }: { embed: EmbedOptions | null }) {
-  const [result, setResult] = useState<{ document?: SharedDocument; diagnostic?: string } | null>(null)
+  const [result, setResult] = useState<{ document?: SharedDocument; diagnostic?: string; code?: string } | null>(null)
   useEffect(() => {
     let cancelled = false
     const load = async () => {
@@ -255,7 +255,8 @@ function SharedScene({ embed }: { embed: EmbedOptions | null }) {
         requireAvailableAlgebra(algebraRegistry, restored.document.algebra)
         if (!cancelled) setResult({ document: restored })
       } catch (error) {
-        if (!cancelled) setResult({ diagnostic: error instanceof DocumentFormatError
+        const code = error instanceof DocumentFormatError ? error.code : 'SHARE_LOAD_FAILED'
+        if (!cancelled) setResult({ code, diagnostic: error instanceof DocumentFormatError
           ? error.code + ': ' + error.message
           : 'SHARE_LOAD_FAILED: The scene link could not be opened.' })
       }
@@ -266,16 +267,22 @@ function SharedScene({ embed }: { embed: EmbedOptions | null }) {
   if (!result) return <p role="status">Opening shared scene…</p>
   // The editor falls back on the active document, which embed mode never reads.
   if (embed && !result.document) {
-    return <EmbeddedSceneUnavailable message={`This scene could not be opened. ${result.diagnostic}`} />
+    return <EmbeddedSceneUnavailable message={`This scene could not be opened: its link may be incomplete or damaged. (${result.code})`} />
   }
   return <Editor sharedDocument={result.document} sceneDiagnostic={result.diagnostic} sharedSession embed={embed} />
 }
 
 function App() {
   const [embed] = useState(() => resolveEmbedMode(window.location.hash, isFramed(window)))
+  // The page-level minimum width would overflow a small frame.
+  useEffect(() => {
+    if (!embed) return
+    document.documentElement.classList.add('is-embedded')
+    return () => document.documentElement.classList.remove('is-embedded')
+  }, [embed])
   if (hasSceneFragment(window.location.hash)) return <SharedScene embed={embed} />
   // Without a scene, embed mode shows the default example and stores nothing.
-  return embed ? <Editor sharedSession embed={embed} /> : <Editor />
+  return embed ? <Editor embed={embed} /> : <Editor />
 }
 
 function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed = null }: {
@@ -285,7 +292,12 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
   /** Embed mode (#215): the canvas alone, in a session that never touches storage. */
   embed?: EmbedOptions | null
 }) {
-  const [ephemeral, setEphemeral] = useState(sharedSession)
+  /**
+   * A shared scene and embed mode never read or write browser storage until
+   * an explicit save; embed mode offers none, so it never touches storage.
+   */
+  const temporary = sharedSession || embed !== null
+  const [ephemeral, setEphemeral] = useState(temporary)
   const persistence = useMemo(
     () => ({
       load: () => browserDocumentStorage(window.localStorage).load(),
@@ -302,7 +314,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
       theme: 'system' as ThemeMode,
       diagnostic: (sceneDiagnostic ?? null) as string | null,
     }
-    if (import.meta.env.MODE === 'test' || embed) return fallback
+    if (import.meta.env.MODE === 'test' || embed !== null) return fallback
     try {
       const stored = persistence.load()
       if (stored === null) return fallback
@@ -514,8 +526,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
   const [reorderAnnouncement, setReorderAnnouncement] = useState('')
   const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null)
   const [anchorPreview, setAnchorPreview] = useState<AnchorCandidate | null>(null)
-  const [viewportLocked, setViewportLocked] = useState(() => embed ? embed.viewportLocked : sharedSession ? false : restoredViewportLock())
-  const [panelCollapsed, setPanelCollapsed] = useState(() => sharedSession ? false : restoredPanelCollapsed())
+  const [viewportLocked, setViewportLocked] = useState(() => embed ? embed.viewportLocked : temporary ? false : restoredViewportLock())
+  const [panelCollapsed, setPanelCollapsed] = useState(() => temporary ? false : restoredPanelCollapsed())
   const collapsePanelButtonRef = useRef<HTMLButtonElement | null>(null)
   const expandPanelButtonRef = useRef<HTMLButtonElement | null>(null)
   const expressionPanelRef = useRef<HTMLElement | null>(null)
@@ -537,7 +549,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
   )
   const [infoDialog, setInfoDialog] = useState<'algebra' | null>(null)
   const [referenceOpen, setReferenceOpen] = useState(false)
-  const [referenceHeight, setReferenceHeight] = useState(() => sharedSession ? DEFAULT_REFERENCE_HEIGHT : restoredReferenceHeight())
+  const [referenceHeight, setReferenceHeight] = useState(() => temporary ? DEFAULT_REFERENCE_HEIGHT : restoredReferenceHeight())
   const closeInfoDialog = useCallback(() => setInfoDialog(null), [])
   const closeAppearance = useCallback(() => {
     setAppearanceItemId(null)
@@ -2018,7 +2030,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
   // until the user opens the library or saves, and reads the former active
   // document at its first write instead.
   const [libraryStart] = useState(() => {
-    if (sharedSession) return { migrationSource: undefined, library: null, boundId: null, saved: null }
+    if (temporary) return { migrationSource: undefined, library: null, boundId: null, saved: null }
     const storage = browserLibraryStorage()
     let migrationSource: string | null = null
     let indexMissing = false
@@ -2802,12 +2814,14 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
                 <path d="M5 6l2 2-2 2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
-            <div
+            </>}
+            {/* Embed mode keeps zoom and recenter, for touch screens without pinch zoom, unless locked. */}
+            {!embed?.viewportLocked && <div
               className="viewport-toolbar"
               role="toolbar"
               aria-label="Viewport controls"
             >
-              <button
+              {!embed && <button
                 type="button"
                 className="viewport-command viewport-lock"
                 onClick={toggleViewportLock}
@@ -2824,7 +2838,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
                     strokeLinecap="round"
                   />
                 </svg>
-              </button>
+              </button>}
               <div className="viewport-navigation">
               <button
                 type="button"
@@ -2862,6 +2876,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
                   <circle cx="8" cy="8" r="3.2" fill="none" />
                 </svg>
               </button>
+              {!embed && <>
               <button
                 type="button"
                 className="viewport-command"
@@ -2879,9 +2894,9 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
                   viewport, { x: viewport.width / 2, y: viewport.height / 2 }, pixelsPerUnit,
                 ))}
               />
+              </>}
               </div>
-            </div>
-            </>}
+            </div>}
             <svg
               ref={attachViewportSvg}
               className={`canvas${viewportLocked ? ' is-viewport-locked' : ''}`}
@@ -3085,7 +3100,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
           </div>
         </section>}
       </main>
-      {embed && <EmbedControls />}
+      {embed && <EmbedControls sceneLinked={!!sharedDocument} />}
       {libraryOpen && !embed && (
         <LibraryPanel
           // A save request asks for a name in a fresh panel.

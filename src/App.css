@@ -3623,20 +3623,35 @@ line.manipulation-focus-ring {
   color: var(--muted);
 }
 
-/* Embed mode (#215): the canvas fills the frame; its two controls are ghost
-   chrome in the corner the viewport toolbar leaves free in this mode. */
+/* Embed mode (#215): the canvas fills the frame at any size, including the
+   narrow widths where the editor stacks and scrolls its panels. */
+html.is-embedded body {
+  min-width: 0;
+}
+
+.app-shell.is-embedded .workspace {
+  overflow: hidden;
+}
+
+.app-shell.is-embedded .visualizer,
+.app-shell.is-embedded .canvas-frame {
+  min-height: 0;
+}
+
+/* The two embed controls sit in the bottom-right corner, clear of the
+   viewport toolbar; readable at rest (WCAG 1.4.3), fully opaque on use. */
 .embed-controls {
   position: absolute;
-  top: 8px;
   right: 8px;
+  bottom: 8px;
   z-index: 9;
   display: flex;
   align-items: center;
   gap: 4px;
   padding: 2px;
-  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
   border-radius: 6px;
-  opacity: 0.6;
+  opacity: 0.9;
   transition: opacity 120ms ease;
 }
 
@@ -3644,6 +3659,12 @@ line.manipulation-focus-ring {
 .embed-unavailable:hover .embed-controls,
 .embed-controls:focus-within {
   opacity: 1;
+}
+
+@media (hover: none) {
+  .embed-controls {
+    opacity: 1;
+  }
 }
 
 .embed-command {
@@ -3655,7 +3676,7 @@ line.manipulation-focus-ring {
   gap: 4px;
   padding: 0 6px;
   font: 600 0.75rem var(--font-sans);
-  color: var(--muted);
+  color: var(--text);
   text-decoration: none;
   background: transparent;
   border: 0;
@@ -3686,7 +3707,7 @@ line.manipulation-focus-ring {
   display: grid;
   place-items: center;
   margin: 0;
-  padding: 48px 16px 16px;
+  padding: 16px 16px 48px;
   color: var(--text);
   text-align: center;
   background: var(--canvas);

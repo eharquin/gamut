@@ -52,7 +52,11 @@ describe('embed mode (#215)', () => {
     expect(screen.queryByRole('region', { name: 'Library' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /expression panel/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Hide canvas/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole('toolbar', { name: 'Viewport controls' })).not.toBeInTheDocument()
+    // Zoom and recenter stay, for touch screens without pinch zoom; the lock and the rest go.
+    const toolbar = screen.getByRole('toolbar', { name: 'Viewport controls' })
+    expect(Array.from(toolbar.querySelectorAll('button'), (button) => button.getAttribute('aria-label')))
+      .toEqual(['Zoom in', 'Zoom out', 'Recenter view'])
+    expect(screen.queryByRole('button', { name: /Lock viewport/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Save local copy' })).not.toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
 
@@ -103,6 +107,7 @@ describe('embed mode (#215)', () => {
     await openEmbeddedScene('&embed=1&theme=dark&lock=1')
     expect(document.documentElement.dataset.theme).toBe('dark')
     expect(viewportCanvas()).toHaveClass('is-viewport-locked')
+    expect(screen.queryByRole('toolbar', { name: 'Viewport controls' })).not.toBeInTheDocument()
   })
 
   it('shows the default example without storage when the fragment has no scene', () => {
@@ -111,8 +116,9 @@ describe('embed mode (#215)', () => {
     render(<App />)
     expect(viewportCanvas()).toBeInTheDocument()
     expect(screen.queryByRole('banner')).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Open in GAMUT/ }))
-      .toHaveAttribute('href', new URL('/', window.location.href).href)
+    expect(document.documentElement).toHaveClass('is-embedded')
+    // The application would open the viewer's own document, not the one shown.
+    expect(screen.queryByRole('link', { name: /Open in GAMUT/ })).not.toBeInTheDocument()
     expect(storage).not.toHaveBeenCalled()
   })
 
@@ -120,7 +126,7 @@ describe('embed mode (#215)', () => {
     const storage = blockStorage()
     window.history.replaceState(null, '', '/#scene=1.json.bad&embed=1')
     render(<App />)
-    expect(await screen.findByRole('alert')).toHaveTextContent('This scene could not be opened. SHARE_ENVELOPE')
+    expect(await screen.findByRole('alert')).toHaveTextContent('This scene could not be opened: its link may be incomplete or damaged. (SHARE_ENVELOPE)')
     expect(screen.getByRole('link', { name: /Open in GAMUT/ })).toBeInTheDocument()
     expect(screen.queryByRole('banner')).not.toBeInTheDocument()
     expect(storage).not.toHaveBeenCalled()

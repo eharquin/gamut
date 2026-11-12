@@ -146,32 +146,43 @@ fragment overrides the detection:
 | `embed=1` | Forces embed mode outside a frame, for testing in a tab. |
 | `embed=0` | Turns embed mode off inside a frame: the full editor opens. |
 | `theme=light` or `theme=dark` | Overrides the document theme for this view; the document is unchanged. |
-| `lock=1` | Opens with the viewport locked: no pan or zoom by pointer, wheel, or keyboard, while objects stay draggable. |
+| `lock=1` | Opens with the viewport locked: no pan or zoom by pointer, wheel, or keyboard, and no zoom controls, while objects stay draggable. |
 
 Options sit next to `scene`, in any order, for example
 `#scene=1.deflate-raw.…&embed=1&lock=1`. They are read without decoding the
 scene payload. Unknown options and unknown values are ignored without
-error, and a repeated option counts by its first occurrence. The 64 KiB fragment limit
-counts them. An `autoplay` option is not implemented: playback state is not
-part of the document, and embed mode offers no control to pause an animation
-(A11Y-004).
+error, and a repeated option counts by its first occurrence. The 64 KiB
+fragment limit counts them. An `autoplay` option is not implemented: playback
+state is not part of the document, and embed mode offers no control to pause
+an animation (A11Y-004).
 
 ### What is shown
 
-The viewport fills the frame and follows its size. There is no header,
-notice, diagnostic banner, expression panel, library panel, panel toggle, or
-viewport toolbar, and sliders are not shown until #190 places them in the
-viewport. Free objects stay draggable by pointer and keyboard, the viewport
-can be panned and zoomed by pointer, wheel, and keyboard unless `lock=1` is
-set, and undo and redo shortcuts still apply. Double-clicking the viewport
-creates nothing, and dropping a file opens nothing.
+The viewport fills the frame and follows its size, at any frame size. There
+is no header, notice, diagnostic banner, expression panel, library panel, or
+panel toggle, and sliders are not shown until #190 places them in the
+viewport. As a consequence, no animation can start in embed mode until #190
+or an `autoplay` option exists.
 
-Two discreet controls sit in the top-right corner, after the canvas in the
+Free objects stay draggable by pointer and keyboard. Base anchoring gestures
+remain, since they are viewport manipulations: dragging a base onto another
+object anchors it, Enter cycles the anchor candidates, and Delete or Backspace
+unlinks an anchored base. The viewport can be panned and zoomed by pointer,
+wheel, and keyboard unless `lock=1` is set; the viewport toolbar keeps
+**Zoom in**, **Zoom out**, and **Recenter view**, for touch screens without
+pinch zoom, and drops the lock, the square-canvas command, and the zoom field.
+With `lock=1` the toolbar is hidden. Undo and redo shortcuts still apply.
+Double-clicking the viewport creates nothing, and dropping a file opens
+nothing.
+
+Two discreet controls sit in the bottom-right corner, after the canvas in the
 keyboard order:
 
 - **Open in GAMUT**, a link that opens the full application in a new tab with
   the same `scene` entry and no display option, so the scene opens as an
-  ordinary temporary session. Edits made in the frame are not carried.
+  ordinary temporary session. Edits made in the frame are not carried. It is
+  absent without a `scene` entry, since the application would then open the
+  viewer's own active document rather than what the frame shows.
 - **Enter fullscreen** / **Exit fullscreen**, shown only when the host allows
   fullscreen (`document.fullscreenEnabled`, which an iframe grants with
   `allowfullscreen`). It toggles fullscreen for the whole page.
@@ -181,6 +192,6 @@ keyboard order:
 Embed mode never reads or writes browser storage: no active document, library,
 viewport-lock, panel, or reference preference. It works when storage is
 blocked or throws. Without a `scene` entry it shows the default example and
-writes nothing. A scene that fails validation shows its diagnostic as text,
-with **Open in GAMUT**, instead of falling back on the active document as the
-full editor does.
+writes nothing. A scene that fails validation shows a plain sentence with its
+diagnostic code in parentheses, as an alert, with **Open in GAMUT**, instead
+of falling back on the active document as the full editor does.

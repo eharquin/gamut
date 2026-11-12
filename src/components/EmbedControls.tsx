@@ -4,13 +4,15 @@ import { useFullscreen } from '../hooks/useFullscreen'
 /**
  * The only controls of embed mode (#215), laid over the canvas: a link that
  * opens the same scene in the full application in a new tab, and fullscreen
- * when the host allows it.
+ * when the host allows it. Without a scene in the fragment there is no link:
+ * the application would open the viewer's own document, not the one shown.
  */
-export function EmbedControls() {
+export function EmbedControls({ sceneLinked }: { sceneLinked: boolean }) {
   const fullscreen = useFullscreen()
+  if (!sceneLinked && !fullscreen.available) return null
   return (
     <div className="embed-controls" role="group" aria-label="Embedded scene">
-      <a
+      {sceneLinked && <a
         className="embed-command embed-open"
         href={fullApplicationUrl(window.location.href)}
         target="_blank"
@@ -21,7 +23,7 @@ export function EmbedControls() {
         <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true">
           <path d="M9 2.5h4.5V7M13.5 2.5 7 9M12 10v3.5H2.5V4H6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-      </a>
+      </a>}
       {fullscreen.available && <button
         type="button"
         className="embed-command"
@@ -49,7 +51,7 @@ export function EmbeddedSceneUnavailable({ message }: { message: string }) {
   return (
     <div className="embed-unavailable">
       <p role="alert">{message}</p>
-      <EmbedControls />
+      <EmbedControls sceneLinked />
     </div>
   )
 }
