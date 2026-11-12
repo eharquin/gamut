@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { executeDocumentCommand } from './documentCommands'
+import { executeDocumentCommand, sourceKind } from './documentCommands'
 import { expressionDocument } from './expressionDocument'
 
 describe('semantic document commands', () => {
@@ -117,6 +117,30 @@ describe('semantic document commands', () => {
       status: 'unsupported', document,
       reason: 'Annotations do not own position source.',
     })
+  })
+
+  it('derives the item kind from the source on every source edit (#187)', () => {
+    const control = { mode: 'slider', minimumSource: '0', maximumSource: '1', stepSource: '0.1', animation: null } as const
+    const document = expressionDocument([
+      { id: 'a', source: 'A = e1', positionSource: '(1, 2)', normalization: 'natural', control },
+    ], { a: { visible: false } })
+    const commented = executeDocumentCommand(document, { kind: 'update-source', itemId: 'a', source: '  # A = e1' })
+    // The format forbids position, normalization, and control on an annotation.
+    expect(commented.document.items).toEqual([{ id: 'a', kind: 'annotation', source: '  # A = e1' }])
+    expect(commented.document.appearance).toEqual(document.appearance)
+
+    const restored = executeDocumentCommand(commented.document, { kind: 'update-source', itemId: 'a', source: ' A = e1' })
+    expect(restored.document.items).toEqual([{ id: 'a', source: ' A = e1' }])
+
+    // A stored annotation without # (valid for the format) becomes an
+    // expression on its next source edit, unless the edit adds a #.
+    const legacy = expressionDocument([{ id: 'note', kind: 'annotation', source: 'prose' }])
+    expect(executeDocumentCommand(legacy, { kind: 'update-source', itemId: 'note', source: 'prose!' })
+      .document.items).toEqual([{ id: 'note', source: 'prose!' }])
+    expect(executeDocumentCommand(legacy, { kind: 'update-source', itemId: 'note', source: '# prose' })
+      .document.items).toEqual([{ id: 'note', kind: 'annotation', source: '# prose' }])
+    expect(sourceKind('a # b')).toBe('expression')
+    expect(sourceKind('\t#')).toBe('annotation')
   })
 
   it('rewrites the smallest eligible literal and refuses compound inverse edits', () => {

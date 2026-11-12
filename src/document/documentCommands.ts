@@ -42,6 +42,25 @@ export type DocumentCommand =
       replacement: string
     }>
 
+/**
+ * The kind a source gives its item (language §3): an annotation when its first
+ * non-whitespace character is `#`, an expression otherwise (#187).
+ */
+export function sourceKind(source: string): 'expression' | 'annotation' {
+  return source.trimStart().startsWith('#') ? 'annotation' : 'expression'
+}
+
+/**
+ * The item after a source edit, with its kind derived from the new source. An
+ * item that becomes an annotation drops the position, normalization, and
+ * control the format forbids on it; undo restores them with the source.
+ */
+function withSource(item: ExpressionItem, source: string): ExpressionItem {
+  if (sourceKind(source) === 'annotation') return { id: item.id, kind: 'annotation', source }
+  if (item.kind === 'annotation') return { id: item.id, source }
+  return { ...item, source }
+}
+
 /** A document has content once any item carries source text (EDIT); empty rows do not count. */
 export function hasContent(document: ExpressionDocument): boolean {
   return document.items.some((item) => item.source.trim() !== '' || (item.positionSource?.trim() ?? '') !== '')
@@ -223,7 +242,7 @@ export function executeDocumentCommand(
   }
 
   const replacement = command.kind === 'update-source'
-    ? { ...item, source: command.source }
+    ? withSource(item, command.source)
     : command.kind === 'update-position'
       ? { ...item, positionSource: command.positionSource }
       : command.kind === 'update-normalization'
