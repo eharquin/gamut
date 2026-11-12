@@ -3,12 +3,12 @@ import type { DocumentCommand } from '../document/documentCommands'
 import type { HistoryAction } from '../document/documentHistory'
 import type { ExpressionControl, ExpressionItem } from '../document/expressionDocument'
 import { declaredName } from '../language/declaredName'
-import type { ScalarControlEvaluation } from './evaluateScalarControl'
+import type { ScalarControlEvaluation } from '../application/evaluateScalarControl'
 import {
   scalarPlaybackFrame,
   scalarPlaybackOffset,
   type PlaybackParameters,
-} from './scalarPlayback'
+} from '../application/scalarPlayback'
 
 /** The animation a slider gets when its control does not configure one. */
 export const DEFAULT_SCALAR_ANIMATION = {
@@ -56,6 +56,11 @@ export type ScalarPlaybackOptions = Readonly<{
   reducedMotion: boolean
 }>
 
+/**
+ * The playback controls. The object and `isPlaying` and `start` are recreated
+ * on every render: call them from event handlers, and do not use them as
+ * effect or memo dependencies.
+ */
 export type ScalarPlayback = Readonly<{
   /** Whether the slider of this item is playing. */
   isPlaying(itemId: string): boolean

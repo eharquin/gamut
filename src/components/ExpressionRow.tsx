@@ -4,7 +4,7 @@ import type { ItemAppearanceSources } from '../application/evaluateAppearanceSou
 import type { EvaluatedDocumentItem } from '../application/evaluateDocument'
 import { evaluateScalarControl, type ScalarControlEvaluation } from '../application/evaluateScalarControl'
 import { hasIdealNorm, isUnitNorm, measuredNorm, normalizeItemValue } from '../application/normalization'
-import { DEFAULT_SCALAR_ANIMATION, type ScalarPlayback } from '../application/useScalarPlayback'
+import { DEFAULT_SCALAR_ANIMATION, type ScalarPlayback } from '../hooks/useScalarPlayback'
 import type { DocumentCommand } from '../document/documentCommands'
 import type { HistoryAction } from '../document/documentHistory'
 import type {
@@ -99,7 +99,10 @@ type ExpressionRowProps = Readonly<{
   appearanceOpen: boolean
   /** This row's normalization choice is the open one. */
   normalizationChoiceActive: boolean
-  playback: ScalarPlayback
+  /** Whether this row's scalar is playing, read by the panel at render. */
+  isPlaying: boolean
+  /** The playback actions a row starts, stops or resets. */
+  playback: Pick<ScalarPlayback, 'start' | 'stop' | 'forgetPaused'>
   refs: ExpressionRowRefs
   actions: ExpressionRowActions
 }>
@@ -127,6 +130,7 @@ export function ExpressionRow({
   listExpanded,
   appearanceOpen,
   normalizationChoiceActive,
+  isPlaying,
   playback,
   refs: {
     expressionRowRefs,
@@ -230,7 +234,6 @@ export function ExpressionRow({
       )
     : null
   const scalarControlAvailable = effectiveControl !== undefined
-  const isPlaying = playback.isPlaying(item.id)
   const empty = item.source.trim() === ''
   const listDetailsId = `list-details-${item.id}`
 

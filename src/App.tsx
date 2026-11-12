@@ -123,7 +123,7 @@ import {
 } from './language/constructorLiteralEdit'
 import { primitiveBase } from './visualization/anchoring'
 import { directPositionAnchorReference } from './language/directVectorEdit'
-import { useScalarPlayback } from './application/useScalarPlayback'
+import { useScalarPlayback } from './hooks/useScalarPlayback'
 import { declaredName } from './language/declaredName'
 import './App.css'
 
@@ -2669,6 +2669,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
                 listExpanded={expandedListIds.has(entry.item.id)}
                 appearanceOpen={appearanceItemId === entry.item.id}
                 normalizationChoiceActive={normalizationChoiceId === entry.item.id}
+                isPlaying={playback.isPlaying(entry.item.id)}
                 playback={playback}
                 refs={expressionRowElementRefs}
                 actions={expressionRowActions}

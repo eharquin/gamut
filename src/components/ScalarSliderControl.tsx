@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react'
 import type { ScalarControlEvaluation } from '../application/evaluateScalarControl'
 import { snapToControlBounds } from '../application/scalarPlayback'
-import { DEFAULT_SCALAR_ANIMATION, type ScalarPlayback } from '../application/useScalarPlayback'
+import { DEFAULT_SCALAR_ANIMATION, type ScalarPlayback } from '../hooks/useScalarPlayback'
 import type { DocumentCommand } from '../document/documentCommands'
 import type { HistoryAction } from '../document/documentHistory'
 import type { ExpressionControl, ExpressionItem } from '../document/expressionDocument'
@@ -20,7 +20,7 @@ type ScalarSliderControlProps = Readonly<{
   control: ExpressionControl
   controlEvaluation: ScalarControlEvaluation
   isPlaying: boolean
-  playback: ScalarPlayback
+  playback: Pick<ScalarPlayback, 'start' | 'stop' | 'forgetPaused'>
   decimalPlaces: number
   objectRenderScale: number
   executeCommand(command: DocumentCommand, coalesceKey?: string): void
