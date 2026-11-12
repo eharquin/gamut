@@ -8,10 +8,21 @@ import {
   mergeAppearance,
 } from './expressionDocument'
 import { directScalarEdit, formatScalarSource } from '../language/directScalarEdit'
+import { applyItemMove, createFolder, deleteFolder, itemFolder, renameFolder } from './expressionFolders'
+import type { FolderPath } from './folderModel'
 
 export type DocumentCommand =
   | Readonly<{ kind: 'insert-item'; item: ExpressionItem; anchorId?: string; placement?: 'before' | 'after' }>
-  | Readonly<{ kind: 'move-item'; itemId: string; anchorId?: string; placement?: 'before' | 'after' }>
+  /**
+   * Moves an item next to the anchor, or to the end, and into `folder` when
+   * given (the empty path is the top level); without it the item keeps its
+   * folder (DOC-013).
+   */
+  | Readonly<{ kind: 'move-item'; itemId: string; anchorId?: string; placement?: 'before' | 'after'; folder?: FolderPath }>
+  | Readonly<{ kind: 'create-folder'; path: FolderPath }>
+  | Readonly<{ kind: 'rename-folder'; path: FolderPath; name: string }>
+  /** Removes a folder and keeps its items and subfolders in its parent. */
+  | Readonly<{ kind: 'delete-folder'; path: FolderPath }>
   | Readonly<{ kind: 'delete-item'; itemId: string }>
   | Readonly<{ kind: 'clear-items' }>
   | Readonly<{ kind: 'update-source'; itemId: string; source: string }>
@@ -61,9 +72,12 @@ function withSource(item: ExpressionItem, source: string): ExpressionItem {
   return { ...item, source }
 }
 
-/** A document has content once any item carries source text (EDIT); empty rows do not count. */
+/**
+ * A document has content once any item carries source text (EDIT), or it has
+ * a folder (DOC-013); empty rows do not count.
+ */
 export function hasContent(document: ExpressionDocument): boolean {
-  return document.items.some((item) => item.source.trim() !== '' || (item.positionSource?.trim() ?? '') !== '')
+  return (document.folders?.length ?? 0) > 0 || document.items.some((item) => item.source.trim() !== '' || (item.positionSource?.trim() ?? '') !== '')
 }
 
 export type CommandResult =
@@ -84,8 +98,18 @@ export function executeDocumentCommand(
   command: DocumentCommand,
 ): CommandResult {
   if (command.kind === 'clear-items') {
-    if (document.items.length === 0) return invalid(document, 'The document is already empty.')
-    return { status: 'applied', document: { ...document, items: [], appearance: {} } }
+    if (document.items.length === 0 && (document.folders?.length ?? 0) === 0)
+      return invalid(document, 'The document is already empty.')
+    return { status: 'applied', document: { ...document, items: [], appearance: {}, folders: [] } }
+  }
+
+  if (command.kind === 'create-folder' || command.kind === 'rename-folder' || command.kind === 'delete-folder') {
+    const edit = command.kind === 'create-folder'
+      ? createFolder(document, command.path)
+      : command.kind === 'rename-folder'
+        ? renameFolder(document, command.path, command.name)
+        : deleteFolder(document, command.path)
+    return edit.status === 'applied' ? edit : invalid(document, edit.reason)
   }
 
   if (command.kind === 'insert-item') {
@@ -95,41 +119,35 @@ export function executeDocumentCommand(
     if (document.items.length >= MAX_EXPRESSION_ITEMS)
       return invalid(document, `A document may contain at most ${MAX_EXPRESSION_ITEMS} items.`)
     let index = document.items.length
+    let inserted = withSource(command.item, command.item.source)
     if (command.anchorId !== undefined) {
       const anchor = itemIndex(document, command.anchorId)
       if (anchor < 0) return invalid(document, `Item “${command.anchorId}” does not exist.`)
       index = anchor + (command.placement === 'before' ? 0 : 1)
+      // A row inserted next to another joins its folder (DOC-013).
+      const folder = itemFolder(document.items[anchor])
+      if (command.item.folder === undefined && folder.length > 0) inserted = { ...inserted, folder }
     }
     return {
       status: 'applied',
       document: {
         ...document,
         // An inserted source gets its kind like an edited one (#187).
-        items: [...document.items.slice(0, index), withSource(command.item, command.item.source), ...document.items.slice(index)],
+        items: [...document.items.slice(0, index), inserted, ...document.items.slice(index)],
       },
     }
   }
 
   if (command.kind === 'move-item') {
-    if (itemIndex(document, command.itemId) < 0)
-      return invalid(document, `Item “${command.itemId}” does not exist.`)
-    if (command.anchorId === command.itemId)
-      return invalid(document, 'An item cannot move relative to itself.')
-    const item = document.items[itemIndex(document, command.itemId)]
-    const withoutItem = document.items.filter(({ id }) => id !== command.itemId)
-    let index = withoutItem.length
-    if (command.anchorId !== undefined) {
-      const anchor = withoutItem.findIndex(({ id }) => id === command.anchorId)
-      if (anchor < 0) return invalid(document, `Item “${command.anchorId}” does not exist.`)
-      index = anchor + (command.placement === 'before' ? 0 : 1)
-    }
-    return {
-      status: 'applied',
-      document: {
-        ...document,
-        items: [...withoutItem.slice(0, index), item, ...withoutItem.slice(index)],
-      },
-    }
+    const item = document.items.find(({ id }) => id === command.itemId)
+    if (!item) return invalid(document, `Item “${command.itemId}” does not exist.`)
+    const edit = applyItemMove(document, {
+      itemId: command.itemId,
+      folder: command.folder ?? itemFolder(item),
+      anchorId: command.anchorId,
+      placement: command.placement,
+    })
+    return edit.status === 'applied' ? edit : invalid(document, edit.reason)
   }
 
   if (command.kind === 'update-algebra') {

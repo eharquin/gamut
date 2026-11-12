@@ -1,3 +1,5 @@
+import type { FolderPath } from './folderModel'
+
 export const MAX_EXPRESSION_ITEMS = 1_000
 
 export type ExpressionAppearance = Readonly<{
@@ -85,6 +87,17 @@ export type ExpressionItem = Readonly<{
   positionSource?: string
   normalization?: ItemNormalization
   control?: ExpressionControl
+  /**
+   * The folder that contains the item, as folder names from the root
+   * (DOC-013); absent or empty at the top level.
+   */
+  folder?: FolderPath
+}>
+
+/** A declared expression folder and its stored collapsed state (DOC-013). */
+export type ExpressionFolder = Readonly<{
+  path: FolderPath
+  collapsed: boolean
 }>
 
 export type ExpressionDocument = Readonly<{
@@ -124,6 +137,11 @@ export type ExpressionDocument = Readonly<{
   }>
   items: readonly ExpressionItem[]
   appearance: Readonly<Record<string, ExpressionAppearance>>
+  /**
+   * Every expression folder, empty ones included, with its collapsed state;
+   * absent when the document has none (DOC-013).
+   */
+  folders?: readonly ExpressionFolder[]
 }>
 
 /** Creates a document whose item identities are independent of their source. */
