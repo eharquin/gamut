@@ -70,8 +70,12 @@ non-executable content and never enters parsing or evaluation. Both closed
 viewport variants restore deterministically: `none` disables the visualizer,
 while the supported two-dimensional record restores center and zoom. An
 unsupported visualizer/viewport combination remains in the document and
-produces an explicit recovery diagnostic. Viewport display controls and
-annotations do not yet have dedicated editing interfaces. The format version
+produces an explicit recovery diagnostic. Viewport display controls do
+not yet have dedicated editing interfaces. Annotations are written as comment
+rows: a source edit derives `kind` from the source (language §3), keeps the
+leading `#` verbatim, and sets `positionSource`, `normalization`, and
+`control` to `null` when the item becomes an annotation; an annotation
+stored without `#` keeps its kind until its source is edited. The format version
 7 appearance fields and list primitive styles are validated, migrated, and
 preserved. `strokeStyle`, `strokeWidthSource`, `opacitySource`,
 `pointStyle`, `pointSizeSource`, both `primitiveStyles` blocks, and the label

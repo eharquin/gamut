@@ -7,6 +7,18 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Added
+
+- Comment rows: a row whose first non-whitespace character is `#` becomes an
+  annotation, shown as text and never evaluated, drawn, or referenced;
+  removing the `#` makes it an expression again, in one undo step. Its
+  position, normalization, and slider are cleared, and undo restores them.
+  The text supports `**bold**`, `*italic*`, inline `` `code` ``, backslash
+  escapes, and `[links](https://…)` limited to `http`, `https`, and `mailto`,
+  opened in a new tab with their destination shown; `a*b*c`, `2*3`, and
+  `x_1` stay literal, and raw HTML is shown as text. The expression
+  reference lists the syntax under **Comments** (#187).
+
 ### Fixed
 
 - Saving a graph while a slider animation plays now stops the animation and

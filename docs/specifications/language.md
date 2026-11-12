@@ -42,7 +42,11 @@ retain positions through supported list operations without a list-level
 position field; `position` and vector `head` distribute over compatible lists.
 
 The scalar functions of section 10 are implemented, including `atan2`.
-Annotations, the remaining properties and operators, serialization, and the
+Annotations are implemented as comment rows: editing a source re-derives its
+item's kind from the first non-whitespace character, and an expression that
+becomes an annotation loses its position source, normalization, and control
+in the same undoable edit. Their text renders the Markdown subset of section
+3. The remaining properties and operators, serialization, and the
 generalized algebra-symbol and capability registries in this specification
 remain planned. This section records implementation evidence; it
 does not narrow the normative language.
@@ -97,6 +101,48 @@ not expression syntax, and may contain any valid Unicode text, including further
 `#` characters, accented characters, symbols, and emoji, subject only to the
 common source-length and document-validity limits. For example, `# était sympa`
 is a valid annotation. Inline trailing comments are not supported.
+
+The stored source keeps the leading `#` verbatim, and an item's kind is derived
+from its source on every source edit. A document may still store an
+annotation whose source has no `#`: its kind decides, and its whole source is
+its text until the next edit derives the kind again.
+
+#### Annotation text
+
+Annotation text, without the first `#` and the whitespace around the text, is
+displayed in a restricted Markdown subset. Annotation text is untrusted, since
+shared documents and scene links display text written by someone else, so an
+implementation builds interface elements from it and never parses or injects
+HTML.
+
+- **Emphasis.** `**text**` is bold and `*text*` italic. A run of `*` opens
+  emphasis only after the start of the text, whitespace, or punctuation, and
+  before a non-whitespace character; it closes only after a non-whitespace
+  character, and before whitespace, punctuation, or the end of the text. Each
+  closer pairs with the nearest opener before it; two-star runs on both sides
+  make bold, otherwise italic, and unpaired stars stay literal. `_` is never a
+  delimiter. So `a*b*c`, `2*3`, `2 * 3`, `A**2`, `x_1 and y_1`, and
+  `_text_` stay literal.
+- **Inline code.** A run of backticks opens a code span closed by the next
+  run of the same length; its content is literal, without escapes or
+  emphasis. An unclosed run is literal.
+- **Links.** `[text](destination)` is a link when the destination has no
+  whitespace and starts with `http://` or `https://` followed by a host, or
+  with `mailto:`, case-insensitively. The destination ends at the first `)`.
+  Link text may contain emphasis and code but no link. A link with any other
+  destination, including `javascript:`, `data:`, `file:`, protocol-relative
+  and relative URLs, or one containing a control character, is displayed as
+  the plain source text that wrote it. Links open in a new browsing context
+  with `rel="noopener noreferrer"`; their destination is shown in a tooltip
+  and in the accessible description.
+- **Escapes.** A backslash before `*`, `` ` ``, `[`, `]`, or `\` makes that
+  character literal; before any other character the backslash is literal.
+- **Everything else is text.** Raw HTML, character references, images
+  (`![alt](url)` is displayed as written), headings, lists, and other
+  Markdown constructs are displayed as text.
+
+An annotation row exposes its text without delimiters to assistive
+technology, and its links are reachable with Tab in reading order.
 
 ## 4. Numeric literals and implicit multiplication
 
