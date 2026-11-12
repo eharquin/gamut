@@ -71,10 +71,12 @@ scene.
 
 An invalid link displays its diagnostic and retains the existing active
 document when it can be restored, otherwise the normal initial example. This
-fallback session also disables automatic writes. **Save local copy** explicitly
-writes the current document with a new document identity and enables ordinary
-autosave after success; the header **Save** button does the same and also
-stores the copy in the local library under the name it asks for. Before either
+fallback session also disables automatic writes. The application shows no
+banner in a temporary session ([#287](https://github.com/eharquin/gamut/issues/287)):
+the name “Shared scene (temporary)” and the dot on **Save** show that nothing
+is stored. The header **Save** button explicitly stores the current document in
+the local library under the name it asks for, with a new document identity,
+and enables ordinary autosave after success. Before it
 writes, and before **Open** or **New** in the library panel end the session,
 the previously saved active document is stored in the local library if it is
 not there yet, so that it is never overwritten; if that fails, the session
@@ -97,7 +99,7 @@ In a temporary session it behaves as follows:
   (STORE-015) and the session ends; if that write fails, the session stays
   temporary and the scene stays open.
 - **Add to my library** in **My library** copies the scene. It is an explicit
-  write and behaves like **Save local copy**
+  write and behaves like **Save**
   ([#266](https://github.com/eharquin/gamut/issues/266)): the previously saved
   active document is protected in the same way, then the scene is copied into
   the library with a new document identity, the copy opens, and the temporary

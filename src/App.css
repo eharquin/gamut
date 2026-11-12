@@ -19,24 +19,11 @@
   padding-block: 8px;
 }
 
-.shared-session-notice,
 .share-result {
   padding: 8px 22px;
   background: var(--surface);
   color: var(--text);
   border-bottom: 1px solid var(--border);
-}
-
-.shared-session-notice {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.shared-session-notice .document-command {
-  flex-shrink: 0;
-  white-space: nowrap;
 }
 
 .share-result {

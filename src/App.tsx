@@ -2010,26 +2010,6 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
     } finally { setSharing(false) }
   }
 
-  const saveLocalCopy = () => {
-    // The former active document goes to the library before it is replaced.
-    if (!keepFormerDocument()) {
-      setDocumentDiagnostic('STORE_WRITE_FAILED: The local copy could not be saved. This session remains temporary; JSON export is available.')
-      return
-    }
-    try {
-      const id = crypto.randomUUID()
-      persistence.save(toCanonicalDocument({ ...expressionDoc, id }, theme, resolvedStyles, resolvedOrientation))
-      // Keep undo history; only the identity changes.
-      dispatchHistory({ type: 'update-identity', id })
-      // Reloading must reopen the saved copy, not the original shared scene.
-      window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search)
-      setEphemeral(false)
-      setDocumentDiagnostic(null)
-    } catch {
-      setDocumentDiagnostic('STORE_WRITE_FAILED: The local copy could not be saved. This session remains temporary; JSON export is available.')
-    }
-  }
-
   // The local library of named graphs (#212). Reading the library never
   // writes; a write reads the index again first, and only then migrates the
   // former active document. That document is read here, during the first
@@ -2206,8 +2186,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
   /**
    * Stores the open graph under `name`. A graph that is not already this
    * library graph takes a fresh identity when its own is taken. In a
-   * temporary scene-link session it is Save local copy: the graph takes a new
-   * identity and the session ends.
+   * temporary scene-link session the graph takes a new identity, keeping its
+   * undo history, and the session ends.
    */
   const commitLibrarySave = (name: string, asNew = false): boolean => {
     // Save as new graph stores a fresh identity and leaves the bound graph as saved.
@@ -2596,8 +2576,6 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
       />
 
       <DocumentNotices
-        temporarySession={ephemeral}
-        onSaveLocalCopy={saveLocalCopy}
         copyNotice={copyNotice?.message ?? null}
         shareResult={shareResult}
         onCloseShare={() => setShareResult(null)}
