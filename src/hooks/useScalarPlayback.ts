@@ -70,8 +70,11 @@ export type ScalarPlayback = Readonly<{
   start(item: ExpressionItem, parameters: PlaybackParameters, currentValue: number): void
   /** Pauses one slider; it resumes from the same point when started again. */
   stop(itemId: string): void
-  /** Stops every slider and commits the playback history entry. */
-  stopAll(): void
+  /**
+   * Stops every slider and commits the playback history entry. The reason,
+   * such as "the graph was saved", completes the announcement.
+   */
+  stopAll(reason?: string): void
   /** Forgets where a paused slider stopped, so the next start uses its current value. */
   forgetPaused(itemId: string): void
   /** The latest live-region message about playback. */
@@ -118,13 +121,13 @@ export function useScalarPlayback({
     setActivePlaybacks(next)
   }, [activePlaybacks, dispatchHistory])
 
-  const stopAll = useCallback(() => {
+  const stopAll = useCallback((reason?: string) => {
     if (activePlaybacks.size === 0) return
     const names = [...activePlaybacks.values()].map((playback) => playback.name)
     dispatchHistory({ type: 'commit-transaction' })
     pausedPlaybacks.current.clear()
     playbackSessionNames.current.clear()
-    setAnnouncement(`${animationSubject(names)} stopped.`)
+    setAnnouncement(`${animationSubject(names)} stopped${reason ? ` because ${reason}` : ''}.`)
     setActivePlaybacks(new Map())
   }, [activePlaybacks, dispatchHistory])
 
