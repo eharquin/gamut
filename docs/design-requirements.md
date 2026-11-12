@@ -543,7 +543,7 @@ unchanged.
   per-browser preference, not document content, and is tolerant of
   unavailable storage.
 - **STORE-017:** **Export library** shall download the whole of **My library**
-  as one `.zip` archive named `gamut-library-<date>.zip`, containing one
+  as one `.zip` archive named `gamut-library-YYYY-MM-DD.zip`, containing one
   canonical JSON document per graph, identical to its single-graph export
   (STORE-008), in directories that reproduce the library folders, and a
   versioned manifest `{ version, exportedAt, entries: [{ path, name, id,
