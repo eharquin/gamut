@@ -3622,3 +3622,97 @@ line.manipulation-focus-ring {
   margin: 0;
   color: var(--muted);
 }
+
+/* Embed mode (#215): the canvas fills the frame at any size, including the
+   narrow widths where the editor stacks and scrolls its panels. */
+html.is-embedded body {
+  min-width: 0;
+}
+
+.app-shell.is-embedded .workspace {
+  overflow: hidden;
+}
+
+.app-shell.is-embedded .visualizer,
+.app-shell.is-embedded .canvas-frame {
+  min-height: 0;
+}
+
+/* The two embed controls sit in the bottom-right corner, clear of the
+   viewport toolbar; readable at rest (WCAG 1.4.3), fully opaque on use. */
+.embed-controls {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  border-radius: 6px;
+  opacity: 0.9;
+  transition: opacity 120ms ease;
+}
+
+.app-shell.is-embedded .workspace-frame:hover .embed-controls,
+.embed-unavailable:hover .embed-controls,
+.embed-controls:focus-within {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .embed-controls {
+    opacity: 1;
+  }
+}
+
+.embed-command {
+  min-width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 6px;
+  font: 600 0.75rem var(--font-sans);
+  color: var(--text);
+  text-decoration: none;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 120ms ease, background 120ms ease;
+}
+
+.embed-command:hover {
+  color: var(--accent);
+  background: var(--surface-active);
+}
+
+.embed-command:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.embed-command svg path {
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+.embed-unavailable {
+  position: relative;
+  flex: 1;
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 16px 16px 48px;
+  color: var(--text);
+  text-align: center;
+  background: var(--canvas);
+}
+
+.workspace > .embed-unavailable {
+  min-height: 0;
+}

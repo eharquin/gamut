@@ -13,8 +13,11 @@ export type ViewportDescriptionInput = Readonly<{
   describedKinds: readonly DescribedKind[]
   expressionCount: number
   omittedElements: number
-  /** Lower-case name of what a double-click creates, such as `vector` or `point`. */
-  creationObject: string
+  /**
+   * Lower-case name of what a double-click creates, such as `vector` or
+   * `point`, or `null` where double-click creates nothing (embed mode).
+   */
+  creationObject: string | null
   formatNumber: (value: number) => string
 }>
 
@@ -91,11 +94,11 @@ export function describeViewport({
   creationObject,
   formatNumber,
 }: ViewportDescriptionInput): string {
-  const hint = `Double-click empty viewport space to create a ${creationObject}.`
+  const hint = creationObject === null ? [] : [`Double-click empty viewport space to create a ${creationObject}.`]
   const described = primitives.filter((primitive) =>
     describedKinds.some(({ kind }) => kind === primitive.kind))
   if (described.length === 0) {
-    return `No spatial objects are visible from ${expressionCount} expressions. ${hint}`
+    return [`No spatial objects are visible from ${expressionCount} expressions.`, ...hint].join(' ')
   }
   const counts = describedKinds.map(({ kind, singular, plural }) => {
     const count = described.filter((primitive) => primitive.kind === kind).length
@@ -110,6 +113,6 @@ export function describeViewport({
     ...(omittedElements > 0
       ? [`${omittedElements} additional list elements are omitted by the rendering limit.`]
       : []),
-    hint,
+    ...hint,
   ].join(' ')
 }

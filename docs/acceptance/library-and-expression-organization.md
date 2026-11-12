@@ -26,6 +26,7 @@ supported browsers. The deployed evidence follows publication.
 | LEO-010 — Coordinate tuples and weighted points | — | Tuple and weighted-drag fixtures in both algebras; language §7, VEC-001, PGA-VIZ-003, PGA convention, and PGA tuple requirement updated ([#180](https://github.com/eharquin/gamut/issues/180), [#181](https://github.com/eharquin/gamut/issues/181)) | Pending |
 | LEO-011 — Compatibility | — | Regression fixtures: 0.1.0 and 0.2.0 documents, 0.2.0 scene links, a 0.2.0 library snapshot; version 8 migration tests; downgrade limitation ([#275](https://github.com/eharquin/gamut/issues/275)) in the release notes | Pending |
 | LEO-012 — Accessibility and release | — | Manual checklist below on the supported browsers; `npm run verify` on the release commit; [PGA 2D Foundation record](pga-2d-foundation.md) complete ([#192](https://github.com/eharquin/gamut/issues/192)); release checklist below | Pending |
+| LEO-013 — Embed mode | — | Detection, embed-mode, and storage-spy tests ([#215](https://github.com/eharquin/gamut/issues/215)); manual check in a Slides.com iframe block below | Pending |
 
 ## Specification ownership
 
@@ -114,6 +115,12 @@ To be completed on every browser in the table above, on the release build.
 - [ ] Open the 0.1.0 and 0.2.0 regression documents and a 0.2.0 scene link
   unchanged; after running 0.2.0 in the same profile, open 0.3.0 and confirm
   the 0.2.0 library is listed with every graph.
+- [ ] Paste a scene link, unchanged, into a Slides.com iframe block (16:9) and
+  present: no header, notice, or panel is shown; the canvas fills the block
+  and follows a resize of the block; a vector or point can be dragged;
+  **Open in GAMUT** opens the same scene in the full application in a new
+  tab; **Fullscreen** is offered and works when the host allows it, and its
+  absence is recorded otherwise; the controls are reachable with Tab (#215).
 - [ ] Narrow the window below 720 px: the library panel opens as an
   overlay, closes on Escape, and returns focus to **Library**; nothing else
   collapses.

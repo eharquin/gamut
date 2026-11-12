@@ -35,9 +35,9 @@ keep this statement true. Missing Web Crypto or compression support produces a t
 diagnostic and leaves JSON import/export available. SHA-256 detects corruption;
 it does not authenticate the author, so the document is still untrusted input.
 
-Unknown fragment options are ignored. Display options such as `embed`,
-`autoplay`, and a theme override are reserved for #215 and have no behavior
-in this implementation. The canonical document's theme is preserved.
+Unknown fragment options are ignored. The display options of
+[embed mode](#embed-mode) (`embed`, `theme`, `lock`) are read next to `scene`
+and never change the canonical document, whose theme is preserved.
 
 ## Validation and limits
 
@@ -123,9 +123,75 @@ The application generates no iframe snippet. Slides.com accepts a plain HTTPS
 URL in its iframe source field, so the scene link is enough to embed a scene;
 actual host integration and host-specific URL-length limits require a host
 test ([Slides.com iframe documentation](https://slides.com/docs/iframe-blocks)).
-An embedded link currently opens the full editor. A focused viewport,
-responsive embed controls, autoplay, the application fullscreen control, and
-“Open in GAMUT” belong to #215. Viewport scalar sliders belong to #190. Native
-slides, a `postMessage` API, and release-pinned hosting are outside #213.
+An embedded link opens in [embed mode](#embed-mode). Viewport scalar sliders
+belong to #190. Native slides, a `postMessage` API, and release-pinned hosting
+are outside #213 and #215.
 The browser compression format is specified by the
 [Compression Standard](https://compression.spec.whatwg.org/).
+
+## Embed mode
+
+Embed mode (STORE-019, [#215](https://github.com/eharquin/gamut/issues/215))
+shows a scene inside a presentation iframe with the canvas alone.
+
+### Activation
+
+Embed mode turns on automatically when GAMUT runs inside a frame
+(`window.self !== window.top`; a top window that cannot be read counts as a
+frame), so scene links already pasted in presentations need no change. The
+fragment overrides the detection:
+
+| Option | Effect |
+|---|---|
+| `embed=1` | Forces embed mode outside a frame, for testing in a tab. |
+| `embed=0` | Turns embed mode off inside a frame: the full editor opens. |
+| `theme=light` or `theme=dark` | Overrides the document theme for this view; the document is unchanged. |
+| `lock=1` | Opens with the viewport locked: no pan or zoom by pointer, wheel, or keyboard, and no zoom controls, while objects stay draggable. |
+
+Options sit next to `scene`, in any order, for example
+`#scene=1.deflate-raw.…&embed=1&lock=1`. They are read without decoding the
+scene payload. Unknown options and unknown values are ignored without
+error, and a repeated option counts by its first occurrence. The 64 KiB
+fragment limit counts them. An `autoplay` option is not implemented: playback
+state is not part of the document, and embed mode offers no control to pause
+an animation (A11Y-004).
+
+### What is shown
+
+The viewport fills the frame and follows its size, at any frame size. There
+is no header, notice, diagnostic banner, expression panel, library panel, or
+panel toggle, and sliders are not shown until #190 places them in the
+viewport. As a consequence, no animation can start in embed mode until #190
+or an `autoplay` option exists.
+
+Free objects stay draggable by pointer and keyboard. Base anchoring gestures
+remain, since they are viewport manipulations: dragging a base onto another
+object anchors it, Enter cycles the anchor candidates, and Delete or Backspace
+unlinks an anchored base. The viewport can be panned and zoomed by pointer,
+wheel, and keyboard unless `lock=1` is set; the viewport toolbar keeps
+**Zoom in**, **Zoom out**, and **Recenter view**, for touch screens without
+pinch zoom, and drops the lock, the square-canvas command, and the zoom field.
+With `lock=1` the toolbar is hidden. Undo and redo shortcuts still apply.
+Double-clicking the viewport creates nothing, and dropping a file opens
+nothing.
+
+Two discreet controls sit in the bottom-right corner, after the canvas in the
+keyboard order:
+
+- **Open in GAMUT**, a link that opens the full application in a new tab with
+  the same `scene` entry and no display option, so the scene opens as an
+  ordinary temporary session. Edits made in the frame are not carried. It is
+  absent without a `scene` entry, since the application would then open the
+  viewer's own active document rather than what the frame shows.
+- **Enter fullscreen** / **Exit fullscreen**, shown only when the host allows
+  fullscreen (`document.fullscreenEnabled`, which an iframe grants with
+  `allowfullscreen`). It toggles fullscreen for the whole page.
+
+### Storage
+
+Embed mode never reads or writes browser storage: no active document, library,
+viewport-lock, panel, or reference preference. It works when storage is
+blocked or throws. Without a `scene` entry it shows the default example and
+writes nothing. A scene that fails validation shows a plain sentence with its
+diagnostic code in parentheses, as an alert, with **Open in GAMUT**, instead
+of falling back on the active document as the full editor does.

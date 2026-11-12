@@ -68,6 +68,19 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   saved, exported, and carried by scene links and library graphs; earlier
   documents open with their values shown. Release 0.2.0 cannot open a version
   8 document (#191).
+- Embed mode for presentations: a scene opened inside an iframe, such as an
+  iframe block on Slides.com, shows only the canvas, filling the frame and
+  following its size, without the header, notices, expression panel, library
+  panel, or panel toggles. Free objects stay draggable and the viewport can be
+  panned and zoomed, with **Zoom in**, **Zoom out**, and **Recenter view**
+  kept; sliders are not shown in this mode. A discreet **Open in GAMUT** link
+  opens the same scene in the full application in a new tab, and a
+  **Fullscreen** button appears when the host allows it.
+  Embed mode reads and writes no browser storage. `embed=1` in the scene-link
+  fragment forces it outside an iframe and `embed=0` turns it off inside one;
+  `theme=light|dark` and `lock=1` are optional display options, and unknown
+  options are ignored. Links already pasted in presentations work unchanged
+  (#215).
 
 ### Library
 
