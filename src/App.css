@@ -3315,6 +3315,12 @@ line.manipulation-focus-ring {
   border-left: 1px solid var(--border);
 }
 
+/* Laid over the viewport only, never over the expression panel (A11Y-012):
+   the panel is placed in the viewport region, or over the workspace in NoViz. */
+.visualizer {
+  position: relative;
+}
+
 .library-panel.is-overlay {
   position: absolute;
   top: 0;
@@ -3375,6 +3381,10 @@ line.manipulation-focus-ring {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.library-section[hidden] {
+  display: none;
 }
 
 .library-temporary {

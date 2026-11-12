@@ -13,6 +13,7 @@ import { showcaseItems, vga2FoundationExampleDocument } from '../document/expres
 import { readExamples, SHIPPED_EXAMPLES } from '.'
 
 const registry = createBuiltinAlgebraRegistry()
+const REGENERATE = 'Run `npm run examples:regenerate` to rewrite the examples in the current canonical format.'
 const restoreOptions = {
   visualizerAvailable: (visualizerId: string) => registry.resolveVisualizer(visualizerId) !== null,
 }
@@ -25,11 +26,22 @@ describe('shipped examples (#266, STORE-015)', () => {
     expect(new Set(examples.map((example) => example.document.id)).size).toBe(examples.length)
   })
 
+  it('isolates an unreadable example with a diagnostic and keeps the others', () => {
+    const read = readExamples([
+      { id: 'broken', source: '{"formatVersion": 7' },
+      SHIPPED_EXAMPLES[0],
+    ])
+    expect(read.examples.map((example) => example.id)).toEqual([SHIPPED_EXAMPLES[0].id])
+    expect(read.diagnostic).toBe('EXAMPLE_INVALID: broken could not be read.')
+    // The shipped examples are read on their own, and not replaced by that read.
+    expect(readExamples().diagnostic).toBeNull()
+  })
+
   for (const { id, source } of SHIPPED_EXAMPLES) {
     describe(id, () => {
       it('is stored in the current canonical format, byte for byte', () => {
-        expect(JSON.parse(source).formatVersion).toBe(CURRENT_FORMAT_VERSION)
-        expect(source).toBe(`${serializeCanonicalDocument(parseCanonicalDocument(source))}\n`)
+        expect(JSON.parse(source).formatVersion, REGENERATE).toBe(CURRENT_FORMAT_VERSION)
+        expect(source, REGENERATE).toBe(`${serializeCanonicalDocument(parseCanonicalDocument(source))}\n`)
       })
 
       it('opens and evaluates without diagnostics', () => {

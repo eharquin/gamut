@@ -4520,6 +4520,8 @@ describe('local library of named graphs (#212)', () => {
     const open = within(openLibrary()).getByRole('button', { name: 'Open Rotation talk' })
     expect(open).toHaveAttribute('aria-current', 'true')
     expect(open.closest('li')!.querySelector('time')).toHaveAttribute('dateTime', expect.stringMatching(/^\d{4}-\d\d-\d\dT/))
+    // Each graph shows its algebra, which the filter replaces as grouping (#266).
+    expect(open.closest('li')!.querySelector('.library-algebra')).toHaveTextContent('VGA · 2D')
   })
 
   it('creates, opens, renames, duplicates, and deletes graphs, which survive a reload', () => {
@@ -4631,7 +4633,8 @@ describe('local library of named graphs (#212)', () => {
     let menu = openLibrary()
     expect(window.localStorage.getItem('gamut.library.v1')).toBeNull()
     expect(within(menu).getByRole('button', { name: 'Open Former scene' })).toHaveAttribute('aria-current', 'true')
-    expect(within(menu).getByRole('button', { name: 'Open Points' })).toBeInTheDocument()
+    expect(within(menu).getByRole('button', { name: 'Open Points' }).closest('li')!.querySelector('.library-algebra'))
+      .toHaveTextContent('PGA · 2D')
     // The algebra filter replaces the grouping by algebra.
     fireEvent.click(within(menu).getByRole('button', { name: 'PGA' }))
     expect(within(menu).getAllByRole('button', { name: /^Open / }).map((button) => button.getAttribute('aria-label')))
@@ -4696,6 +4699,16 @@ describe('local library of named graphs (#212)', () => {
       expect(within(panel).getByRole('tabpanel')).toHaveAccessibleName('Examples')
       fireEvent.keyDown(examples, { key: 'Home' })
       expect(mine).toHaveFocus()
+      fireEvent.keyDown(mine, { key: 'End' })
+      expect(examples).toHaveFocus()
+      fireEvent.keyDown(examples, { key: 'ArrowLeft' })
+      expect(mine).toHaveFocus()
+      expect(mine).toHaveAttribute('aria-selected', 'true')
+      // Both tabs control a rendered panel; the other section is hidden.
+      for (const tab of within(panel).getAllByRole('tab')) {
+        expect(document.getElementById(tab.getAttribute('aria-controls')!)).toHaveAttribute('role', 'tabpanel')
+      }
+      expect(document.getElementById('library-section-examples')).not.toBeVisible()
 
       // Docked, Escape elsewhere belongs to the editor and leaves the panel open.
       source().focus()
@@ -4708,24 +4721,60 @@ describe('local library of named graphs (#212)', () => {
       expect(libraryButton()).toHaveFocus()
     })
 
+    const narrowWindow = () => vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === LIBRARY_OVERLAY_QUERY,
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+    }))
+
     it('opens over the viewport below 720 pixels and closes on Escape', () => {
-      vi.stubGlobal('matchMedia', (query: string) => ({
-        matches: query === LIBRARY_OVERLAY_QUERY,
-        media: query,
-        addEventListener: () => {},
-        removeEventListener: () => {},
-        addListener: () => {},
-        removeListener: () => {},
-      }))
+      narrowWindow()
       render(<App />)
       fireEvent.click(libraryButton())
       expect(libraryMenu()).toHaveClass('is-overlay')
-      // Opening it collapses nothing else.
-      expect(screen.getByRole('complementary', { name: 'Expressions' })).not.toHaveClass('is-collapsed')
+      // Laid over the viewport only: the expression panel stays uncovered,
+      // and opening the library collapses nothing else.
+      const expressions = screen.getByRole('complementary', { name: 'Expressions' })
+      expect(libraryMenu().closest('.visualizer')).not.toBeNull()
+      expect(expressions).not.toContainElement(libraryMenu())
+      expect(expressions).not.toHaveClass('is-collapsed')
       source().focus()
       fireEvent.keyDown(document.body, { key: 'Escape' })
       expect(screen.queryByRole('region', { name: 'Library' })).not.toBeInTheDocument()
       expect(libraryButton()).toHaveFocus()
+    })
+
+    it('dismisses a confirmation with Escape before the overlay', () => {
+      narrowWindow()
+      render(<App />)
+      saveAs('Kept')
+      const panel = openLibrary()
+      fireEvent.click(within(panel).getByRole('button', { name: 'Delete Kept' }))
+      expect(within(panel).getByRole('alertdialog', { name: 'Confirm' })).toBeInTheDocument()
+      fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+      expect(within(libraryMenu()).queryByRole('alertdialog')).not.toBeInTheDocument()
+      expect(index()).toMatchObject([{ name: 'Kept' }])
+      fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+      expect(screen.queryByRole('region', { name: 'Library' })).not.toBeInTheDocument()
+    })
+
+    it('leaves Escape to another open popover over the overlay', () => {
+      narrowWindow()
+      render(<App />)
+      fireEvent.change(source(), { target: { value: '' } })
+      fireEvent.click(screen.getByRole('button', { name: 'VGA · 2D. Change algebra' }))
+      fireEvent.click(within(screen.getByRole('menu')).getAllByRole('menuitemradio')[1])
+      fireEvent.click(libraryButton())
+      fireEvent.click(screen.getAllByRole('button', { name: 'Normalization: off' })[0])
+      const popover = screen.getByRole('dialog', { name: 'Normalize' })
+      const inside = within(popover).getAllByRole('button')[0]
+      inside.focus()
+      expect(popover).toContainElement(document.activeElement as HTMLElement)
+      fireEvent.keyDown(inside, { key: 'Escape' })
+      expect(libraryMenu()).toBeInTheDocument()
     })
 
     it('opens an example unbound, and adds a copy to my library without changing the example', () => {

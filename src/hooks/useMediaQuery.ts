@@ -8,16 +8,30 @@ const matches = (query: string): boolean => {
   }
 }
 
-/** Whether a CSS media query matches, following later changes of the window. */
+/**
+ * Whether a CSS media query matches, following later changes of the window.
+ * Without `matchMedia`, or when it throws, the query never matches.
+ */
 export function useMediaQuery(query: string): boolean {
   const [matched, setMatched] = useState(() => matches(query))
   useEffect(() => {
-    const list = window.matchMedia?.(query)
+    let list: MediaQueryList | undefined
+    try {
+      list = window.matchMedia?.(query)
+    } catch {
+      list = undefined
+    }
     if (!list) return
-    const change = () => setMatched(list.matches)
+    const media = list
+    const change = () => setMatched(media.matches)
     change()
-    list.addEventListener?.('change', change)
-    return () => list.removeEventListener?.('change', change)
+    // Older Safari versions only offer the deprecated listener methods.
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', change)
+      return () => media.removeEventListener('change', change)
+    }
+    media.addListener?.(change)
+    return () => media.removeListener?.(change)
   }, [query])
   return matched
 }

@@ -112,6 +112,33 @@ describe('scene sharing in the application', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
   })
 
+  it('adds an example to my library in a temporary session without ending the session (#266)', async () => {
+    const source = serializeCanonicalDocument(saved)
+    window.localStorage.setItem(ACTIVE_DOCUMENT_KEY, source)
+    await openSharedScene()
+    const hash = window.location.hash
+    const writes = vi.spyOn(Storage.prototype, 'setItem')
+    fireEvent.click(screen.getByRole('button', { name: 'Library' }))
+    const panel = screen.getByRole('region', { name: 'Library' })
+    fireEvent.click(within(panel).getByRole('tab', { name: 'Examples' }))
+    fireEvent.click(within(panel).getByRole('button', { name: 'Add VGA 2D Rotation Example to my library' }))
+
+    // The former active document is migrated, and the example copy is stored.
+    const entries: { id: string; name: string }[] = JSON.parse(window.localStorage.getItem('gamut.library.v1')!).entries
+    expect(entries.map((entry) => entry.id)).toContain('saved-document')
+    expect(window.localStorage.getItem('gamut.library.v1.document.saved-document')).toBe(source)
+    const copy = entries.find((entry) => entry.name === 'VGA 2D Rotation Example')!
+    expect(parseCanonicalDocument(window.localStorage.getItem(`gamut.library.v1.document.${copy.id}`)!).items[0].source)
+      .toBe('V1 = vector(0.66, 3.042)')
+    // The scene stays open and temporary; the active document is untouched.
+    expect(window.localStorage.getItem(ACTIVE_DOCUMENT_KEY)).toBe(source)
+    expect(writes.mock.calls.map(([key]) => key)).not.toContain(ACTIVE_DOCUMENT_KEY)
+    expect(window.location.hash).toBe(hash)
+    expect(screen.getByRole('button', { name: 'Save local copy' })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Open graph name' })).toHaveValue('Shared scene (temporary)')
+    expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('Shared = vector(3, 4)')
+  })
+
   it('writes nothing when the library panel opens in a temporary session (#212)', async () => {
     const source = serializeCanonicalDocument(saved)
     window.localStorage.setItem(ACTIVE_DOCUMENT_KEY, source)

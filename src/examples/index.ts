@@ -32,14 +32,17 @@ export type ExampleRead = Readonly<{
   diagnostic: string | null
 }>
 
-let read: ExampleRead | null = null
+let shipped: ExampleRead | null = null
 
-/** Reads the shipped examples once; an unreadable example is isolated with a diagnostic. */
-export function readExamples(): ExampleRead {
-  if (read) return read
+/**
+ * Reads the examples, the shipped ones once; an unreadable example is
+ * isolated with a diagnostic and the others stay listed.
+ */
+export function readExamples(sources: readonly Readonly<{ id: string; source: string }>[] = SHIPPED_EXAMPLES): ExampleRead {
+  if (sources === SHIPPED_EXAMPLES && shipped) return shipped
   const examples: LibraryExample[] = []
   const failed: string[] = []
-  for (const { id, source } of SHIPPED_EXAMPLES) {
+  for (const { id, source } of sources) {
     try {
       const document = parseCanonicalDocument(source)
       examples.push({
@@ -53,9 +56,10 @@ export function readExamples(): ExampleRead {
       failed.push(id)
     }
   }
-  read = {
+  const read = {
     examples,
     diagnostic: failed.length === 0 ? null : `EXAMPLE_INVALID: ${failed.join(', ')} could not be read.`,
   }
+  if (sources === SHIPPED_EXAMPLES) shipped = read
   return read
 }

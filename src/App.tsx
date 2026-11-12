@@ -2025,6 +2025,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const saveButtonRef = useRef<HTMLButtonElement | null>(null)
   const libraryButtonRef = useRef<HTMLButtonElement | null>(null)
   const libraryReturnFocusRef = useRef<HTMLButtonElement | null>(null)
+  /** The viewport the library panel is laid over on a narrow window. */
+  const [viewportHost, setViewportHost] = useState<HTMLElement | null>(null)
   const currentCanonical = useMemo(
     () => toCanonicalDocument(expressionDoc, theme, resolvedStyles, resolvedOrientation),
     [expressionDoc, theme, resolvedStyles, resolvedOrientation],
@@ -2281,7 +2283,16 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   /** Opens a shipped example unbound from the library, as a new graph with its own identity (#266). */
   const openExample = (example: LibraryExample) => {
     const restored = fromCanonicalDocument({ ...example.document, id: crypto.randomUUID() }, restoreOptions)
+    try {
+      requireAvailableAlgebra(algebraRegistry, restored.document.algebra)
+    } catch (error) {
+      reportLibraryFailure(error, `EXAMPLE_INVALID: “${example.name}” could not be opened.${
+        error instanceof DocumentFormatError ? ` ${error.code}: ${error.message}` : ''}`)
+      return
+    }
     if (!keepFormerDocument()) return
+    // An example stores the system theme only because a canonical document
+    // needs one; it is not a choice of its author, so the reader's theme stays.
     openGraph(restored.document, theme, restored.recoveryDiagnostic, null)
   }
   const addExampleToLibrary = (example: LibraryExample) => {
@@ -2696,7 +2707,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           onKeyDown={resizePanelWithKeyboard}
         />}
 
-        {visualizerActive && <section className="visualizer" aria-label={visualizer?.regionName}>
+        {visualizerActive && <section ref={setViewportHost} className="visualizer" aria-label={visualizer?.regionName}>
           <div ref={canvasFrameRef} className="canvas-frame">
             {panelHidden && <button
               ref={expandPanelButtonRef}
@@ -3015,6 +3026,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           // A save request asks for a name in a fresh panel.
           key={libraryNaming ? 'naming' : 'browsing'}
           returnFocusRef={libraryReturnFocusRef}
+          overlayHost={viewportHost}
           entries={library?.entries ?? []}
           algebras={algebraRegistry.definitions()}
           openId={ephemeral ? '' : boundId ?? ''}

@@ -82,6 +82,31 @@ The header shows “Shared scene (temporary)” as the graph name until then. It
 fragment from the address, so reloading opens the saved copy. A failed save retains the temporary session and JSON
 export. No separate local-library implementation is introduced here.
 
+### Library panel in a temporary session
+
+The library panel (STORE-014) replaces the library menu of release 0.2.0.
+In a temporary session it behaves as follows:
+
+- **My library** lists the stored graphs and states that the open scene is
+  temporary and not stored. Opening a graph ends the session as **Open**
+  does above.
+- Opening an example from **Examples** behaves like opening a library graph:
+  the previously saved active document is stored in the library first when it
+  is not there yet, then the example opens unbound from any library entry
+  (STORE-015) and the session ends; if that write fails, the session stays
+  temporary and the scene stays open.
+- **Add to my library** in **My library** copies the scene. It is an explicit
+  write and behaves like **Save local copy**
+  ([#266](https://github.com/eharquin/gamut/issues/266)): the previously saved
+  active document is protected in the same way, then the scene is copied into
+  the library with a new document identity, the copy opens, and the temporary
+  session ends.
+- **Add to my library** on an example copies the example, not the scene: the
+  previously saved active document is protected in the same way, the copy is
+  stored in the library with a new document identity, and the scene stays
+  open, temporary, and unsaved; the active document and the address are not
+  written ([#266](https://github.com/eharquin/gamut/issues/266)).
+
 ## Embedding and scope
 
 The application generates no iframe snippet. Slides.com accepts a plain HTTPS

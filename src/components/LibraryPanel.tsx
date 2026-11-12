@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type RefObject } from 'react'
+import { createPortal } from 'react-dom'
 import { filterLibraryEntries, type LibraryEntry } from '../document/documentLibrary'
 import type { AlgebraDefinition } from '../algebra/algebraDefinition'
 import { readExamples, type LibraryExample } from '../examples'
@@ -24,6 +25,12 @@ type Pending =
 export type LibraryPanelProps = Readonly<{
   /** The button focus returns to on close: Library, or Save when Save asked for a name. */
   returnFocusRef: RefObject<HTMLButtonElement | null>
+  /**
+   * The viewport the panel is laid over on a narrow window, so that it never
+   * covers the expression panel; without a viewport (NoViz) it covers the
+   * workspace.
+   */
+  overlayHost: HTMLElement | null
   entries: readonly LibraryEntry[]
   /** The registered algebras, in filter order; the filter shows their family, such as `VGA`. */
   algebras: readonly Pick<AlgebraDefinition, 'algebraId' | 'badge'>[]
@@ -86,7 +93,7 @@ const SECTIONS: readonly Readonly<{ id: Section; label: string }>[] = [
  * panel; Escape answers a confirmation before it closes the panel.
  */
 export function LibraryPanel({
-  returnFocusRef, entries, algebras, openId, naming, diagnostic,
+  returnFocusRef, overlayHost, entries, algebras, openId, naming, diagnostic,
   unsavedChanges, temporarySession, currentName,
   onSaveAs, onSaveAsNew, onNew, onOpen, onRename, onDuplicate, onDelete,
   onOpenExample, onAddExample, onAddScene, onClose,
@@ -113,8 +120,11 @@ export function LibraryPanel({
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key !== 'Escape' || event.defaultPrevented) return
       // Docked, the panel answers Escape only while it holds the focus; laid
-      // over the viewport, it closes on Escape wherever the focus is.
-      if (!overlayRef.current && !ref.current?.contains(document.activeElement)) return
+      // over the viewport, it closes on Escape wherever the focus is, except
+      // inside another dialog or popover, which answers it first.
+      const focused = document.activeElement
+      const inPanel = !!ref.current?.contains(focused)
+      if (!inPanel && (!overlayRef.current || focused?.closest('[role="dialog"], [role="alertdialog"]'))) return
       if (pendingRef.current) setPending(null)
       else onClose()
     }
@@ -236,7 +246,7 @@ export function LibraryPanel({
   const shownEntries = filterLibraryEntries(entries, algebraId)
   const shownExamples = examples.filter((example) => algebraId === null || example.algebraId === algebraId)
 
-  return (
+  const panel = (
     <section
       ref={ref}
       id="library-panel"
@@ -294,93 +304,94 @@ export function LibraryPanel({
           ))}
         </div>
         {confirmation}
-        {section === 'mine' ? (
-          <div className="library-section" id="library-section-mine" role="tabpanel" aria-labelledby="library-tab-mine">
-            {temporarySession && (
-              <div className="library-temporary">
-                <p>This shared scene is temporary: browser storage is not used until you add it to your library.</p>
-                <button type="button" className="library-add-scene" onClick={onAddScene}>Add to my library</button>
-              </div>
-            )}
-            {diagnostic && <p className="library-diagnostic" role="alert">{diagnostic}</p>}
-            <div className="library-commands">
-              <button type="button" className="library-new" onClick={requestNew}>+ New graph</button>
-              {!naming && !savingAsNew && (
-                <button
-                  type="button"
-                  className="library-save-as"
-                  onClick={() => { setNameDraft(`${currentName} copy`); setSavingAsNew(true) }}
-                >Save as new graph…</button>
-              )}
+        {/* Both sections stay rendered, so that every tab controls its panel; the other one is hidden. */}
+        <div className="library-section" id="library-section-mine" role="tabpanel" aria-labelledby="library-tab-mine"
+          hidden={section !== 'mine'}>
+          {temporarySession && (
+            <div className="library-temporary">
+              <p>This shared scene is temporary: browser storage is not used until you add it to your library.</p>
+              <button type="button" className="library-add-scene" onClick={onAddScene}>Add to my library</button>
             </div>
-            {shownEntries.length === 0 ? (
-              <p className="library-empty">{entries.length === 0
-                ? 'No saved graphs yet. Save keeps the open graph here.'
-                : 'No saved graphs in this algebra.'}</p>
-            ) : (
-              <ul className="library-list" aria-label="Saved graphs">
-                {shownEntries.map((entry) => (
-                  <li key={entry.id} className={entry.id === openId ? 'is-open' : undefined}>
-                    <button
-                      type="button"
-                      className="library-open"
-                      aria-current={entry.id === openId ? 'true' : undefined}
-                      aria-label={`Open ${entry.name}`}
-                      onClick={() => requestOpen(entry)}
-                    >
-                      <span className="library-name">{entry.name}</span>
-                    </button>
-                    <div className="library-meta">
-                      <span className="library-algebra">{label(entry.algebraId)}</span>
-                      <time dateTime={entry.updatedAt}>{formatDate(entry.updatedAt)}</time>
-                      <div className="library-actions">
-                        <button type="button" aria-label={`Rename ${entry.name}`} title="Rename"
-                          onClick={() => setPending({ kind: 'rename', entry, draft: entry.name })}>Rename</button>
-                        <button type="button" aria-label={`Duplicate ${entry.name}`} title="Duplicate"
-                          onClick={() => onDuplicate(entry)}>Duplicate</button>
-                        <button type="button" aria-label={`Delete ${entry.name}`} title="Delete"
-                          onClick={() => setPending({ kind: 'delete', entry })}>Delete</button>
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+          )}
+          {diagnostic && <p className="library-diagnostic" role="alert">{diagnostic}</p>}
+          <div className="library-commands">
+            <button type="button" className="library-new" onClick={requestNew}>+ New graph</button>
+            {!naming && !savingAsNew && (
+              <button
+                type="button"
+                className="library-save-as"
+                onClick={() => { setNameDraft(`${currentName} copy`); setSavingAsNew(true) }}
+              >Save as new graph…</button>
             )}
           </div>
-        ) : (
-          <div className="library-section" id="library-section-examples" role="tabpanel" aria-labelledby="library-tab-examples">
-            {diagnostic && <p className="library-diagnostic" role="alert">{diagnostic}</p>}
-            {examplesDiagnostic && <p className="library-diagnostic" role="alert">{examplesDiagnostic}</p>}
-            <p className="library-note">Examples are read-only. Add one to your library to keep your changes.</p>
-            {shownExamples.length === 0 ? (
-              <p className="library-empty">No examples in this algebra.</p>
-            ) : (
-              <ul className="library-list" aria-label="Examples">
-                {shownExamples.map((example) => (
-                  <li key={example.id}>
-                    <button
-                      type="button"
-                      className="library-open"
-                      aria-label={`Open example ${example.name}`}
-                      onClick={() => requestExample(example)}
-                    >
-                      <span className="library-name">{example.name}</span>
-                      {example.description && <span className="library-description">{example.description}</span>}
-                    </button>
-                    <div className="library-meta">
-                      <span className="library-algebra">{label(example.algebraId)}</span>
-                      <div className="library-actions">
-                        <button type="button" aria-label={`Add ${example.name} to my library`} title="Add to my library"
-                          onClick={() => onAddExample(example)}>Add to my library</button>
-                      </div>
+          {shownEntries.length === 0 ? (
+            <p className="library-empty">{entries.length === 0
+              ? 'No saved graphs yet. Save keeps the open graph here.'
+              : 'No saved graphs in this algebra.'}</p>
+          ) : (
+            <ul className="library-list" aria-label="Saved graphs">
+              {shownEntries.map((entry) => (
+                <li key={entry.id} className={entry.id === openId ? 'is-open' : undefined}>
+                  <button
+                    type="button"
+                    className="library-open"
+                    aria-current={entry.id === openId ? 'true' : undefined}
+                    aria-label={`Open ${entry.name}`}
+                    onClick={() => requestOpen(entry)}
+                  >
+                    <span className="library-name">{entry.name}</span>
+                  </button>
+                  <div className="library-meta">
+                    <span className="library-algebra">{label(entry.algebraId)}</span>
+                    <time dateTime={entry.updatedAt}>{formatDate(entry.updatedAt)}</time>
+                    <div className="library-actions">
+                      <button type="button" aria-label={`Rename ${entry.name}`} title="Rename"
+                        onClick={() => setPending({ kind: 'rename', entry, draft: entry.name })}>Rename</button>
+                      <button type="button" aria-label={`Duplicate ${entry.name}`} title="Duplicate"
+                        onClick={() => onDuplicate(entry)}>Duplicate</button>
+                      <button type="button" aria-label={`Delete ${entry.name}`} title="Delete"
+                        onClick={() => setPending({ kind: 'delete', entry })}>Delete</button>
                     </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="library-section" id="library-section-examples" role="tabpanel" aria-labelledby="library-tab-examples"
+          hidden={section !== 'examples'}>
+          {diagnostic && <p className="library-diagnostic" role="alert">{diagnostic}</p>}
+          {examplesDiagnostic && <p className="library-diagnostic" role="alert">{examplesDiagnostic}</p>}
+          <p className="library-note">Examples are read-only. Add one to your library to keep your changes.</p>
+          {shownExamples.length === 0 ? (
+            <p className="library-empty">No examples in this algebra.</p>
+          ) : (
+            <ul className="library-list" aria-label="Examples">
+              {shownExamples.map((example) => (
+                <li key={example.id}>
+                  <button
+                    type="button"
+                    className="library-open"
+                    aria-label={`Open example ${example.name}`}
+                    onClick={() => requestExample(example)}
+                  >
+                    <span className="library-name">{example.name}</span>
+                    {example.description && <span className="library-description">{example.description}</span>}
+                  </button>
+                  <div className="library-meta">
+                    <span className="library-algebra">{label(example.algebraId)}</span>
+                    <div className="library-actions">
+                      <button type="button" aria-label={`Add ${example.name} to my library`} title="Add to my library"
+                        onClick={() => onAddExample(example)}>Add to my library</button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </section>
   )
+  return overlay && overlayHost ? createPortal(panel, overlayHost) : panel
 }
