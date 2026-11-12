@@ -17,6 +17,7 @@ than promising dates or complete feature lists.
 
 ## 0.1 — Stable VGA(2) workflow
 
+Released as [MultiVector 0.1.0](docs/releases/0.1.0.md) on 2026-09-13.
 Establish the first reusable release around vector geometric algebra in two
 dimensions:
 
@@ -28,22 +29,21 @@ dimensions:
 
 ## 0.2 — Multi-algebra foundation
 
-Released as [0.2.0](docs/releases/0.2.0.md) on 2026-11-10. Demonstrates that
-the architecture is not a VGA-specific application:
+Released as [0.2.0](docs/releases/0.2.0.md) on 2026-11-10; its PGA(2)
+acceptance is pending ([#192](https://github.com/eharquin/gamut/issues/192)).
+Introduces the pieces that make the architecture not VGA-specific:
 
 - a registered algebra-definition and capability boundary;
 - PGA(2) with versioned projective conventions;
 - points, ideal entities, lines, incidence, join/meet, and Euclidean motions;
 - canonical documents that preserve algebra identity and configuration.
 
-Still open from this foundation: the accepted PGA(2) research workflow
-([#192](https://github.com/eharquin/gamut/issues/192), planned for 0.3) and
-comparative reference fixtures
-([#19](https://github.com/eharquin/gamut/issues/19)).
+The PGA(2) research workflow is claimed once its acceptance record is
+complete, planned for 0.3.
 
-## 0.3 — Library and expression organisation
+## 0.3 — Library and expression organization
 
-Make documents easier to organise, find and teach with
+Make documents easier to organize, find and teach with
 ([scope](docs/releases/0.3.0.md), [milestone](https://github.com/eharquin/gamut/milestone/4)):
 
 - a library panel with personal graphs and shipped example scenes, in folders,
@@ -57,8 +57,9 @@ Make documents easier to organise, find and teach with
 
 Expand according to research value and validation evidence. Candidate outcomes
 include VGA/PGA 3D, conformal workflows, NoViz calculation, figure export, and
-reproducible sharing. An algebra enters a release only when its conventions,
-interpretation, numerical behavior, and examples are independently verified.
+reproducible sharing beyond the scene links of 0.2. An algebra enters a release
+only when its conventions, interpretation, numerical behavior, and examples are
+independently verified.
 
 ## 1.0 — JOSS research release
 
