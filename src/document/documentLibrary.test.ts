@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { serializeCanonicalDocument, toCanonicalDocument, type CanonicalDocument } from './canonicalDocument'
 import {
   comparableSource,
+  addCopyToLibrary,
   copyName,
   duplicateInLibrary,
-  groupLibraryEntries,
+  filterLibraryEntries,
   LIBRARY_INDEX_KEY,
   libraryDocumentKey,
   LibraryError,
@@ -232,17 +233,29 @@ describe('local library (#212)', () => {
     expect(comparableSource(graph('a', 'A', 'vector(0, 1)'))).not.toBe(comparableSource(saved))
   })
 
-  it('groups graphs by algebra, most recently modified first', () => {
+  it('filters graphs by algebra, most recently modified first (#266)', () => {
     const entry = (id: string, algebraId: string, updatedAt: string) =>
       ({ id, name: id, algebraId, createdAt: NOW, updatedAt })
-    const groups = groupLibraryEntries([
+    const entries = [
       entry('p', 'org.multivector.pga', NOW),
       entry('v1', 'org.multivector.vga', NOW),
       entry('v2', 'org.multivector.vga', LATER),
-    ], ['org.multivector.vga', 'org.multivector.pga'])
-    expect(groups.map((group) => [group.algebraId, group.entries.map((item) => item.id)])).toEqual([
-      ['org.multivector.vga', ['v2', 'v1']],
-      ['org.multivector.pga', ['p']],
-    ])
+    ]
+    expect(filterLibraryEntries(entries, null).map((item) => item.id)).toEqual(['v2', 'p', 'v1'])
+    expect(filterLibraryEntries(entries, 'org.multivector.vga').map((item) => item.id)).toEqual(['v2', 'v1'])
+    expect(filterLibraryEntries(entries, 'org.multivector.pga').map((item) => item.id)).toEqual(['p'])
+  })
+
+  it('adds a copy of a document under a fresh identity, never changing it (#266)', () => {
+    const { storage } = memoryStorage()
+    const example = graph('example-id', 'Rotation')
+    let next = 0
+    const createId = () => `copy-${++next}`
+    const first = addCopyToLibrary(storage, example, { now: NOW, createId })
+    const second = addCopyToLibrary(storage, example, { now: LATER, createId })
+    expect([first.id, first.name, second.id, second.name]).toEqual(['copy-1', 'Rotation', 'copy-2', 'Rotation copy'])
+    expect(loadFromLibrary(storage, 'copy-2')).toEqual({ ...example, id: 'copy-2', metadata: { ...example.metadata, title: 'Rotation copy' } })
+    expect(readLibrary(storage).entries.map((item) => item.id)).not.toContain('example-id')
+    expect(example.id).toBe('example-id')
   })
 })

@@ -3289,6 +3289,141 @@ line.manipulation-focus-ring {
   font-size: 0.9rem;
 }
 
+/* Library panel (#266): docked on the right of the workspace, so that the
+   viewport resizes beside it; laid over the viewport below 720px (A11Y-012). */
+.workspace-frame {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.workspace-frame > .workspace {
+  min-width: 0;
+}
+
+.library-panel {
+  flex: 0 0 320px;
+  width: 320px;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  color: var(--text);
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+}
+
+/* Laid over the viewport only, never over the expression panel (A11Y-012):
+   the panel is placed in the viewport region, or over the workspace in NoViz. */
+.visualizer {
+  position: relative;
+}
+
+.library-panel.is-overlay {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 14;
+  width: min(340px, 100%);
+  border-left-color: var(--border-strong);
+  box-shadow: var(--shadow-modal);
+}
+
+.library-tabs,
+.library-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.library-tabs {
+  border-bottom: 1px solid var(--border);
+}
+
+.library-tabs button {
+  margin-bottom: -1px;
+  padding: 6px 10px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.library-tabs button[aria-selected='true'] {
+  color: var(--text-strong);
+  border-bottom-color: var(--accent);
+}
+
+.library-filter button {
+  padding: 2px 8px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font: 0.68rem var(--font-mono);
+  cursor: pointer;
+}
+
+.library-filter button[aria-pressed='true'] {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.library-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.library-section[hidden] {
+  display: none;
+}
+
+.library-temporary {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.library-temporary p,
+.library-note {
+  margin: 0;
+  color: var(--muted);
+}
+
+.library-add-scene {
+  justify-self: flex-start;
+  padding: 4px 8px;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid var(--accent-border);
+  border-radius: 4px;
+  font: 700 0.74rem var(--font-mono);
+  cursor: pointer;
+}
+
+.library-algebra {
+  color: var(--muted);
+  font: 0.62rem var(--font-mono);
+  white-space: nowrap;
+}
+
+.library-description {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
 /* Local library of named graphs (#212). */
 .library-body {
   display: flex;
@@ -3322,15 +3457,7 @@ line.manipulation-focus-ring {
   border-color: var(--accent-border);
 }
 
-.library-group h3 {
-  margin: 4px 0;
-  color: var(--muted);
-  font: 700 0.64rem var(--font-mono);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.library-group ul {
+.library-list {
   margin: 0;
   padding: 0;
   list-style: none;
@@ -3339,12 +3466,12 @@ line.manipulation-focus-ring {
 }
 
 /* The name takes the whole width; date and actions share the line below. */
-.library-group li {
+.library-list li {
   display: grid;
   border-radius: 6px;
 }
 
-.library-group li.is-open {
+.library-list li.is-open {
   background: var(--accent-soft);
 }
 
@@ -3460,7 +3587,7 @@ line.manipulation-focus-ring {
   cursor: default;
 }
 
-.library-body :focus-visible {
+.library-panel :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }

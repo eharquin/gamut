@@ -96,11 +96,17 @@ In a temporary session it behaves as follows:
   is not there yet, then the example opens unbound from any library entry
   (STORE-015) and the session ends; if that write fails, the session stays
   temporary and the scene stays open.
-- **Add to my library** is an explicit write and behaves like **Save local
-  copy** ([#266](https://github.com/eharquin/gamut/issues/266)): the
-  previously saved active document is protected in the same way, then the
-  scene is copied into the library with a new document identity, the copy
-  opens, and the temporary session ends.
+- **Add to my library** in **My library** copies the scene. It is an explicit
+  write and behaves like **Save local copy**
+  ([#266](https://github.com/eharquin/gamut/issues/266)): the previously saved
+  active document is protected in the same way, then the scene is copied into
+  the library with a new document identity, the copy opens, and the temporary
+  session ends.
+- **Add to my library** on an example copies the example, not the scene: the
+  previously saved active document is protected in the same way, the copy is
+  stored in the library with a new document identity, and the scene stays
+  open, temporary, and unsaved; the active document and the address are not
+  written ([#266](https://github.com/eharquin/gamut/issues/266)).
 - **Import library**, and dropping a `.zip` file, are unavailable: they report
   that a temporary session does not write the library, and write nothing
   ([#268](https://github.com/eharquin/gamut/issues/268)). **Export library**
