@@ -6,7 +6,6 @@ import {
   useReducer,
   useRef,
   useState,
-  type ChangeEvent,
   type CSSProperties,
   type KeyboardEvent,
   type MouseEvent as ReactMouseEvent,
@@ -17,18 +16,18 @@ import { showcaseMetadata } from './algebra/algebraDefinition'
 import { createBuiltinAlgebraRegistry } from './algebra/builtinAlgebras'
 import { evaluateDocument } from './application/evaluateDocument'
 import { AlgebraInfoDialog } from './components/AlgebraInfoDialog'
-import { AlgebraMenu } from './components/AlgebraMenu'
-import { DocumentCommands, GraphNameField, LibraryCommands } from './components/DocumentCommands'
+import {
+  DocumentHeader,
+  DocumentNotices,
+  type DocumentHeaderActions,
+  type DocumentHeaderRefs,
+} from './components/DocumentHeader'
 import { ExpressionReference } from './components/ExpressionReference'
 import type { ReferenceExample } from './language/expressionReference'
 import { ClearExpressionsButton } from './components/ClearExpressionsButton'
 import { ExpressionRow, type ExpressionRowActions, type ExpressionRowRefs } from './components/ExpressionRow'
 import { ZoomLevelField } from './components/ZoomLevelField'
-import {
-  SettingsMenu,
-  type DisplaySettings,
-} from './components/SettingsMenu'
-import { ThemeToggle } from './components/ThemeToggle'
+import type { DisplaySettings } from './components/SettingsMenu'
 import { resolveItemAppearance } from './components/appearancePalette'
 import { OPAQUE_INTERPRETATION, type InterpretedEntity, type Point2d } from './geometry/interpretation'
 import type { VisualizationPrimitive } from './visualization/primitives'
@@ -79,13 +78,12 @@ import {
   DocumentFormatError,
   fromCanonicalDocument,
   parseCanonicalDocument,
-  parseCanonicalDocumentBytes,
   resolveCanonicalImport,
-  serializeCanonicalDocument,
   toCanonicalDocument,
   type CanonicalDocument,
   type ThemeMode,
 } from './document/canonicalDocument'
+import { documentFileDiagnostic, downloadDocumentFile, readDocumentFile } from './document/documentFile'
 import { ACTIVE_DOCUMENT_KEY, browserDocumentStorage } from './document/documentStorage'
 import {
   browserLibraryStorage,
@@ -361,7 +359,6 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const removedEditorFallbacks = useRef(new Map<string, EditorFocus>())
   const viewportCreatedItemIds = useRef(new Set<string>())
   const addButtonRef = useRef<HTMLButtonElement>(null)
-  const importInputRef = useRef<HTMLInputElement>(null)
   const algebraInfoButtonRef = useRef<HTMLButtonElement>(null)
   const expressionReferenceButtonRef = useRef<HTMLButtonElement>(null)
   const resizeDrag = useRef<Readonly<{ startX: number; startWidth: number }> | null>(
@@ -1848,13 +1845,6 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     handle.addEventListener('pointercancel', end)
   }
 
-  const importDocument = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (!file) return
-    await importDocumentFile(file)
-  }
-
   /**
    * Opens a chosen or dropped document file: size limit, parsing, migration,
    * validation, the replace or duplicate choice, and diagnostics. A temporary
@@ -1863,7 +1853,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const importDocumentFile = async (file: File) => {
     if (playback.anyPlaying) playback.stopAll()
     try {
-      const parsed = parseCanonicalDocumentBytes(new Uint8Array(await file.arrayBuffer()))
+      const parsed = await readDocumentFile(file)
       const collision = parsed.id === expressionDoc.id
       const choice = collision && !window.confirm(
         'A document with this identity is already open. Choose OK to replace it, or Cancel to duplicate the import with fresh identities.',
@@ -1888,9 +1878,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       setDocumentDiagnostic(imported.recoveryDiagnostic)
     } catch (error) {
       setDocumentDiagnostic(
-        error instanceof DocumentFormatError
-          ? error.code + ': ' + error.message
-          : 'DOCUMENT_IMPORT_FAILED: The document could not be imported.',
+        documentFileDiagnostic(error, 'DOCUMENT_IMPORT_FAILED: The document could not be imported.'),
       )
     }
   }
@@ -1960,7 +1948,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
         setShareResult({ content: url, label: 'Scene link', message: 'Select and copy the text below.' + warning })
       }
     } catch (error) {
-      setDocumentDiagnostic(error instanceof DocumentFormatError ? error.code + ': ' + error.message : 'SHARE_EXPORT_FAILED: The scene link could not be created. Use JSON export instead.')
+      setDocumentDiagnostic(documentFileDiagnostic(error, 'SHARE_EXPORT_FAILED: The scene link could not be created. Use JSON export instead.'))
     } finally { setSharing(false) }
   }
 
@@ -2295,24 +2283,14 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
 
   const exportDocument = () => {
     try {
-      const source = serializeCanonicalDocument(
+      downloadDocumentFile(
         toCanonicalDocument(expressionDoc, theme, resolvedStyles, resolvedOrientation),
+        expressionDoc.title,
       )
-      const blob = new Blob([source], { type: 'application/json;charset=utf-8' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      const basename = (expressionDoc.title || 'gamut-document')
-        .replace(/[^a-z0-9_-]+/gi, '-').replace(/^-|-$/g, '') || 'gamut-document'
-      link.href = url
-      link.download = basename + '.gamut.json'
-      link.click()
-      URL.revokeObjectURL(url)
       setDocumentDiagnostic(null)
     } catch (error) {
       setDocumentDiagnostic(
-        error instanceof DocumentFormatError
-          ? error.code + ': ' + error.message
-          : 'DOCUMENT_EXPORT_FAILED: The document could not be exported.',
+        documentFileDiagnostic(error, 'DOCUMENT_EXPORT_FAILED: The document could not be exported.'),
       )
     }
   }
@@ -2474,94 +2452,53 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       return next
     }),
   }
+  const documentHeaderRefs: DocumentHeaderRefs = {
+    algebraInfoButtonRef,
+    saveButtonRef,
+    libraryButtonRef,
+  }
+  const documentHeaderActions: DocumentHeaderActions = {
+    selectAlgebra,
+    showAlgebraInfo: () => setInfoDialog('algebra'),
+    renameGraph: renameOpenGraph,
+    saveToLibrary: saveToLibraryRequest,
+    toggleLibrary,
+    importFile: importDocumentFile,
+    exportDocument,
+    copyLink: () => void copyScene(),
+    changeTheme: setTheme,
+    changeDisplay: updateDisplay,
+  }
   return (
     <div className="app-shell">
-      <header className="app-header">
-        <a
-          className="app-title"
-          href={import.meta.env.BASE_URL}
-          aria-label="GAMUT home"
-        >
-          GAMUT
-        </a>
-        <AlgebraMenu
-          badge={algebraDefinition.badge}
-          choices={algebraRegistry.definitions().map((definition) => ({
-            algebraId: definition.algebraId,
-            badge: definition.badge,
-            name: definition.info({}).name,
-          }))}
-          selectedAlgebraId={algebraDefinition.algebraId}
-          onSelect={selectAlgebra}
-          onInfo={() => setInfoDialog('algebra')}
-          infoButtonRef={algebraInfoButtonRef}
-        />
-        <input
-          ref={importInputRef}
-          className="document-file-input"
-          type="file"
-          accept="application/json,.json,.gamut.json,.multivector.json"
-          aria-label="Import document file"
-          onChange={importDocument}
-        />
-        <div className="header-actions">
-          {/* Three groups: the open graph, the document file, the display. */}
-          <div className="header-group header-group-graph" role="group" aria-label="Graph">
-            <GraphNameField
-              name={graphName}
-              temporaryLabel={ephemeral ? graphName : null}
-              onRename={renameOpenGraph}
-            />
-            <LibraryCommands
-              onSave={saveToLibraryRequest}
-              unsavedChanges={unsavedChanges}
-              onLibrary={toggleLibrary}
-              libraryOpen={libraryOpen}
-              saveRef={saveButtonRef}
-              libraryRef={libraryButtonRef}
-            />
-          </div>
-          <div className="header-group" role="group" aria-label="Document file">
-            <DocumentCommands
-              onImport={() => importInputRef.current?.click()}
-              onExport={exportDocument}
-              onCopyLink={() => void copyScene()}
-              sharing={sharing}
-            />
-          </div>
-          <div className="header-group" role="group" aria-label="Display">
-            <ThemeToggle theme={theme} onThemeChange={setTheme} />
-            <SettingsMenu
-              display={expressionDoc.view.display}
-              theme={theme}
-              onDisplayChange={updateDisplay}
-              onThemeChange={setTheme}
-              renderingSettings={!noViz}
-            />
-          </div>
-        </div>
-      </header>
+      <DocumentHeader
+        algebraBadge={algebraDefinition.badge}
+        algebraChoices={algebraRegistry.definitions().map((definition) => ({
+          algebraId: definition.algebraId,
+          badge: definition.badge,
+          name: definition.info({}).name,
+        }))}
+        selectedAlgebraId={algebraDefinition.algebraId}
+        graphName={graphName}
+        temporarySession={ephemeral}
+        unsavedChanges={unsavedChanges}
+        libraryOpen={libraryOpen}
+        sharing={sharing}
+        theme={theme}
+        display={expressionDoc.view.display}
+        renderingSettings={!noViz}
+        refs={documentHeaderRefs}
+        actions={documentHeaderActions}
+      />
 
-      {ephemeral && (
-        <div className="shared-session-notice">
-          <span>Temporary session. Changes are not saved automatically.</span>
-          <button type="button" className="document-command" onClick={saveLocalCopy}>Save local copy</button>
-        </div>
-      )}
-      <p className="copy-notice" role="status" hidden={!copyNotice}>{copyNotice?.message}</p>
-      {shareResult && (
-        <section className="share-result" aria-label="Share scene">
-          <p role="status">{shareResult.message}</p>
-          <label>{shareResult.label}<textarea readOnly value={shareResult.content} onFocus={(event) => event.currentTarget.select()} /></label>
-          <button type="button" onClick={() => setShareResult(null)}>Close sharing</button>
-        </section>
-      )}
-
-      {documentDiagnostic && (
-        <div className="document-diagnostic" role="alert">
-          {documentDiagnostic}
-        </div>
-      )}
+      <DocumentNotices
+        temporarySession={ephemeral}
+        onSaveLocalCopy={saveLocalCopy}
+        copyNotice={copyNotice?.message ?? null}
+        shareResult={shareResult}
+        onCloseShare={() => setShareResult(null)}
+        documentDiagnostic={documentDiagnostic}
+      />
       {interpretationResolution.status === 'unavailable' && (
         <div className="document-diagnostic" role="alert">
           {interpretationResolution.code}: {interpretationResolution.message}
