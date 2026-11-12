@@ -462,6 +462,24 @@ export function removeFromLibrary(
 }
 
 /**
+ * Stores a copy of a document that is not a library graph, such as a shipped
+ * example (#266), under a fresh identity and its title, or a copy name when a
+ * graph already has that name. The document itself is never changed.
+ */
+export function addCopyToLibrary(
+  storage: LibraryStorage | null,
+  document: CanonicalDocument,
+  options: LibraryOptions & Readonly<{ createId?: () => string }> = {},
+): LibrarySave & Readonly<{ name: string }> {
+  const title = untitled(document)
+  const names = readLibrary(storage, options).entries.map((entry) => entry.name)
+  const name = names.includes(title) ? copyName(title, names) : title
+  const createId = options.createId ?? (() => crypto.randomUUID())
+  const saved = saveToLibrary(storage, { ...document, id: createId() }, name, { ...options, boundId: null, createId })
+  return { ...saved, name }
+}
+
+/**
  * The canonical text that tells whether a graph has changes to save: the
  * document without its viewport centre and zoom, which are view settings and
  * not content.
@@ -473,22 +491,16 @@ export function comparableSource(document: CanonicalDocument): string {
   return serializeCanonicalDocument({ ...document, view: { ...document.view, viewport } })
 }
 
-/** Groups entries by algebra in the given algebra order, most recently modified first within a group. */
-export function groupLibraryEntries(
+/**
+ * The entries of one algebra, or all of them for `null`, most recently
+ * modified first: the algebra filter of the library panel (#266).
+ */
+export function filterLibraryEntries(
   entries: readonly LibraryEntry[],
-  algebraOrder: readonly string[],
-): readonly Readonly<{ algebraId: string; entries: readonly LibraryEntry[] }>[] {
-  const rank = (algebraId: string) => {
-    const index = algebraOrder.indexOf(algebraId)
-    return index < 0 ? algebraOrder.length : index
-  }
-  const ids = [...new Set(entries.map((entry) => entry.algebraId))]
-    .sort((left, right) => rank(left) - rank(right) || left.localeCompare(right))
-  return ids.map((algebraId) => ({
-    algebraId,
-    entries: entries
-      .filter((entry) => entry.algebraId === algebraId)
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) ||
-        left.name.localeCompare(right.name) || left.id.localeCompare(right.id)),
-  }))
+  algebraId: string | null,
+): readonly LibraryEntry[] {
+  return entries
+    .filter((entry) => algebraId === null || entry.algebraId === algebraId)
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) ||
+      left.name.localeCompare(right.name) || left.id.localeCompare(right.id))
 }

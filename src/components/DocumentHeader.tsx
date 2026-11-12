@@ -9,9 +9,9 @@ import { ThemeToggle } from './ThemeToggle'
 export type DocumentHeaderRefs = Readonly<{
   /** The algebra information button, to which the information dialog returns focus. */
   algebraInfoButtonRef: RefObject<HTMLButtonElement | null>
-  /** The Save button, to which the library menu returns focus after a save request. */
+  /** The Save button, to which the library panel returns focus after a save request. */
   saveButtonRef: RefObject<HTMLButtonElement | null>
-  /** The Library button, which anchors the library menu. */
+  /** The Library button, which opens the library panel and takes focus back when it closes. */
   libraryButtonRef: RefObject<HTMLButtonElement | null>
 }>
 

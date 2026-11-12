@@ -7,6 +7,24 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Library
+
+- The library is a panel docked on the right, opened and closed by
+  **Library**, instead of a popover; the viewport resizes beside it. Below a
+  window width of 720 pixels it opens over the viewport and closes on Escape.
+  It is a labelled region: focus moves into it when it opens and returns to
+  **Library** when it closes (#266).
+- The panel has two sections. **My library** keeps every action of the
+  library menu (open, rename, duplicate, delete, save as new graph, and the
+  confirmations); an All / VGA / PGA filter replaces the grouping by algebra.
+  **Examples** lists read-only example scenes shipped with the application:
+  opening one shows it as a new, unsaved graph, and **Add to my library**
+  stores a copy. The first examples are the VGA(2) and PGA(2) showcases (#266).
+- In a temporary shared-scene session, **My library** states that browser
+  storage is not used, and its **Add to my library** copies the scene into
+  the library, opens the copy, and ends the session, like **Save local copy**
+  (#266).
+
 ### Fixed
 
 - Saving a graph while a slider animation plays now stops the animation and

@@ -16,6 +16,7 @@ import {
   paletteEntry,
 } from './components/appearancePalette'
 import { CLEAR_HOLD_MS } from './components/ClearExpressionsButton'
+import { LIBRARY_OVERLAY_QUERY } from './components/LibraryPanel'
 import { serializeCanonicalDocument, toCanonicalDocument } from './document/canonicalDocument'
 import { ACTIVE_DOCUMENT_KEY } from './document/documentStorage'
 import { expressionDocument } from './document/expressionDocument'
@@ -3884,7 +3885,7 @@ describe('documents whose positions are turned off', () => {
 })
 
 describe('normalization chosen from the expression row (#185)', () => {
-  it('closes the normalization popover and the library menu on a press on the canvas', () => {
+  it('closes the normalization popover, but not the docked library panel, on a press on the canvas', () => {
     render(<App />)
     fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: '' } })
     fireEvent.click(screen.getByRole('button', { name: 'VGA · 2D. Change algebra' }))
@@ -3898,9 +3899,9 @@ describe('normalization chosen from the expression row (#185)', () => {
     expect(screen.queryByRole('dialog', { name: 'Normalize' })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Library' }))
-    expect(screen.getByRole('dialog', { name: 'Library' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Library' })).toBeInTheDocument()
     pressCanvas()
-    expect(screen.queryByRole('dialog', { name: 'Library' })).not.toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Library' })).toBeInTheDocument()
   })
 
   it('opens the choice in a popover that closes on Escape, a click outside, or its close button', () => {
@@ -4308,9 +4309,10 @@ describe('NoViz calculator mode (#55)', () => {
 describe('local library of named graphs (#212)', () => {
   afterEach(() => {
     vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
     window.localStorage.clear()
   })
-  const libraryMenu = () => screen.getByRole('dialog', { name: 'Library' })
+  const libraryMenu = () => screen.getByRole('region', { name: 'Library' })
   const openLibrary = () => {
     fireEvent.click(screen.getByRole('button', { name: 'Library' }))
     return libraryMenu()
@@ -4494,7 +4496,7 @@ describe('local library of named graphs (#212)', () => {
     expect(saveButton()).toHaveAccessibleName('Save')
   })
 
-  it('asks for a name in the library menu the first time, then saves under the title', () => {
+  it('asks for a name in the library panel the first time, then saves under the title', () => {
     const prompt = vi.spyOn(window, 'prompt')
     render(<App />)
     fireEvent.click(saveButton())
@@ -4505,18 +4507,17 @@ describe('local library of named graphs (#212)', () => {
     fireEvent.change(name, { target: { value: 'Rotation talk' } })
     fireEvent.click(within(menu).getByRole('button', { name: 'Save' }))
     expect(prompt).not.toHaveBeenCalled()
-    expect(screen.queryByRole('dialog', { name: 'Library' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Library' })).not.toBeInTheDocument()
     expect(screen.getByText('Saved “Rotation talk” to the library.')).toBeInTheDocument()
 
     // The next save does not ask again, and stores the current revision.
     fireEvent.change(source(), { target: { value: 'vector(5, 6)' } })
     fireEvent.click(saveButton())
-    expect(screen.queryByRole('dialog', { name: 'Library' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Library' })).not.toBeInTheDocument()
     expect(stored('local-document').metadata.title).toBe('Rotation talk')
     expect(stored('local-document').items[0].source).toBe('vector(5, 6)')
 
-    const group = within(openLibrary()).getByRole('region', { name: 'VGA · 2D' })
-    const open = within(group).getByRole('button', { name: 'Open Rotation talk' })
+    const open = within(openLibrary()).getByRole('button', { name: 'Open Rotation talk' })
     expect(open).toHaveAttribute('aria-current', 'true')
     expect(open.closest('li')!.querySelector('time')).toHaveAttribute('dateTime', expect.stringMatching(/^\d{4}-\d\d-\d\dT/))
   })
@@ -4598,7 +4599,7 @@ describe('local library of named graphs (#212)', () => {
     render(<App />)
     expect(nameField()).toHaveValue('')
     expect(within(openLibrary()).getByRole('button', { name: 'Open Saved default' })).not.toHaveAttribute('aria-current')
-    fireEvent.click(screen.getByRole('button', { name: 'Close Library menu' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Close library' }))
     saveAs('This visit')
 
     expect(stored('local-document').items[0].source).toBe('Saved = vector(1, 1)')
@@ -4629,10 +4630,13 @@ describe('local library of named graphs (#212)', () => {
     expect(saveButton()).toHaveAccessibleName('Save')
     let menu = openLibrary()
     expect(window.localStorage.getItem('gamut.library.v1')).toBeNull()
-    expect(within(within(menu).getByRole('region', { name: 'VGA · 2D' })).getByRole('button', { name: 'Open Former scene' }))
-      .toHaveAttribute('aria-current', 'true')
-    expect(within(within(menu).getByRole('region', { name: 'PGA · 2D' })).getByRole('button', { name: 'Open Points' }))
-      .toBeInTheDocument()
+    expect(within(menu).getByRole('button', { name: 'Open Former scene' })).toHaveAttribute('aria-current', 'true')
+    expect(within(menu).getByRole('button', { name: 'Open Points' })).toBeInTheDocument()
+    // The algebra filter replaces the grouping by algebra.
+    fireEvent.click(within(menu).getByRole('button', { name: 'PGA' }))
+    expect(within(menu).getAllByRole('button', { name: /^Open / }).map((button) => button.getAttribute('aria-label')))
+      .toEqual(['Open Points'])
+    fireEvent.click(within(menu).getByRole('button', { name: 'All' }))
 
     // Opening another graph stores the former document first.
     fireEvent.click(within(menu).getByRole('button', { name: 'Open Points' }))
@@ -4660,14 +4664,118 @@ describe('local library of named graphs (#212)', () => {
     ] }))
     act(() => { window.dispatchEvent(new StorageEvent('storage', { key: 'gamut.library.v1' })) })
     expect(within(menu).getByRole('button', { name: 'Open Other tab' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Close Library menu' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Close library' }))
 
     fireEvent.change(source(), { target: { value: 'vector(1, 1)' } })
     fireEvent.click(saveButton())
     expect(index().map((entry) => entry.name)).toEqual(['Mine', 'Other tab'])
   })
 
-  it('closes a confirmation with Escape and keeps the menu open', () => {
+  describe('library panel (#266)', () => {
+    const libraryButton = () => screen.getByRole('button', { name: 'Library' })
+
+    it('is a labelled region beside the viewport, opens on My library, and returns focus on close', () => {
+      render(<App />)
+      libraryButton().focus()
+      fireEvent.click(libraryButton())
+      const panel = libraryMenu()
+      expect(libraryButton()).toHaveAttribute('aria-expanded', 'true')
+      expect(libraryButton()).toHaveAttribute('aria-controls', panel.id)
+      // Docked next to the workspace, which resizes instead of being covered.
+      expect(panel).not.toHaveClass('is-overlay')
+      expect(panel.parentElement).toBe(screen.getByRole('main').parentElement)
+      const mine = within(panel).getByRole('tab', { name: 'My library' })
+      expect(mine).toHaveAttribute('aria-selected', 'true')
+      expect(mine).toHaveFocus()
+      expect(within(panel).getByRole('tabpanel')).toHaveAccessibleName('My library')
+
+      // Arrow keys move between the sections.
+      fireEvent.keyDown(mine, { key: 'ArrowRight' })
+      const examples = within(panel).getByRole('tab', { name: 'Examples' })
+      expect(examples).toHaveFocus()
+      expect(within(panel).getByRole('tabpanel')).toHaveAccessibleName('Examples')
+      fireEvent.keyDown(examples, { key: 'Home' })
+      expect(mine).toHaveFocus()
+
+      // Docked, Escape elsewhere belongs to the editor and leaves the panel open.
+      source().focus()
+      fireEvent.keyDown(document.body, { key: 'Escape' })
+      expect(libraryMenu()).toBeInTheDocument()
+
+      fireEvent.click(libraryButton())
+      expect(screen.queryByRole('region', { name: 'Library' })).not.toBeInTheDocument()
+      expect(libraryButton()).toHaveAttribute('aria-expanded', 'false')
+      expect(libraryButton()).toHaveFocus()
+    })
+
+    it('opens over the viewport below 720 pixels and closes on Escape', () => {
+      vi.stubGlobal('matchMedia', (query: string) => ({
+        matches: query === LIBRARY_OVERLAY_QUERY,
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+      }))
+      render(<App />)
+      fireEvent.click(libraryButton())
+      expect(libraryMenu()).toHaveClass('is-overlay')
+      // Opening it collapses nothing else.
+      expect(screen.getByRole('complementary', { name: 'Expressions' })).not.toHaveClass('is-collapsed')
+      source().focus()
+      fireEvent.keyDown(document.body, { key: 'Escape' })
+      expect(screen.queryByRole('region', { name: 'Library' })).not.toBeInTheDocument()
+      expect(libraryButton()).toHaveFocus()
+    })
+
+    it('opens an example unbound, and adds a copy to my library without changing the example', () => {
+      render(<App />)
+      saveAs('Mine')
+      let panel = openLibrary()
+      fireEvent.click(within(panel).getByRole('tab', { name: 'Examples' }))
+      const exampleNames = () => within(panel).getAllByRole('button', { name: /^Open example / })
+        .map((button) => button.getAttribute('aria-label'))
+      expect(exampleNames()).toEqual(['Open example VGA 2D Rotation Example', 'Open example PGA 2D Triangle Example'])
+      fireEvent.click(within(panel).getByRole('button', { name: 'PGA' }))
+      expect(exampleNames()).toEqual(['Open example PGA 2D Triangle Example'])
+      fireEvent.click(within(panel).getByRole('button', { name: 'All' }))
+      // Examples are read-only.
+      expect(within(panel).queryByRole('button', { name: /^(Rename|Delete|Duplicate) / })).not.toBeInTheDocument()
+
+      fireEvent.click(within(panel).getByRole('button', { name: 'Add VGA 2D Rotation Example to my library' }))
+      expect(index().map((entry) => entry.name)).toEqual(['Mine', 'VGA 2D Rotation Example'])
+      const copy = index()[1]
+      expect(copy.id).not.toMatch(/^example-/)
+      expect(stored(copy.id).items[2].source).toBe('R = exp(0.5*a*e12)')
+      expect(screen.getByText('Added “VGA 2D Rotation Example” to my library.')).toBeInTheDocument()
+      expect(nameField()).toHaveValue('Mine')
+
+      // The open graph is saved, so the example opens at once, unbound.
+      fireEvent.click(within(panel).getByRole('button', { name: 'Open example PGA 2D Triangle Example' }))
+      expect(screen.queryByRole('region', { name: 'Library' })).not.toBeInTheDocument()
+      expect(source()).toHaveValue('A = point(-2, 1)')
+      expect(nameField()).toHaveValue('')
+      expect(saveButton()).toHaveAccessibleName('Save (unsaved changes)')
+      expect(index()).toHaveLength(2)
+
+      // Opening another example now asks before discarding it.
+      panel = openLibrary()
+      expect(within(panel).getByRole('tab', { name: 'My library' })).toHaveAttribute('aria-selected', 'true')
+      expect(within(panel).getByRole('button', { name: 'Open VGA 2D Rotation Example' })).not.toHaveAttribute('aria-current')
+      fireEvent.click(within(panel).getByRole('tab', { name: 'Examples' }))
+      fireEvent.click(within(panel).getByRole('button', { name: 'Open example VGA 2D Rotation Example' }))
+      fireEvent.click(within(within(panel).getByRole('alertdialog', { name: 'Confirm' })).getByRole('button', { name: 'Cancel' }))
+      expect(source()).toHaveValue('A = point(-2, 1)')
+
+      // Saving an opened example stores a new graph.
+      fireEvent.click(within(panel).getByRole('button', { name: 'Close library' }))
+      saveAs('Triangle')
+      expect(index().map((entry) => entry.name)).toEqual(['Mine', 'VGA 2D Rotation Example', 'Triangle'])
+      expect(index().some((entry) => entry.id.startsWith('example-'))).toBe(false)
+    })
+  })
+
+  it('closes a confirmation with Escape and keeps the panel open', () => {
     render(<App />)
     saveAs('Escaped')
     const menu = openLibrary()
@@ -4677,7 +4785,7 @@ describe('local library of named graphs (#212)', () => {
     expect(within(libraryMenu()).queryByRole('alertdialog')).not.toBeInTheDocument()
     expect(menu).toContainElement(document.activeElement as HTMLElement)
     fireEvent.keyDown(document, { key: 'Escape' })
-    expect(screen.queryByRole('dialog', { name: 'Library' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Library' })).not.toBeInTheDocument()
   })
 
   it('keeps editing and reports the problem when browser storage is unavailable', () => {

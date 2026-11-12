@@ -86,10 +86,10 @@ import {
 import { documentFileDiagnostic, downloadDocumentFile, readDocumentFile } from './document/documentFile'
 import { ACTIVE_DOCUMENT_KEY, browserDocumentStorage } from './document/documentStorage'
 import {
+  addCopyToLibrary,
   browserLibraryStorage,
   comparableSource,
   duplicateInLibrary,
-  groupLibraryEntries,
   LIBRARY_DOCUMENT_PREFIX,
   LIBRARY_INDEX_KEY,
   LIBRARY_OPEN_KEY,
@@ -104,7 +104,8 @@ import {
   type LibraryEntry,
   type LibraryRead,
 } from './document/documentLibrary'
-import { LibraryMenu } from './components/LibraryMenu'
+import { LibraryPanel } from './components/LibraryPanel'
+import type { LibraryExample } from './examples'
 import { selectDroppedDocument } from './document/droppedDocument'
 import { createSceneLink, decodeSceneFragment, hasSceneFragment, SHARE_URL_WARNING_LENGTH } from './document/sceneLink'
 import { formatDisplayNumber } from './presentation/formatNumber'
@@ -2104,7 +2105,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       closeLibrary()
       return
     }
-    // Opening the menu reads the library again and writes nothing.
+    // Opening the panel reads the library again and writes nothing.
     setLibrary(readLibrary(browserLibraryStorage(), libraryOptions()))
     libraryReturnFocusRef.current = libraryButtonRef.current
     setLibraryNaming(null)
@@ -2170,7 +2171,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       commitLibrarySave(expressionDoc.title.trim() || 'Untitled graph')
       return
     }
-    // The first save asks for a name in the library menu.
+    // The first save asks for a name in the library panel.
     currentLibrary()
     libraryReturnFocusRef.current = saveButtonRef.current
     setLibraryNaming({ initialName: expressionDoc.title.trim() || 'Untitled graph' })
@@ -2277,9 +2278,21 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       setSavedRevision(null)
     }
   }
-  const algebraBadges = new Map(algebraRegistry.definitions().map((definition) => [definition.algebraId, definition.badge]))
-  const libraryGroups = groupLibraryEntries(library?.entries ?? [], [...algebraBadges.keys()])
-    .map((group) => ({ ...group, label: algebraBadges.get(group.algebraId) ?? (group.algebraId || 'Unknown algebra') }))
+  /** Opens a shipped example unbound from the library, as a new graph with its own identity (#266). */
+  const openExample = (example: LibraryExample) => {
+    const restored = fromCanonicalDocument({ ...example.document, id: crypto.randomUUID() }, restoreOptions)
+    if (!keepFormerDocument()) return
+    openGraph(restored.document, theme, restored.recoveryDiagnostic, null)
+  }
+  const addExampleToLibrary = (example: LibraryExample) => {
+    try {
+      const added = addCopyToLibrary(browserLibraryStorage(), example.document, libraryOptions())
+      reportLibrary(added.entries, null)
+      setCopyNotice({ message: `Added “${added.name}” to my library.`, durationMs: 2500 })
+    } catch (error) {
+      reportLibraryFailure(error, `LIBRARY_WRITE_FAILED: “${example.name}” could not be added to the library.`)
+    }
+  }
 
   const exportDocument = () => {
     try {
@@ -2505,6 +2518,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
         </div>
       )}
 
+      <div className="workspace-frame">
       <main className="workspace" ref={workspaceRef}>
         <aside
           ref={expressionPanelRef}
@@ -2997,16 +3011,17 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
         </section>}
       </main>
       {libraryOpen && (
-        <LibraryMenu
-          // A save request asks for a name in a fresh menu.
+        <LibraryPanel
+          // A save request asks for a name in a fresh panel.
           key={libraryNaming ? 'naming' : 'browsing'}
-          anchorRef={libraryButtonRef}
           returnFocusRef={libraryReturnFocusRef}
-          groups={libraryGroups}
+          entries={library?.entries ?? []}
+          algebras={algebraRegistry.definitions()}
           openId={ephemeral ? '' : boundId ?? ''}
           naming={libraryNaming}
           diagnostic={library?.diagnostic ?? null}
           unsavedChanges={unsavedChanges}
+          temporarySession={ephemeral}
           onSaveAs={(name) => { commitLibrarySave(name) }}
           onSaveAsNew={(name) => { commitLibrarySave(name, true) }}
           currentName={expressionDoc.title.trim() || 'Untitled graph'}
@@ -3015,9 +3030,13 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           onRename={(entry, name) => { renameLibraryEntry(entry.id, name) }}
           onDuplicate={duplicateLibraryEntry}
           onDelete={deleteLibraryEntry}
+          onOpenExample={openExample}
+          onAddExample={addExampleToLibrary}
+          onAddScene={() => { commitLibrarySave(expressionDoc.title.trim() || 'Untitled graph') }}
           onClose={closeLibrary}
         />
       )}
+      </div>
       {infoDialog === 'algebra' && (
         <AlgebraInfoDialog
           info={algebraDefinition.info(algebraResolution.parameters)}
