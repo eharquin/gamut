@@ -30,7 +30,8 @@ bytes; document identity is defined by the decoded canonical JSON.
 The encoder uses `CompressionStream('deflate-raw')`. It selects `json` when
 compression would increase size or would exceed the 64:1 decoding ratio.
 Compression and decompression use browser APIs; no compression dependency is
-bundled. Missing Web Crypto or compression support produces a textual
+bundled. Library archives (STORE-017) reuse the same `deflate-raw` stream and
+keep this statement true. Missing Web Crypto or compression support produces a textual
 diagnostic and leaves JSON import/export available. SHA-256 detects corruption;
 it does not authenticate the author, so the document is still untrusted input.
 
@@ -74,13 +75,39 @@ fallback session also disables automatic writes. **Save local copy** explicitly
 writes the current document with a new document identity and enables ordinary
 autosave after success; the header **Save** button does the same and also
 stores the copy in the local library under the name it asks for. Before either
-writes, and before **Open** or **New** in the library menu end the session,
+writes, and before **Open** or **New** in the library panel end the session,
 the previously saved active document is stored in the local library if it is
 not there yet, so that it is never overwritten; if that fails, the session
-stays temporary. Opening the library menu reads storage but writes nothing.
+stays temporary. Opening the library panel reads storage but writes nothing.
 The header shows “Shared scene (temporary)” as the graph name until then. It keeps the undo history and removes the scene
 fragment from the address, so reloading opens the saved copy. A failed save retains the temporary session and JSON
 export. No separate local-library implementation is introduced here.
+
+### Library panel in a temporary session
+
+The library panel (STORE-014) replaces the library menu of release 0.2.0.
+In a temporary session it behaves as follows:
+
+- **My library** lists the stored graphs and states that the open scene is
+  temporary and not stored. Opening a graph ends the session as **Open**
+  does above.
+- Opening an example from **Examples** behaves like opening a library graph:
+  the previously saved active document is stored in the library first when it
+  is not there yet, then the example opens unbound from any library entry
+  (STORE-015) and the session ends; if that write fails, the session stays
+  temporary and the scene stays open.
+- **Add to my library** is an explicit write and behaves like **Save local
+  copy** ([#266](https://github.com/eharquin/gamut/issues/266)): the
+  previously saved active document is protected in the same way before the
+  example's copy is stored. Whether the stored copy then becomes the open
+  graph, or the scene stays open, is open, decided in #266.
+- **Import library**, and dropping a `.zip` file, are unavailable: they report
+  that a temporary session does not write the library, and write nothing
+  ([#268](https://github.com/eharquin/gamut/issues/268)). **Export library**
+  only reads storage and stays available.
+- Collapsing or expanding a library folder does not write its per-browser
+  preference (STORE-016). Collapsing an expression folder changes the shared
+  document like any other edit (DOC-013) and does not rewrite the URL.
 
 ## Embedding and scope
 

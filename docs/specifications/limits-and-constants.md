@@ -3,7 +3,8 @@
 **Status:** Draft for review
 **Date:** 2026-07-27
 **Applies to:** Initial language and VGA 2D workflow
-**Refines:** SEC-004 through SEC-007, CMD-005, CMD-006, and A11Y-007
+**Refines:** SEC-004 through SEC-007, SEC-010, SEC-011, CMD-005, CMD-006,
+DOC-013, STORE-016, A11Y-007, and A11Y-012
 **License:** MIT
 
 ## 1. Purpose and evolution
@@ -36,6 +37,56 @@ valid document exceeds the sharing limit.
 Every item source, position source, control-bound source, and appearance source
 is a separate source property for the source-length limit. The decoded document limit also bounds
 metadata, appearance, parameters, and view state.
+
+### 2.1 Folders
+
+**Proposed for 0.3.0** ([#272](https://github.com/eharquin/gamut/issues/272)):
+the values below may change through review until
+[#83](https://github.com/eharquin/gamut/issues/83) and
+[#267](https://github.com/eharquin/gamut/issues/267) land. Expression folders
+(DOC-013) and library folders (STORE-016) share one folder model and these
+limits.
+
+| Quantity | Limit | Diagnostic |
+| --- | ---: | --- |
+| Folder nesting depth, a root-level folder being depth 1 | 8 | `LIMIT_FOLDER_DEPTH` |
+| Expression folders per document | 256 | `LIMIT_FOLDER_COUNT` |
+| Folders in the local library | 1,000 | `LIMIT_FOLDER_COUNT` |
+| Characters per folder name | 128 | `LIMIT_FOLDER_NAME_LENGTH` |
+
+Folders do not count towards the 1,000 items per document. A folder name is
+counted in Unicode code points. Loading a document over a folder limit fails
+validation like any other resource limit; an interactive command that would
+cross one is refused without changing the document or the library.
+
+### 2.2 Library archives
+
+**Proposed for 0.3.0** ([#272](https://github.com/eharquin/gamut/issues/272)):
+the values below may change through review until
+[#268](https://github.com/eharquin/gamut/issues/268) lands. They bound the
+import of a library archive (STORE-018, SEC-010).
+
+| Quantity | Limit | Diagnostic |
+| --- | ---: | --- |
+| Archive file size | 32 MiB | `LIMIT_ARCHIVE_SIZE` |
+| Entries per archive, including directories and the manifest | 2,048 | `LIMIT_ARCHIVE_ENTRIES` |
+| UTF-8 bytes per entry path | 1,024 | `LIMIT_ARCHIVE_PATH_LENGTH` |
+| Decompressed bytes per document entry | 4 MiB | `LIMIT_DOCUMENT_DECODED_SIZE` |
+| Decompressed bytes of the manifest | 1 MiB | `LIMIT_ARCHIVE_MANIFEST_SIZE` |
+| Total decompressed bytes per archive | 64 MiB | `LIMIT_ARCHIVE_DECODED_SIZE` |
+| Decompression expansion ratio per entry | 64:1 | `LIMIT_DECOMPRESSION_RATIO` |
+
+The archive file size is checked before the file is read. Decompressed sizes
+and the expansion ratio are counted while inflating each entry, as for scene
+links, and never taken from the sizes the archive declares. A document entry
+then enters the raw JSON import pipeline of the
+[document format](document-format.md#4-validation-and-migration). Folder
+depth and folder name length apply to the directories of an entry path.
+Crossing the manifest limit discards the manifest with a warning, since the
+manifest is only a hint (SEC-011); crossing any other limit rejects the whole
+archive. Browser storage quotas are usually far below the total decompressed
+limit; a quota failure during import is reported under STORE-018 rather than
+treated as a limit.
 
 ## 3. Parsing and dependency analysis
 
@@ -133,6 +184,11 @@ origin, so that rotating a line about an anchor stays smooth and the anchor
 stays on the line. Trailing zeroes are removed and negative zero is
 serialized as `0`. Literals already in a document are rewritten only when the
 viewport moves the object that holds them.
+
+The library panel (STORE-014) is docked beside the viewport above a width
+breakpoint and opens as an overlay over the viewport below it (A11Y-012). The
+breakpoint value is open, decided in
+[#266](https://github.com/eharquin/gamut/issues/266).
 
 Document history retains at most 100 complete pre-command document snapshots.
 When the limit is exceeded, the oldest snapshot is discarded first. Undo and
