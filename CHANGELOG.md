@@ -7,6 +7,37 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Scientific capabilities
+
+- A coordinate tuple is resolved by the active algebra instead of a hidden
+  `vector` call (#180). In PGA(2), `(x, y)` is `point(x, y)` and `(x, y, w)`
+  the homogeneous `point(x, y, w)`, so `(x, y, 0)` is the ideal point in
+  direction `(x, y)`; a triple is never a line. In VGA(2), `(x, y)` stays
+  `vector(x, y)` with exactly two components. Any other number of components,
+  such as `(1,)` or `(1, 2, 3)` in VGA(2), gives an arity diagnostic at the
+  tuple that does not mention `vector`.
+- Tuple and `vector(…)` components accept any expression, as constructor
+  arguments do: `(X[1], 2)` and `(A.norm, 1)` evaluate, a list literal such as
+  `([0, 1], 2)` broadcasts, and a non-scalar component is rejected at
+  evaluation with the constructor's scalar diagnostic instead of a syntax
+  error (#180).
+
+### Document and convention changes
+
+- Language section 7 makes the tuple algebra-neutral: the active definition
+  declares the constructor and arities it denotes. The `(1,)`, 3-component
+  and excess-component rules are removed for VGA(2) and left to VGA Core
+  (VGAC-004); VEC-001 to VEC-003 say so. The new PGA-015 states the PGA(2)
+  rule and the PGA convention section 9 lists the tuple next to the
+  constructors. The language version does not change (#180).
+
+### Interface and accessibility
+
+- Dragging a point or vector written as a tuple rewrites the tuple in place,
+  so `P = (2, 1)` becomes `P = (2.5, 1)`, not `point(2.5, 1)`. PGA position
+  fields accept the tuple `(x, y)` and keep it when the base is dragged; the
+  position diagnostic that pointed tuples to `point(1, 2)` is gone (#180).
+
 ### Fixed
 
 - Saving a graph while a slider animation plays now stops the animation and

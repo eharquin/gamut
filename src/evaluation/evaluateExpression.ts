@@ -101,6 +101,26 @@ function evaluateExpressionUnchecked(
       return nary(expression, expression.arguments.map(evaluate),
         (args) => engine.call(expression.name, args), budget)
     }
+    case 'tuple': {
+      const tuple = engine.tuple
+      if (tuple === undefined) {
+        throw new ExpressionEvaluationError(
+          'LANG_UNSUPPORTED_TUPLE',
+          'Coordinate tuples are not supported by the active algebra.',
+          expression.origin,
+        )
+      }
+      const count = expression.components.length
+      if (!tuple.arities.includes(count)) {
+        throw new ExpressionEvaluationError(
+          'LANG_ARITY',
+          `A coordinate tuple takes ${tuple.arities.join(' or ')} components in this algebra, received ${count}.`,
+          expression.origin,
+        )
+      }
+      return nary(expression, expression.components.map(evaluate),
+        (args) => engine.call(tuple.constructor, args), budget)
+    }
     case 'pseudoscalar':
       return engine.pseudoscalar()
     case 'reference':
