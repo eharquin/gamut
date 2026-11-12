@@ -70,8 +70,10 @@ describe('standard PGA(2) interpretation', () => {
     const head = engine.add(interpretation.positionValue({ x: 1, y: 1 }, PGA_2D_BASIS), owned(point(3, 4, 0)))
     expect(interpretation.interpret(head)).toMatchObject({ kind: 'euclidean-point', x: 4, y: 5, weight: 1 })
     expect(interpretation.formatPosition('1', '2')).toBe('point(1, 2)')
-    expect(interpretation.literalEdit(p)).toEqual({ constructor: 'point', arity: 2 })
-    expect(interpretation.literalEdit(d)).toEqual({ constructor: 'ipoint', arity: 2 })
+    // A weighted point(x, y, w) is edited too; point(x, y, 0) is the ideal
+    // point, edited like ipoint(x, y) (#181).
+    expect(interpretation.literalEdit(p)).toEqual({ constructor: 'point', arity: 2, weightedConstructor: 'point' })
+    expect(interpretation.literalEdit(d)).toEqual({ constructor: 'ipoint', arity: 2, weightedConstructor: 'point' })
     expect(interpretation.literalEdit(l)).toEqual({ constructor: 'line', arity: 3 })
   })
 

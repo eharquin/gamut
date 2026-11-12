@@ -8,7 +8,9 @@
 **Decision records:** [PGA(2) Convention Decisions](../architecture/pga-2d-convention-decisions.md),
 [PGA(2) Motor Logarithm and Square Root Decisions](../architecture/pga-2d-motor-logarithm-decisions.md)
 **Amended:** 2026-10-11, section 8 adds the motor logarithm and square root
-(D12–D18) to version 1; no previously valid source changes value (D17)
+(D12–D18) to version 1; no previously valid source changes value (D17);
+2026-11-12, section 9 lists the coordinate tuple (#180); no previously valid
+source changes value
 **License:** MIT
 
 ## 1. Purpose and authority
@@ -264,6 +266,16 @@ point(x, y, w)  = w e12 - x e02 + y e01
 point(x, y)     = point(x, y, 1)
 ipoint(x, y)    = point(x, y, 0)
 ```
+
+A coordinate tuple denotes `point` ([language section 7](language.md#7-vectors-and-tuples)):
+
+```text
+(x, y)          = point(x, y)
+(x, y, w)       = point(x, y, w)
+```
+
+so `(x, y, 0)` is `ipoint(x, y)`. A triple is never a line; any other number
+of components is an arity error.
 
 `point` takes raw homogeneous coordinates: its Euclidean position, when it has
 one, is `(x / w, y / w)`. `ipoint` is exactly `point` with weight zero and

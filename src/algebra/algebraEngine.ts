@@ -1,6 +1,7 @@
 import { type AlgebraBasis } from '../domain/algebraBasis'
 import { type OwnedMultivector } from '../domain/multivector'
 import { type ScalarFunctionName } from '../domain/scalarFunctions'
+import { type TupleConstructor } from '../language/ast'
 
 /**
  * The operation contract every registered algebra definition provides.
@@ -14,6 +15,12 @@ export type AlgebraEngine = Readonly<{
   basis: AlgebraBasis
   /** Registered function and constructor names with their accepted arities (ALG-028). */
   functions: ReadonlyMap<string, readonly number[]>
+  /**
+   * The registered constructor a coordinate tuple denotes and the tuple
+   * arities it accepts (language section 7); an algebra without one rejects
+   * every tuple. Each accepted arity is an arity of that constructor.
+   */
+  tuple?: TupleConstructor
   /** Applies a registered function; the caller has checked name and arity. */
   call(name: string, args: readonly OwnedMultivector[]): OwnedMultivector
   scalar(value: number): OwnedMultivector

@@ -4,6 +4,8 @@
 **Date:** 2026-07-30
 **Initial scope:** VGA core
 **Refines:** LANG-001 through LANG-009
+**Amended:** 2026-11-12, section 7: a coordinate tuple is resolved by the
+active algebra (#180); the language version does not change (section 15)
 **License:** MIT
 
 ## 1. Purpose and authority
@@ -25,7 +27,8 @@ cycles, and invalid dependencies. It supports these features for the current
 VGA(2) scalar, vector-constructor, compact-blade, unary-sign, addition,
 subtraction, geometric product, outer product, inner product, regressive
 product, reverse, dual, grade involution, pseudoscalar, grade-projection, and
-coefficient-extraction subset. The read-only `V.position` and
+coefficient-extraction subset. Coordinate tuples are implemented for every
+algebra that declares a tuple constructor (section 7): VGA(2) and PGA(2). The read-only `V.position` and
 `V.head` properties resolve the separately evaluated position and the derived
 sum `V.position + V` for named positioned vectors. Pure bivectors receive the
 same separate position capability through `B.position` but have no `head`
@@ -213,16 +216,37 @@ projection distribute over lists.
 
 ## 7. Vectors and tuples
 
-Constructor and tuple forms are equivalent vector syntax:
+A coordinate tuple is a parenthesized list of two or more comma-separated
+components, or one component followed by a comma: `(1)` is a parenthesized
+scalar, and the trailing comma makes `(1,)` a one-component tuple. Only a
+one-component tuple takes a trailing comma, and an empty tuple is invalid.
+A component may be any expression, as a constructor argument may: the
+constructor the tuple denotes rejects a non-scalar component at evaluation
+with its own scalar-boundary diagnostic, and a list component broadcasts
+with the rules of section 11, so `([0, 1], 2)` is the list of the two
+values. The same holds for the components of `vector(…)`.
+
+The tuple is algebra-neutral syntax. The active algebra definition declares
+which registered constructor a tuple denotes and which numbers of components
+it accepts; the tuple then evaluates exactly as that constructor called with
+its components. A tuple has as many components as the dimension of the space,
+plus the weight for a projective point:
 
 ```text
-vector(1)       == (1,)
-vector(1, 2)    == (1, 2)
-vector(1, 2, 3) == (1, 2, 3)
+VGA(2):  (x, y)    == vector(x, y)
+PGA(2):  (x, y)    == point(x, y)
+         (x, y, w) == point(x, y, w)
 ```
 
-`(1)` is a parenthesized scalar; the trailing comma makes `(1,)` a vector.
-`vector()` and an empty tuple are invalid. Components are scalar expressions.
+In PGA(2), `(x, y, 0)` is therefore the ideal point in direction `(x, y)`;
+a triple is never a line, which keeps `line(a, b, c)`. A tuple with a number of
+components the active algebra does not accept, such as `(1,)` or `(1, 2, 3)`
+in VGA(2) and `(1, 2, 3, 4)` in PGA(2), produces an arity diagnostic at the
+tuple's span; the diagnostic names the tuple, never the constructor it would
+denote. An algebra that declares no tuple constructor rejects every tuple.
+One-component, three-component, and longer VGA tuples, with the zero-filled
+missing and inactive excess components of VEC-002 and VEC-003, belong to a
+higher-dimensional VGA and are fixed by the VGA Core milestone (VGAC-004).
 
 `vector` is the constructor registered by the VGA definition. Every other
 constructor is a registered function of the active definition and uses the
@@ -233,9 +257,7 @@ PGA definition registers `point(x, y)`, `point(x, y, w)`, `ipoint(x, y)`, and
 algebra does not register produces the common unsupported-function diagnostic
 at the call's span, and a call with an unregistered number of arguments an
 arity diagnostic. Constructor calls broadcast over list arguments with the
-rules of section 11.
-Missing components are zero-filled in higher dimensions. Excess components and
-their sources remain stored but inactive in lower dimensions.
+rules of section 11, and so do tuples.
 
 Tuple versus constructor spelling and all component source spans remain
 available to language-aware editing services; source rewriting behavior is

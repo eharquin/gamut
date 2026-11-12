@@ -3,7 +3,7 @@
 **Status:** Draft for review
 **Date:** 2026-07-30
 **Format version:** 1
-**Refines:** DOC-001 through DOC-012
+**Refines:** DOC-001 through DOC-014
 **License:** MIT
 
 ## 1. Purpose and authority
@@ -208,7 +208,7 @@ unknown field as an implicit extension.
 | Field | Type | Rule |
 | --- | --- | --- |
 | `id` | string | Non-empty opaque immutable document identity. |
-| `formatVersion` | positive integer | Exactly the current version (`8`) after migration. |
+| `formatVersion` | positive integer | Exactly the current version (`8`) after migration; expression folders join version 8 before 0.3.0 is published (section 4.1). |
 | `languageVersion` | positive integer | Selects source syntax and semantics. |
 | `algebra` | `AlgebraReference` | Selects one validated algebra configuration. |
 | `interpretation` | `InterpretationReference \| null` | At most one active interpretation. |
@@ -400,8 +400,9 @@ visibility fields are booleans, and `theme` is `light`, `dark`, or `system`.
 tolerance treats as residue; it never changes a computed value.
 `valuesVisible` is a boolean, `true` for new documents: when it is `false`,
 the multivector value under each expression, and under each element of an
-expanded list, is hidden ([#191](https://github.com/eharquin/gamut/issues/191)).
-Each affected row announces its value as hidden and never exposes the hidden
+expanded list, is hidden as specified by DOC-014
+([#191](https://github.com/eharquin/gamut/issues/191)). Each affected row
+announces its value as hidden (A11Y-013) and never exposes the hidden
 coefficients through its accessible name, description, or live announcements.
 Descriptions, diagnostics, controls, and the drawing are unchanged, and
 turning the setting back on reveals every value at once. Like the other
@@ -409,6 +410,33 @@ display settings, it is saved, exported, and carried by scene links and
 library graphs; it is a teaching aid, not a protection: the values remain in
 the document.
 Later format versions may add viewport variants through migration.
+
+### 2.4 Expression folders
+
+From format version 8, a document may group its items in expression folders
+(DOC-013), as decided in [#83](https://github.com/eharquin/gamut/issues/83):
+
+- each item carries the list of folder names that contains it, from the root
+  (for example `["Triangle", "Angles"]`); an absent or empty list means the
+  top level;
+- the collapsed state of folders is stored separately in the document, not on
+  the items;
+- a folder name is stored plain text with no markup semantics; it is never
+  empty, and two folders with the same parent never share a name, so a name
+  list identifies one folder;
+- the order of `items` stays the item order used for the canvas draw order and for every other order-dependent rule of
+  this document; a folder never changes evaluation, appearance, position, or
+  dependency nodes (section 5);
+- objects are closed and nesting depth, folder count, and name length obey
+  the [folder limits](limits-and-constants.md#21-folders); folders do not
+  count towards the 1,000 items per document;
+- the collapsed state is document content, serialized and compared like other
+  fields, so changing it is an unsaved change; it is not an undo entry.
+
+The exact field names of the item folder list and of the collapsed-state
+record are fixed by the #83 implementation before 0.3.0 is published. A
+document without folders has all its items at the top level in their stored
+order.
 
 ## 3. Canonical JSON
 
@@ -479,7 +507,7 @@ previous one; the implementation records the migrations in
 | 5 | `Appearance.idealPointDisplay` (`vector`, `ideal`, `both`): how an ideal PGA point is drawn; earlier documents default to `vector`. |
 | 6 | `Appearance.pointListDisplay` (`none`, `open-polyline`, `closed-loop`) and `Appearance.pointMarkersVisible`: how the elements of a list of finite and ideal points are connected, and whether a connected one keeps its point markers; earlier documents default to `none` with markers. |
 | 7 | Appearance sources (`strokeWidthSource`, `pointSizeSource`, `opacitySource`, `labelAngleSource`, `labelSizeSource`, `labelDistanceSource`), `strokeStyle`, `pointStyle`, `labelAnchor`, and `primitiveStyles`; `Item.normalization` adds `euclidean` and `ideal`; the style registry adds `orange`, `teal`, `purple`, and `pink`. The migration fills empty sources, `solid`, `dot`, and `labelAnchor: top-right` (the fixed position of earlier versions), and moves `pointListDisplay` to `primitiveStyles.points.connection` and `pointMarkersVisible` to `primitiveStyles.points.visible`, kept `true` for an unconnected list, which always drew its markers; `primitiveStyles.lines.orientationVisible` copies the item's orientation. Normalization is unchanged. |
-| 8 | **Planned for 0.3.0; may change until 0.3.0 is published.** `ViewState.display.valuesVisible` ([#191](https://github.com/eharquin/gamut/issues/191)); earlier documents always showed their values, so the migration sets `valuesVisible: true`. Expression folders ([#83](https://github.com/eharquin/gamut/issues/83)) join this version before 0.3.0 is published. |
+| 8 | **Planned for 0.3.0; may change until 0.3.0 is published.** `ViewState.display.valuesVisible` ([#191](https://github.com/eharquin/gamut/issues/191)); earlier documents always showed their values, so the migration sets `valuesVisible: true`. Expression folders join this version before 0.3.0 is published: each item's folder name list, and the collapsed state of folders stored separately (section 2.4, [#83](https://github.com/eharquin/gamut/issues/83)); their migration places every item at the top level in its current order, with no folders. |
 
 A release can open only the format versions it knows. Release 0.2.0 cannot
 open a version 8 document; protecting an older release against a document

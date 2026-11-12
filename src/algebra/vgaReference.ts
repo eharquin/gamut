@@ -38,7 +38,7 @@ export const VGA_2_REFERENCE: readonly ReferenceSection[] = [
       entry('e1, e2, e12', 'canonical VGA(2) basis blades',
         { source: 'e12', inspection: 'e12' }, { source: 'e21', inspection: '-e12' }),
       pseudoscalarEntry('e12'),
-      entry('V = (2, 1)', 'named vector declaration using tuple syntax', { source: 'V = (2, 1)', inspection: '2e1 + e2' }),
+      entry('V = (2, 1)', 'named vector declaration using tuple syntax, exactly two components', { source: 'V = (2, 1)', inspection: '2e1 + e2' }),
       entry('vector(2, 1)', 'explicit vector constructor', { source: 'vector(2, 1)', inspection: '2e1 + e2' }),
     ],
   },

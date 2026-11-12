@@ -12,7 +12,7 @@ import {
  * written, and one short line, then the normalization choices of a row.
  */
 export const PGA_2_ALGEBRA_REFERENCE: readonly ReferenceTopic[] = [
-  topic('Point', 'point(x, y), point(x, y, w)', 'point (x, y), weight w',
+  topic('Point', 'point(x, y), point(x, y, w), (x, y), (x, y, w)', 'point (x, y), weight w',
     { source: 'P = point(1, 2)', inspection: '2e01 - e02 + e12' }, { source: 'point(2, 4, 2)', inspection: '4e01 - 2e02 + 2e12' }),
   topic('Ideal point', 'ipoint(x, y)', 'direction (x, y)', { source: 'D = ipoint(1, 1)', inspection: 'e01 - e02' }),
   topic('Line', 'line(a, b, c), A & B', 'a·x + b·y + c = 0, or the line through A and B',
@@ -46,6 +46,8 @@ export const PGA_2_REFERENCE: readonly ReferenceSection[] = [
       entry('point(x, y)', 'Euclidean point at (x, y)', { source: 'point(1, 2)', inspection: '2e01 - e02 + e12' }),
       entry('point(x, y, w)', 'weighted point at (x / w, y / w)',
         { source: 'point(2, 4, 2)', inspection: '4e01 - 2e02 + 2e12' }),
+      entry('(x, y), (x, y, w)', 'point(x, y) or point(x, y, w), so (x, y, 0) is an ideal point',
+        { source: 'P = (1, 2)', inspection: '2e01 - e02 + e12' }, { source: '(1, 1, 0)', inspection: 'e01 - e02' }),
       entry('ipoint(x, y)', 'ideal point in direction (x, y)', { source: 'ipoint(1, 1)', inspection: 'e01 - e02' }),
       entry('line(a, b, c)', 'the line a x + b y + c = 0', { source: 'line(1, 0, -1)', inspection: '-e0 + e1' }),
     ],
@@ -76,7 +78,7 @@ export const PGA_2_REFERENCE: readonly ReferenceSection[] = [
   {
     title: 'Positioning',
     entries: [
-      entry('position point(x, y)', 'optional field under an ideal-point row',
+      entry('position point(x, y)', 'optional field under an ideal-point row, also written (x, y)',
         { source: 'I = ipoint(1, 0)', positionSource: 'point(1, 2)', inspection: '-e02' },
         { source: 'J = ipoint(0, 1)', inspection: 'e01' }),
       entry('position P, position I.head', 'the position may reference a named point or the position or head of an ideal point',

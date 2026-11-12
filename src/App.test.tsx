@@ -3737,6 +3737,153 @@ describe('PGA 2D foundation workflow', () => {
     fireEvent.pointerUp(canvas, { pointerId: 33 })
     expect(first).toHaveValue('L = line(0.955, 0.296, 0)')
   })
+  // 72 pixels per unit, origin at (320, 240).
+  const at = (x: number, y: number) => ({ clientX: 320 + x * 72, clientY: 240 - y * 72 })
+  const dragHandle = (name: string, pointerId: number, x: number, y: number) => {
+    const canvas = viewportCanvas()
+    fireEvent.pointerDown(screen.getByRole('button', { name }), { button: 0, pointerId })
+    fireEvent.pointerMove(canvas, { pointerId, ...at(x, y) })
+    fireEvent.pointerUp(canvas, { pointerId })
+  }
+
+  it('drags a weighted point keeping its weight, as one undoable rewrite (#181)', () => {
+    selectPga()
+    const first = screen.getByRole('textbox', { name: 'Expression 1' })
+    fireEvent.change(first, { target: { value: 'P = point(4, 2, 2)' } })
+    sizeViewportCanvas(viewportCanvas())
+    expect(screen.getByText('Point')).toHaveTextContent('at (2, 1), weight 2')
+
+    dragHandle('Move P', 51, 3, 1)
+    expect(first).toHaveValue('P = point(6, 2, 2)')
+    expect(screen.getByText('Point')).toHaveTextContent('at (3, 1), weight 2')
+    fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
+    expect(first).toHaveValue('P = point(4, 2, 2)')
+
+    // Arrow keys move the drawn point by the step and announce where it is drawn.
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Move P' }), { key: 'ArrowRight', shiftKey: true })
+    expect(first).toHaveValue('P = point(6, 2, 2)')
+    expect(screen.getByText(/moved to 3, 1\.$/)).toBeInTheDocument()
+  })
+
+  it('keeps negative, fractional and named weights while dragging (#181)', () => {
+    selectPga()
+    const first = screen.getByRole('textbox', { name: 'Expression 1' })
+    sizeViewportCanvas(viewportCanvas())
+    for (const [source, dragged] of [
+      // Drawn at (2, 1); the sign of the weight, and the orientation, are kept.
+      ['P = point(-2, -1, -1)', 'P = point(-3, -1, -1)'],
+      ['P = point(1, 0.5, 0.5)', 'P = point(1.5, 0.5, 0.5)'],
+    ] as const) {
+      fireEvent.change(first, { target: { value: source } })
+      dragHandle('Move P', 52, 3, 1)
+      expect(first).toHaveValue(dragged)
+    }
+
+    fireEvent.change(first, { target: { value: 'w = 2' } })
+    fireEvent.keyDown(first, { key: 'Enter' })
+    const second = screen.getByRole('textbox', { name: 'Expression 2' })
+    fireEvent.change(second, { target: { value: 'P = point(4, 2, w)' } })
+    dragHandle('Move P', 53, 3, 1)
+    expect(second).toHaveValue('P = point(6, 2, w)')
+    expect(first).toHaveValue('w = 2')
+  })
+
+  const enterRows = (...sources: string[]) => sources.forEach((source, index) => {
+    const row = screen.getByRole('textbox', { name: `Expression ${index + 1}` })
+    fireEvent.change(row, { target: { value: source } })
+    if (index < sources.length - 1) fireEvent.keyDown(row, { key: 'Enter' })
+  })
+
+  it('announces where a weighted point is drawn after an arrow key (#181)', () => {
+    selectPga()
+    sizeViewportCanvas(viewportCanvas())
+    enterRows('P = point(0.37, 0.37, 0.37)')
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Move P' }), { key: 'ArrowRight' })
+    // 1.1 · 0.37 = 0.407 is written 0.41, drawn at 0.41 / 0.37 = 1.108…
+    expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('P = point(0.41, 0.37, 0.37)')
+    expect(screen.getByText('Object base moved to 1.11, 1.')).toBeInTheDocument()
+  })
+
+  it('edits a coordinate name through its scalar and keeps a named negative weight (#181)', () => {
+    selectPga()
+    sizeViewportCanvas(viewportCanvas())
+    enterRows('a = 4', 'P = point(a, 2, 2)')
+    dragHandle('Move P', 59, 3, 1)
+    expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('a = 6')
+    expect(screen.getByRole('textbox', { name: 'Expression 2' })).toHaveValue('P = point(a, 2, 2)')
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: 'w = 1' } })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 2' }), { target: { value: 'P = point(4, 2, -w)' } })
+    expect(screen.getByText('Point')).toHaveTextContent('at (-4, -2), weight -1')
+    dragHandle('Move P', 60, 3, 1)
+    expect(screen.getByRole('textbox', { name: 'Expression 2' })).toHaveValue('P = point(-3, -1, -w)')
+    expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('w = 1')
+  })
+
+  it('shows no handle for a weight that a coordinate changes or that is too small to keep (#181)', () => {
+    selectPga()
+    sizeViewportCanvas(viewportCanvas())
+    enterRows('t = 1', 'w = 2*t', 'P = point(t, 1, w)')
+    expect(screen.getByText('Point')).toHaveTextContent('weight 2')
+    expect(screen.queryByRole('button', { name: 'Move P' })).not.toBeInTheDocument()
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 2' }), { target: { value: 'w = 2' } })
+    expect(screen.getByRole('button', { name: 'Move P' })).toBeInTheDocument()
+
+    // At 72 pixels per unit, |w| / 72 needs more than eight decimals.
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 3' }), { target: { value: 'P = point(1e-9, 1e-9, 1e-9)' } })
+    expect(screen.getByText('Point')).toHaveTextContent('at (1, 1)')
+    expect(screen.queryByRole('button', { name: 'Move P' })).not.toBeInTheDocument()
+  })
+
+  it('drags point(x, y, 0) and (x, y, 0) like an ideal point, keeping the zero (#181)', () => {
+    selectPga()
+    const first = screen.getByRole('textbox', { name: 'Expression 1' })
+    sizeViewportCanvas(viewportCanvas())
+    for (const [source, dragged] of [
+      ['D = point(1, 0, 0)', 'D = point(2, 2, 0)'],
+      ['D = (1, 0, 0)', 'D = (2, 2, 0)'],
+    ] as const) {
+      fireEvent.change(first, { target: { value: source } })
+      expect(screen.getByText('Ideal point')).toHaveTextContent('direction (1, 0)')
+      expect(screen.getByRole('button', { name: 'Move base of D' })).toBeInTheDocument()
+      dragHandle('Move head of D', 54, 2, 2)
+      expect(first).toHaveValue(dragged)
+    }
+  })
+
+  it('draws and drags a PGA tuple like the point it denotes, keeping the tuple (#180)', () => {
+    selectPga()
+    const first = screen.getByRole('textbox', { name: 'Expression 1' })
+    sizeViewportCanvas(viewportCanvas())
+    fireEvent.change(first, { target: { value: 'P = (1, 2)' } })
+    expect(screen.getByText('Point')).toHaveTextContent('at (1, 2)')
+    expect(screen.getByLabelText('P')).toHaveClass('point-marker')
+    dragHandle('Move P', 55, 2.5, 1)
+    expect(first).toHaveValue('P = (2.5, 1)')
+
+    fireEvent.change(first, { target: { value: 'P = (4, 2, 2)' } })
+    dragHandle('Move P', 56, 3, 1)
+    expect(first).toHaveValue('P = (6, 2, 2)')
+
+    // An arity PGA(2) does not accept is diagnosed without naming vector.
+    fireEvent.change(first, { target: { value: 'P = (1, 2, 3, 4)' } })
+    expect(screen.getByText('A coordinate tuple takes 2 or 3 components in this algebra, received 4.')).toBeInTheDocument()
+    expect(screen.queryByText(/vector/)).not.toBeInTheDocument()
+  })
+
+  it('accepts and keeps a tuple in a PGA position field (#180)', () => {
+    selectPga()
+    const first = screen.getByRole('textbox', { name: 'Expression 1' })
+    fireEvent.change(first, { target: { value: 'D = ipoint(1, 0)' } })
+    sizeViewportCanvas(viewportCanvas())
+    dragHandle('Move base of D', 57, 1, 1)
+    const position = screen.getByRole('textbox', { name: 'Position 1' })
+    expect(position).toHaveValue('point(1, 1)')
+    fireEvent.change(position, { target: { value: '(1, 1)' } })
+    expect(screen.queryByText(/coordinate tuples are not supported/)).not.toBeInTheDocument()
+    dragHandle('Move base of D', 58, 2, 1)
+    expect(screen.getByRole('textbox', { name: 'Position 1' })).toHaveValue('(2, 1)')
+  })
 })
 
 describe('stroke width and opacity from the appearance menu (#221)', () => {
@@ -4710,5 +4857,18 @@ describe('local library of named graphs (#212)', () => {
     const menu = openLibrary()
     fireEvent.click(within(menu).getByRole('button', { name: 'Duplicate Broken' }))
     expect(within(menu).getByRole('alert')).toHaveTextContent(/^LIBRARY_ENTRY_INVALID/)
+  })
+})
+
+describe('VGA(2) coordinate tuples (#180)', () => {
+  it('shows the tuple arity diagnostic without naming vector', () => {
+    render(<App />)
+    const first = screen.getByRole('textbox', { name: 'Expression 1' })
+    fireEvent.change(first, { target: { value: 'V = (1, 2, 3)' } })
+    expect(screen.getByText('A coordinate tuple takes 2 components in this algebra, received 3.')).toBeInTheDocument()
+    fireEvent.change(first, { target: { value: 'V = (1,)' } })
+    expect(screen.getByText('A coordinate tuple takes 2 components in this algebra, received 1.')).toBeInTheDocument()
+    fireEvent.change(first, { target: { value: 'V = (2, 1)' } })
+    expect(screen.queryByText(/coordinate tuple takes/)).not.toBeInTheDocument()
   })
 })

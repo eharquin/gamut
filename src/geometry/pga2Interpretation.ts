@@ -238,8 +238,10 @@ export const PGA_2D_INTERPRETATION: Interpretation<Pga2Entity> = Object.freeze({
   },
   creation: { constructor: 'point', objectName: 'Point' },
   literalEdit(entity) {
-    if (entity.kind === 'euclidean-point') return { constructor: 'point', arity: 2 }
-    if (entity.kind === 'ideal-point') return { constructor: 'ipoint', arity: 2 }
+    // A weighted point(x, y, w) keeps its weight while dragged; written with
+    // a zero weight it is an ideal point, dragged like ipoint(x, y) (#181).
+    if (entity.kind === 'euclidean-point') return { constructor: 'point', arity: 2, weightedConstructor: 'point' }
+    if (entity.kind === 'ideal-point') return { constructor: 'ipoint', arity: 2, weightedConstructor: 'point' }
     if (entity.kind === 'euclidean-line') return { constructor: 'line', arity: 3 }
     return null
   },
