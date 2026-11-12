@@ -140,28 +140,31 @@ describe('minimal expression parser', () => {
     })
   })
 
+  it('parses any component expression; the constructor checks scalars at evaluation', () => {
+    for (const source of ['(e1, 2, 3)', '(X[1], 2)', '(A.norm, 1)', '([0, 1], 2)', 'vector(e1, 2)', 'vector([0, 1], 2)']) {
+      expect(parseExpression(source), source).toMatchObject({ ok: true })
+    }
+    expect(parseExpression('([0, 1], 2)')).toMatchObject({
+      ok: true,
+      expression: { kind: 'tuple', components: [{ kind: 'list-expression' }, { kind: 'scalar-literal' }] },
+    })
+  })
+
   it('names the tuple, not vector, in tuple syntax diagnostics', () => {
-    expect(parseExpression('(e1, 2, 3)')).toEqual({
-      ok: false,
-      diagnostic: {
-        code: 'LANG_SYNTAX',
-        severity: 'error',
-        message: 'Tuple components must be scalar expressions.',
-        span: { start: 1, end: 3 },
-      },
-    })
-    expect(parseExpression('(1, 2, e12)')).toMatchObject({
-      ok: false, diagnostic: { message: 'Tuple components must be scalar expressions.', span: { start: 7, end: 10 } },
-    })
     expect(parseExpression('(1, 2 3')).toMatchObject({
       ok: false, diagnostic: { code: 'LANG_SYNTAX' },
     })
     expect(parseExpression('(1, 2')).toMatchObject({
       ok: false, diagnostic: { message: 'Expected “)” after tuple components.' },
     })
-    // Only a single component takes a trailing comma.
-    expect(parseExpression('(1, 2,)')).toMatchObject({
-      ok: false, diagnostic: { message: 'Expected an expression.' },
+    expect(parseExpression('(1, 2,)')).toEqual({
+      ok: false,
+      diagnostic: {
+        code: 'LANG_SYNTAX',
+        severity: 'error',
+        message: 'Only a one-component tuple takes a trailing comma.',
+        span: { start: 5, end: 6 },
+      },
     })
   })
 
@@ -187,12 +190,18 @@ describe('minimal expression parser', () => {
     })
   })
 
-  it('rejects scientific notation without an explicit exponent sign', () => {
-    const result = parseExpression('vector(1e3, 2)')
-
-    expect(result).toMatchObject({
-      ok: false,
-      diagnostic: { code: 'LANG_SYNTAX' },
+  it('does not read scientific notation without an explicit exponent sign', () => {
+    // `1e3` is the implicit product of 1 and the blade e3, never 1000; as a
+    // vector component it is rejected at evaluation as a non-scalar.
+    expect(parseExpression('vector(1e3, 2)')).toMatchObject({
+      ok: true,
+      expression: {
+        kind: 'vector-constructor',
+        components: [{
+          kind: 'binary-expression', implicit: true,
+          left: { kind: 'scalar-literal', value: 1 }, right: { kind: 'basis-blade', name: 'e3' },
+        }, { value: 2 }],
+      },
     })
   })
 
@@ -228,18 +237,6 @@ describe('minimal expression parser', () => {
           operator: '*',
           implicit: false,
         },
-      },
-    })
-  })
-
-  it('rejects a blade-valued vector component before lowering', () => {
-    expect(parseExpression('vector(e1, 2)')).toEqual({
-      ok: false,
-      diagnostic: {
-        code: 'LANG_SYNTAX',
-        severity: 'error',
-        message: 'Vector components must be scalar expressions.',
-        span: { start: 7, end: 9 },
       },
     })
   })

@@ -1,14 +1,8 @@
-import type { SurfaceExpressionNode } from './ast'
+import type { SurfaceExpressionNode, TupleConstructor } from './ast'
 import { formatScalarSource } from './directScalarEdit'
 import { parseDocumentExpression, parseExpression } from './parseExpression'
 
 export type SourceSpan = Readonly<{ start: number; end: number }>
-
-/**
- * The constructor a coordinate tuple denotes in the active algebra and the
- * arities it accepts (language section 7); `null` when the algebra has none.
- */
-export type TupleSpelling = Readonly<{ constructor: string; arities: readonly number[] }> | null
 
 /** One constructor argument as a direct-edit target: a numeric literal or a signed name. */
 export type ConstructorComponentEdit =
@@ -45,7 +39,7 @@ function componentEdit(node: SurfaceExpressionNode): ConstructorComponentEdit | 
 function constructorArguments(
   node: SurfaceExpressionNode,
   constructor: string,
-  tuple: TupleSpelling,
+  tuple: TupleConstructor | null,
 ): readonly SurfaceExpressionNode[] | null {
   if (constructor === 'vector' && node.kind === 'vector-constructor') return node.components
   if (node.kind === 'tuple' && tuple?.constructor === constructor &&
@@ -58,7 +52,7 @@ function componentsOf(
   node: SurfaceExpressionNode,
   constructor: string,
   arity: number,
-  tuple: TupleSpelling,
+  tuple: TupleConstructor | null,
 ): readonly ConstructorComponentEdit[] | null {
   const args = constructorArguments(node, constructor, tuple)
   if (!args || args.length !== arity) return null
@@ -79,7 +73,7 @@ export function directItemConstructorComponents(
   source: string,
   constructor: string,
   arity: number,
-  tuple: TupleSpelling = null,
+  tuple: TupleConstructor | null = null,
 ): readonly ConstructorComponentEdit[] | null {
   const parsed = parseDocumentExpression(source)
   if (!parsed.ok) return null
@@ -91,7 +85,7 @@ export function directConstructorComponents(
   source: string,
   constructor: string,
   arity: number,
-  tuple: TupleSpelling = null,
+  tuple: TupleConstructor | null = null,
 ): readonly ConstructorComponentEdit[] | null {
   const parsed = parseExpression(source)
   return parsed.ok ? componentsOf(parsed.expression, constructor, arity, tuple) : null

@@ -879,6 +879,52 @@ describe('coordinate tuples resolved by the active algebra (#180)', () => {
     }
   })
 
+  it('evaluates a PGA list of tuples element by element', () => {
+    const [list] = evaluatePga('L = [(1, 2), (3, 4, 1)]')
+    expect(list.evaluation).toMatchObject({ status: 'valid', inspection: '[2e01 - e02 + e12, 4e01 - 3e02 + e12]' })
+  })
+
+  it('accepts any component expression and broadcasts a list literal like the constructor', () => {
+    const [vgaTuple, vgaCall] = evaluate('T = ([0, 1], 2)', 'C = vector([0, 1], 2)')
+    expect(vgaTuple.evaluation).toMatchObject({ status: 'valid', inspection: '[2e2, e1 + 2e2]' })
+    expect(vgaCall.evaluation).toMatchObject({ status: 'valid', inspection: '[2e2, e1 + 2e2]' })
+    const [pgaTuple, pgaCall] = evaluatePga('T = ([0, 1], 2)', 'C = point([0, 1], 2)')
+    expect(pgaTuple.evaluation).toMatchObject({ status: 'valid', inspection: '[2e01 + e12, 2e01 - e02 + e12]' })
+    expect(pgaTuple.evaluation).toMatchObject({ inspection: (pgaCall.evaluation as { inspection: string }).inspection })
+    const [, , indexed, norm] = evaluatePga('X = [3, 4]', 'A = line(3, 4, 0)', 'P = (X[1], 2)', 'Q = (A.norm, 1)')
+    expect(indexed.evaluation).toMatchObject({ status: 'valid', entity: { kind: 'euclidean-point', x: 4, y: 2 } })
+    expect(norm.evaluation).toMatchObject({ status: 'valid', entity: { kind: 'euclidean-point', x: 5, y: 1 } })
+  })
+
+  it('rejects a non-scalar component at evaluation with the constructor message', () => {
+    expect(invalid(evaluate('V = (e1, 2)')[0].evaluation)).toMatchObject({
+      code: 'ALG_DOMAIN', message: 'A vector component must be scalar.', span: { start: 4, end: 11 },
+    })
+    expect(invalid(evaluate('V = vector(e1, 2)')[0].evaluation)).toMatchObject({
+      code: 'ALG_DOMAIN', message: 'A vector component must be scalar.',
+    })
+    expect(invalid(evaluatePga('P = (e1, 2, 1)')[0].evaluation)).toMatchObject({
+      code: 'ALG_DOMAIN', message: 'A point coordinate must be scalar.', span: { start: 4, end: 14 },
+    })
+    expect(invalid(evaluatePga('P = (1, 2, e0)')[0].evaluation)).toMatchObject({
+      code: 'ALG_DOMAIN', message: 'A point weight must be scalar.',
+    })
+  })
+
+  it('rejects every tuple in an algebra that declares no tuple constructor', () => {
+    const { tuple: _tuple, ...withoutTuple } = createVga2Engine()
+    const [result] = evaluateDocument(
+      expressionDocument([{ id: 'v', source: 'V = (1, 2)' }]),
+      { engine: withoutTuple, interpretation: VGA_2D_INTERPRETATION },
+    )
+    expect(invalid(result.evaluation)).toEqual({
+      code: 'LANG_UNSUPPORTED_TUPLE',
+      severity: 'error',
+      message: 'Coordinate tuples are not supported by the active algebra.',
+      span: { start: 4, end: 10 },
+    })
+  })
+
   it('keeps vector(x, y) a VGA constructor that PGA does not register', () => {
     expect(invalid(evaluatePga('V = vector(1, 2)')[0].evaluation)).toMatchObject({ code: 'LANG_UNSUPPORTED_FUNCTION' })
   })

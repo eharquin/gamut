@@ -42,6 +42,20 @@ describe('constructor literal editing', () => {
       .toBe('( 3 ,4 )')
   })
 
+  it('edits vector(x, y) and VGA tuples, signs and references included', () => {
+    const source = 'V = vector(-2, +3)'
+    const components = directItemConstructorComponents(source, 'vector', 2, VGA_TUPLE)
+    expect(rewriteConstructorLiterals(source, components!, [1.25, -4])).toBe('V = vector(1.25, -4)')
+    const referenced = directItemConstructorComponents('V = vector(-a, 2)', 'vector', 2, VGA_TUPLE)
+    expect(referenced).toEqual([
+      { kind: 'reference', name: 'a', sign: -1 },
+      { kind: 'literal', span: { start: 15, end: 16 } },
+    ])
+    expect(rewriteConstructorLiterals('V = vector(-a, 2)', referenced!, [3, 4])).toBe('V = vector(-a, 4)')
+    expect(directItemConstructorComponents('V = vector(a + 1, 2)', 'vector', 2, VGA_TUPLE)).toBeNull()
+    expect(directConstructorComponents('(1 / 2, 3)', 'vector', 2, VGA_TUPLE)).toBeNull()
+  })
+
   it('refuses a different constructor, arity, or compound argument', () => {
     expect(directItemConstructorComponents('P = point(1, 2)', 'point', 3)).toBeNull()
     expect(directItemConstructorComponents('P = line(1, 2, 3)', 'point', 3)).toBeNull()

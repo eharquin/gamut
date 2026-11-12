@@ -4680,3 +4680,16 @@ describe('local library of named graphs (#212)', () => {
     expect(within(menu).getByRole('alert')).toHaveTextContent(/^LIBRARY_ENTRY_INVALID/)
   })
 })
+
+describe('VGA(2) coordinate tuples (#180)', () => {
+  it('shows the tuple arity diagnostic without naming vector', () => {
+    render(<App />)
+    const first = screen.getByRole('textbox', { name: 'Expression 1' })
+    fireEvent.change(first, { target: { value: 'V = (1, 2, 3)' } })
+    expect(screen.getByText('A coordinate tuple takes 2 components in this algebra, received 3.')).toBeInTheDocument()
+    fireEvent.change(first, { target: { value: 'V = (1,)' } })
+    expect(screen.getByText('A coordinate tuple takes 2 components in this algebra, received 1.')).toBeInTheDocument()
+    fireEvent.change(first, { target: { value: 'V = (2, 1)' } })
+    expect(screen.queryByText(/coordinate tuple takes/)).not.toBeInTheDocument()
+  })
+})

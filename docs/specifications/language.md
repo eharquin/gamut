@@ -24,10 +24,11 @@ The application currently implements one declaration or anonymous expression
 per row, case-sensitive identifier references, forward-reference resolution,
 and document-level diagnostics for missing names, duplicate declarations,
 cycles, and invalid dependencies. It supports these features for the current
-VGA(2) scalar, vector-constructor, coordinate-tuple, compact-blade, unary-sign, addition,
+VGA(2) scalar, vector-constructor, compact-blade, unary-sign, addition,
 subtraction, geometric product, outer product, inner product, regressive
 product, reverse, dual, grade involution, pseudoscalar, grade-projection, and
-coefficient-extraction subset. The read-only `V.position` and
+coefficient-extraction subset. Coordinate tuples are implemented for every
+algebra that declares a tuple constructor (section 7): VGA(2) and PGA(2). The read-only `V.position` and
 `V.head` properties resolve the separately evaluated position and the derived
 sum `V.position + V` for named positioned vectors. Pure bivectors receive the
 same separate position capability through `B.position` but have no `head`
@@ -216,9 +217,14 @@ projection distribute over lists.
 ## 7. Vectors and tuples
 
 A coordinate tuple is a parenthesized list of two or more comma-separated
-scalar components, or one component followed by a comma: `(1)` is a
-parenthesized scalar, and the trailing comma makes `(1,)` a one-component
-tuple. An empty tuple is invalid. Components are scalar expressions.
+components, or one component followed by a comma: `(1)` is a parenthesized
+scalar, and the trailing comma makes `(1,)` a one-component tuple. Only a
+one-component tuple takes a trailing comma, and an empty tuple is invalid.
+A component may be any expression, as a constructor argument may: the
+constructor the tuple denotes rejects a non-scalar component at evaluation
+with its own scalar-boundary diagnostic, and a list component broadcasts
+with the rules of section 11, so `([0, 1], 2)` is the list of the two
+values. The same holds for the components of `vector(…)`.
 
 The tuple is algebra-neutral syntax. The active algebra definition declares
 which registered constructor a tuple denotes and which numbers of components
