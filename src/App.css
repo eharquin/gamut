@@ -1073,6 +1073,39 @@ body.reordering-items .reorder-handle {
 
 .expression-status-pastille.is-empty { background: var(--text-dim); }
 .expression-status-pastille.is-error { background: var(--error); }
+/* An annotation row is never evaluated: a hollow pastille, muted source. */
+.expression-status-pastille.is-annotation { background: transparent; border-color: var(--text-dim); }
+
+.is-annotation .expression-source {
+  color: var(--muted);
+}
+
+/* Annotation text in the Markdown subset (#187): prose, not code. */
+.annotation-text {
+  margin: 0;
+  padding: 0 4px 2px 0;
+  color: var(--text);
+  font: 0.875rem/1.45 var(--font-sans);
+  overflow-wrap: anywhere;
+}
+
+.annotation-text code {
+  padding: 0 3px;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  background: var(--surface-code);
+  border-radius: 3px;
+}
+
+.annotation-text a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.annotation-text a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
 
 .expression-body {
   min-width: 0;

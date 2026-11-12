@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import {
+  COMMENT_REFERENCE,
   STYLE_REFERENCE,
   isSetupExample,
   type ReferenceExample,
@@ -79,7 +80,11 @@ export function ExpressionReference({
       id: 'reference-general',
       tab: 'General',
       title: 'General expressions',
-      sections: [...languageSections('general', generalSections), topicSection('general', 'Style', STYLE_REFERENCE)],
+      sections: [
+        ...languageSections('general', generalSections),
+        topicSection('general', 'Comments', COMMENT_REFERENCE),
+        topicSection('general', 'Style', STYLE_REFERENCE),
+      ],
     },
     {
       id: 'reference-algebra',
