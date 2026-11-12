@@ -45,6 +45,37 @@ export function formatViewportCoordinate(
   return formatRoundTripNumber(Number(value.toFixed(viewportCoordinateDecimals(pixelsPerUnit))))
 }
 
+/**
+ * Whether a weighted point can be dragged at this zoom: the weight is finite
+ * and non-zero, and the scaled step `|w| / pixelsPerUnit` needs no more than
+ * the eight decimals a viewport coordinate may have. A tinier weight would
+ * round `X·w` to zero, so such a point shows no handle (#181).
+ */
+export function weightedDragSupported(weight: number, pixelsPerUnit: number): boolean {
+  return Number.isFinite(weight) && weight !== 0 &&
+    Math.round(Math.log10(pixelsPerUnit / Math.abs(weight))) <= MAX_COORDINATE_DECIMALS
+}
+
+/**
+ * The literal coordinates that draw a weighted point `point(x, y, w)` at a
+ * viewport point `(X, Y)`: `(X·w, Y·w)`, each rounded with the pointer step
+ * scaled by `|w|`, so the drawn point keeps the precision of an unweighted
+ * drag. A weight of 1 gives the coordinates of an unweighted drag; `null`
+ * when `weightedDragSupported` refuses the weight (#181).
+ */
+export function weightedViewportCoordinates(
+  point: Readonly<{ x: number; y: number }>,
+  weight: number,
+  pixelsPerUnit: number,
+): readonly [number, number] | null {
+  if (!weightedDragSupported(weight, pixelsPerUnit)) return null
+  const scale = pixelsPerUnit / Math.abs(weight)
+  return [
+    Number(formatViewportCoordinate(point.x * weight, scale)),
+    Number(formatViewportCoordinate(point.y * weight, scale)),
+  ]
+}
+
 /** The declaration created for a located object at a viewport point (INTERACT2D-001). */
 export function creationSource(
   constructor: string,

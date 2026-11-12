@@ -183,7 +183,12 @@ to arrow-key moves, and to the coordinates announced after an arrow-key move,
 so one object never mixes precisions. Line coefficients are written with a
 ten times finer step, refined further by the anchor's distance from the
 origin, so that rotating a line about an anchor stays smooth and the anchor
-stays on the line. Trailing zeroes are removed and negative zero is
+stays on the line. A weighted point `point(x, y, w)` dragged to `(X, Y)` is
+written `point(X·w, Y·w, w)`, with `X·w` and `Y·w` formatted at the scale
+`pixelsPerUnit / |w|`, the pointer step scaled by `|w|`, so the drawn point
+keeps the precision of an unweighted drag; its arrow-key announcement gives
+the drawn position `(X·w / w, Y·w / w)` at the active zoom. A weight whose
+scale would need more than eight decimal places shows no handle. Trailing zeroes are removed and negative zero is
 serialized as `0`. Literals already in a document are rewritten only when the
 viewport moves the object that holds them.
 

@@ -251,6 +251,15 @@ Included:
   its source exactly as `vector(x, y)` is rewritten in VGA);
 - lists of points and lines with the VGA list rules.
 
+Extended after the first milestone (2026-11-12, #180 and #181, PGA-VIZ-003):
+a weighted `point(x, y, w)` is dragged keeping its weight, rewritten as
+`point(X·w, Y·w, w)` for the pointer `(X, Y)` with a step scaled by `|w|`; a
+negative weight keeps its sign and a weight written as a name is not touched.
+`point(x, y, 0)` is an ideal point and is manipulated like `ipoint(x, y)`, its
+head drag rewriting `x` and `y` and keeping the zero. The coordinate tuples
+`(x, y)` and `(x, y, w)` denote `point` and are dragged the same way, keeping
+their tuple spelling.
+
 Deferred, tracked as issues when the milestone is written: dragging a line,
 anchoring, interactive motors, motor logarithm and interpolation, distance and
 angle read-outs, and any touch or 3D concern.

@@ -5,7 +5,7 @@ import { PGA_2D_INTERPRETATION } from '../geometry/pga2Interpretation'
 import { VGA_2D_INTERPRETATION, type Vector2dEntity } from '../geometry/vga2Interpretation'
 import { expressionDocument } from '../document/expressionDocument'
 import type { ExpressionItem } from '../document/expressionDocument'
-import { evaluateDocument } from './evaluateDocument'
+import { declarationDependsOn, evaluateDocument } from './evaluateDocument'
 
 const engine = createVga2Engine()
 const context = { engine, interpretation: VGA_2D_INTERPRETATION }
@@ -927,5 +927,32 @@ describe('coordinate tuples resolved by the active algebra (#180)', () => {
 
   it('keeps vector(x, y) a VGA constructor that PGA does not register', () => {
     expect(invalid(evaluatePga('V = vector(1, 2)')[0].evaluation)).toMatchObject({ code: 'LANG_UNSUPPORTED_FUNCTION' })
+  })
+})
+
+describe('declaration dependencies of a kept weight (#181)', () => {
+  const items = expressionDocument([
+    { id: 't', source: 't = 1' },
+    { id: 'u', source: 'u = 3' },
+    { id: 'w', source: 'w = 2*t' },
+    { id: 'v', source: 'v = w + 1' },
+    { id: 'k', source: 'k = 2' },
+    { id: 'n', kind: 'annotation', source: 'k = t' },
+    { id: 'c', source: 'c = c2', positionSource: '(t, 0)' },
+    { id: 'c2', source: 'c2 = c' },
+  ]).items
+
+  it('follows references directly and through other declarations', () => {
+    expect(declarationDependsOn(items, 'w', new Set(['t']))).toBe(true)
+    expect(declarationDependsOn(items, 'v', new Set(['t']))).toBe(true)
+    expect(declarationDependsOn(items, 't', new Set(['t']))).toBe(true)
+    expect(declarationDependsOn(items, 'w', new Set(['u']))).toBe(false)
+    expect(declarationDependsOn(items, 'k', new Set(['t']))).toBe(false)
+    expect(declarationDependsOn(items, 'missing', new Set(['t']))).toBe(false)
+  })
+
+  it('includes positions and stops on cycles', () => {
+    expect(declarationDependsOn(items, 'c2', new Set(['t']))).toBe(true)
+    expect(declarationDependsOn(items, 'c2', new Set(['u']))).toBe(false)
   })
 })
