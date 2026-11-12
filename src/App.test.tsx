@@ -4954,14 +4954,28 @@ describe('local library of named graphs (#212)', () => {
       expect(saveButton()).toHaveAccessibleName('Save (unsaved changes)')
       expect(index()).toHaveLength(2)
 
-      // Opening another example now asks before discarding it.
+      // An example opened unchanged is left without confirmation (#266).
       panel = openLibrary()
       expect(within(panel).getByRole('tab', { name: 'My library' })).toHaveAttribute('aria-selected', 'true')
       expect(within(panel).getByRole('button', { name: 'Open VGA 2D Rotation Example' })).not.toHaveAttribute('aria-current')
       fireEvent.click(within(panel).getByRole('tab', { name: 'Examples' }))
       fireEvent.click(within(panel).getByRole('button', { name: 'Open example VGA 2D Rotation Example' }))
-      fireEvent.click(within(within(panel).getByRole('alertdialog', { name: 'Confirm' })).getByRole('button', { name: 'Cancel' }))
+      expect(screen.queryByRole('alertdialog', { name: 'Confirm' })).not.toBeInTheDocument()
+      expect(source()).toHaveValue('V1 = vector(0.66, 3.042)')
+      expect(saveButton()).toHaveAccessibleName('Save (unsaved changes)')
+      panel = openLibrary()
+      fireEvent.click(within(panel).getByRole('tab', { name: 'Examples' }))
+      fireEvent.click(within(panel).getByRole('button', { name: 'Open example PGA 2D Triangle Example' }))
+      expect(screen.queryByRole('alertdialog', { name: 'Confirm' })).not.toBeInTheDocument()
       expect(source()).toHaveValue('A = point(-2, 1)')
+
+      // Once the example is edited, leaving it asks before discarding it.
+      fireEvent.change(source(), { target: { value: 'A = point(-3, 1)' } })
+      panel = openLibrary()
+      fireEvent.click(within(panel).getByRole('tab', { name: 'Examples' }))
+      fireEvent.click(within(panel).getByRole('button', { name: 'Open example VGA 2D Rotation Example' }))
+      fireEvent.click(within(within(panel).getByRole('alertdialog', { name: 'Confirm' })).getByRole('button', { name: 'Cancel' }))
+      expect(source()).toHaveValue('A = point(-3, 1)')
 
       // Saving an opened example stores a new graph.
       fireEvent.click(within(panel).getByRole('button', { name: 'Close library' }))

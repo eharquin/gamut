@@ -1907,6 +1907,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       // An imported graph is not a library graph, even with a library identity.
       setBoundId(null)
       setSavedRevision(null)
+      setExampleRevision(null)
       setTheme(imported.theme)
       setAppearanceItemId(null)
       setExpandedListIds(new Set())
@@ -2056,6 +2057,12 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   /** The last saved revision of the open graph, which unsaved changes are measured against. */
   const [savedRevision, setSavedRevision] = useState<CanonicalDocument | null>(libraryStart.saved)
   const markSavedOnRender = useRef(false)
+  /**
+   * The example the open graph was opened from, as rendered, while the graph is
+   * not in the library: leaving it asks for confirmation only once it differs.
+   */
+  const [exampleRevision, setExampleRevision] = useState<CanonicalDocument | null>(null)
+  const markExampleOnRender = useRef(false)
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [libraryNaming, setLibraryNaming] = useState<Readonly<{ initialName: string }> | null>(null)
   const saveButtonRef = useRef<HTMLButtonElement | null>(null)
@@ -2074,6 +2081,11 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     markSavedOnRender.current = false
     setSavedRevision(currentCanonical)
   }, [currentCanonical])
+  useLayoutEffect(() => {
+    if (!markExampleOnRender.current) return
+    markExampleOnRender.current = false
+    setExampleRevision(currentCanonical)
+  }, [currentCanonical])
   /**
    * Whether the open graph differs from its last saved revision; a graph that
    * was never saved has changes once it has content. The viewport centre and
@@ -2083,6 +2095,14 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     if (boundId === null || savedRevision === null) return hasContent(expressionDoc)
     return comparableSource(currentCanonical) !== comparableSource(savedRevision)
   }, [boundId, savedRevision, currentCanonical, expressionDoc])
+  /**
+   * Whether leaving the open graph discards work: its unsaved changes, except
+   * that an example opened unchanged can be left without confirmation, although
+   * Save still shows it as unsaved until it is in the library.
+   */
+  const discardableChanges = boundId === null && exampleRevision !== null
+    ? comparableSource(currentCanonical) !== comparableSource(exampleRevision)
+    : unsavedChanges
   const graphName = ephemeral ? 'Shared scene (temporary)' : boundId === null ? '' : expressionDoc.title.trim() || 'Untitled graph'
   useEffect(() => {
     document.title = `${graphName || 'Untitled'} · GAMUT`
@@ -2231,6 +2251,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     nextId.current = document.items.length + 1
     setDocumentDiagnostic(diagnostic)
     setBoundId(libraryId)
+    setExampleRevision(null)
     setSavedRevision(null)
     markSavedOnRender.current = libraryId !== null
     if (ephemeral) {
@@ -2330,6 +2351,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     // An example stores the system theme only because a canonical document
     // needs one; it is not a choice of its author, so the reader's theme stays.
     openGraph(restored.document, theme, restored.recoveryDiagnostic, null)
+    markExampleOnRender.current = true
   }
   const addExampleToLibrary = (example: LibraryExample) => {
     try {
@@ -3068,7 +3090,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           openId={ephemeral ? '' : boundId ?? ''}
           naming={libraryNaming}
           diagnostic={library?.diagnostic ?? null}
-          unsavedChanges={unsavedChanges}
+          unsavedChanges={discardableChanges}
           temporarySession={ephemeral}
           onSaveAs={(name) => { commitLibrarySave(name) }}
           onSaveAsNew={(name) => { commitLibrarySave(name, true) }}

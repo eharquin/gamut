@@ -40,7 +40,10 @@ export type LibraryPanelProps = Readonly<{
   naming: Readonly<{ initialName: string }> | null
   /** A library or storage problem to report in text. */
   diagnostic: string | null
-  /** Whether the open graph differs from its last saved revision, or is unsaved content. */
+  /**
+   * Whether leaving the open graph discards work: it differs from its last saved
+   * revision, or is unsaved content other than an example opened unchanged.
+   */
   unsavedChanges: boolean
   /** Set in a temporary scene-link session, whose scene is not stored. */
   temporarySession: boolean
