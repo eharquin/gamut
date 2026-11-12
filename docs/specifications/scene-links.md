@@ -98,9 +98,9 @@ In a temporary session it behaves as follows:
   temporary and the scene stays open.
 - **Add to my library** is an explicit write and behaves like **Save local
   copy** ([#266](https://github.com/eharquin/gamut/issues/266)): the
-  previously saved active document is protected in the same way before the
-  example's copy is stored. Whether the stored copy then becomes the open
-  graph, or the scene stays open, is open, decided in #266.
+  previously saved active document is protected in the same way, then the
+  scene is copied into the library with a new document identity, the copy
+  opens, and the temporary session ends.
 - **Import library**, and dropping a `.zip` file, are unavailable: they report
   that a temporary session does not write the library, and write nothing
   ([#268](https://github.com/eharquin/gamut/issues/268)). **Export library**

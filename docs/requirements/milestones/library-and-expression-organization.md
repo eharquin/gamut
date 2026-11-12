@@ -37,10 +37,11 @@ A user, without developer tools, shall be able to:
   **Examples**, open a graph or an example, and add an example to **My
   library**;
 - organize **My library** in nested folders, move graphs between folders by
-  menu and by drag and drop, and browse the fixed folder tree of **Examples**;
+  menu and by drag and drop, filter the panel by algebra, and browse the
+  fixed folder tree of **Examples**;
 - export the whole library as a `.zip` archive and import it, by **Import
   library** or by dropping the file, into another browser, finding the graphs
-  in an `Imported <date>` folder with nothing overwritten;
+  in an `Imported YYYY-MM-DD` folder with nothing overwritten;
 - start the application for the first time, or switch algebra, and get the
   algebra's showcase, identical to its example in **Examples**;
 - group expressions in named, nested, collapsible folders, move rows into and
@@ -79,19 +80,22 @@ excluded.
   ([#274](https://github.com/eharquin/gamut/issues/274)).
 - **LEO-002 — Library panel:** The library panel satisfies STORE-014 and
   A11Y-010: it opens on **My library**, keeps every 0.2.0 library action,
-  resizes the viewport instead of covering it above the breakpoint, and
-  behaves as specified in a temporary session
+  filters by algebra (All, VGA, PGA), resizes the viewport instead of
+  covering it at 720 CSS pixels and above, and behaves as specified in a
+  temporary session
   ([#266](https://github.com/eharquin/gamut/issues/266)).
 - **LEO-003 — Library folders:** Folders in **My library** and **Examples**
   satisfy STORE-016 and A11Y-011. Tests show that an index written by 0.3.0
   keeps every entry under the 0.2.0 parsing rules, that a 0.2.0 index opens
   unchanged at the root, that a graph saved from 0.2.0 moves to the root, and
-  cover moves and folder deletion
+  cover the `folder` name lists, names containing `/`, empty folders in
+  `gamut.library.v1.folders`, moves, and the deletion of a non-empty folder
+  with its graphs and subfolders
   ([#267](https://github.com/eharquin/gamut/issues/267)).
 - **LEO-004 — Library archive:** Export and import satisfy STORE-017,
   STORE-018, SEC-010, and SEC-011. Tests cover an export–import round trip
   with folders, invalid documents skipped and reported, identity collisions,
-  the `Imported <date>` folder, a full quota, a dropped `.zip`, the
+  the manifest as an untrusted hint, the `Imported YYYY-MM-DD` folder, a full quota, a dropped `.zip`, the
   temporary-session refusal, and every rejection and limit of SEC-010 at its
   boundary ([#268](https://github.com/eharquin/gamut/issues/268)).
 - **LEO-005 — Examples and first run:** The shipped VGA(2) and PGA(2)
@@ -103,7 +107,8 @@ excluded.
   [#217](https://github.com/eharquin/gamut/issues/217)).
 - **LEO-006 — Expression folders:** Expression folders satisfy DOC-013 and
   A11Y-011 under [document format §2.4](../../specifications/document-format.md#24-expression-folders).
-  Tests cover moves into, out of, and within folders, undo and redo,
+  Tests cover moves into, out of, and within folders, refused empty and
+  duplicate sibling names, undo and redo,
   collapsed state as an unsaved change without a history entry, canonical
   round trips, and flat documents that keep their order after migration
   ([#83](https://github.com/eharquin/gamut/issues/83)).
@@ -141,29 +146,15 @@ Completion claims an organized, shareable personal library with examples and
 structured documents in the supported desktop browsers, not a collaborative
 or synchronized library.
 
-## Open decisions
+## Decisions
 
-These decisions are not yet recorded in an issue comment and are made in the
-named issue before or during its implementation:
-
-- the encoding of the library index `folder` field (a path string or a list
-  of names) and the name of the separate key for empty folders
-  ([#267](https://github.com/eharquin/gamut/issues/267));
-- whether deleting a non-empty library folder deletes its graphs or moves
-  them to the parent, and whether the 0.2.0 grouping by algebra becomes a
-  filter or a secondary label ([#267](https://github.com/eharquin/gamut/issues/267));
-- the serialized layout of expression folders in format version 8, and the
-  rules for empty or duplicate folder names
-  ([#83](https://github.com/eharquin/gamut/issues/83), with #267 for library
-  folders);
-- the width breakpoint of the library overlay
-  ([#266](https://github.com/eharquin/gamut/issues/266));
-- whether **Add to my library** in a temporary session opens the stored copy
-  or leaves the scene open ([#266](https://github.com/eharquin/gamut/issues/266));
-- the manifest schema, the format of `<date>` in archive and folder names, and
-  the diagnostic codes of the SEC-010 rejections
-  ([#268](https://github.com/eharquin/gamut/issues/268)).
-
-The folder and archive limits of the
+The design questions raised by this document were decided on 2026-11-12 in
+[#83](https://github.com/eharquin/gamut/issues/83),
+[#266](https://github.com/eharquin/gamut/issues/266),
+[#267](https://github.com/eharquin/gamut/issues/267), and
+[#268](https://github.com/eharquin/gamut/issues/268), and are stated in the
+common requirements and specifications this milestone applies. The diagnostic
+codes of the SEC-010 rejections, other than the limit codes, are chosen by
+#268. The folder and archive limits of the
 [limits and interaction constants](../../specifications/limits-and-constants.md#21-folders)
 are proposed values, reviewed with this document.

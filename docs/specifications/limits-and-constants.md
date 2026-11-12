@@ -54,8 +54,10 @@ limits.
 | Folders in the local library | 1,000 | `LIMIT_FOLDER_COUNT` |
 | Characters per folder name | 128 | `LIMIT_FOLDER_NAME_LENGTH` |
 
-Folders do not count towards the 1,000 items per document. A folder name is
-counted in Unicode code points. Loading a document over a folder limit fails
+Folders do not count towards the 1,000 items per document
+(`LIMIT_ITEM_COUNT`); only expression and annotation items do. A folder name is
+counted in Unicode code points, is never empty, and is unique among the
+folders of one parent. Loading a document over a folder limit fails
 validation like any other resource limit; an interactive command that would
 cross one is refused without changing the document or the library.
 
@@ -187,8 +189,9 @@ viewport moves the object that holds them.
 
 The library panel (STORE-014) is docked beside the viewport above a width
 breakpoint and opens as an overlay over the viewport below it (A11Y-012). The
-breakpoint value is open, decided in
-[#266](https://github.com/eharquin/gamut/issues/266).
+breakpoint is a window width of 720 CSS pixels
+([#266](https://github.com/eharquin/gamut/issues/266)): below 720 the panel is
+an overlay.
 
 Document history retains at most 100 complete pre-command document snapshots.
 When the limit is exceeded, the oldest snapshot is discarded first. Undo and

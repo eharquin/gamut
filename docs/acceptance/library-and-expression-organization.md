@@ -42,7 +42,7 @@ the specifications of their own behavior; #272 checks them before acceptance.
 - [ ] Language §1 and §3 with the Markdown subset (#187).
 - [ ] Document format §2.4 layout and the version 8 history row (#83, #191).
 - [ ] Folder and archive limits confirmed or revised (#83, #267, #268).
-- [ ] Open decisions of the milestone document recorded in their issues.
+- [ ] Field names of the version 8 item folder list and collapsed-state record (#83), and the SEC-010 rejection diagnostic codes (#268), recorded in the specifications.
 - [ ] User documentation: README and the in-app expression reference (tuples
   and `#` comments).
 
@@ -77,17 +77,22 @@ To be completed on every browser in the table above, on the release build.
 - [ ] Open an example, edit it, and confirm it is unbound; **Add to my library**
   stores a copy under the example's folder path.
 - [ ] Create, rename, nest, collapse, and delete library folders; move a graph
-  by menu, by keyboard, and by drag and drop; reload and find the collapsed
-  state again.
+  by menu, by keyboard, and by drag and drop; use a folder name containing
+  `/`; filter by All, VGA, and PGA; reload and find the collapsed state
+  again; delete a non-empty folder and confirm that the confirmation counts
+  the graphs deleted with its subfolders.
 - [ ] Export the library, import it in another browser or profile, by
   **Import library** and by dropping the `.zip`; find every graph in
-  `Imported <date>` with its folders and nothing overwritten. Import a
+  `Imported YYYY-MM-DD` with its folders and nothing overwritten. Import a
   modified archive with an invalid document and read the summary.
 - [ ] Open a scene link: **My library** states that the session is temporary,
   **Import library** and a dropped `.zip` are refused with a message,
-  **Export library** works, and nothing is written until an explicit save.
+  **Export library** works, and nothing is written until an explicit save;
+  **Add to my library** copies the scene into the library, opens the copy,
+  and ends the temporary session.
 - [ ] Create nested expression folders, move rows in and out by pointer and
-  keyboard, undo and redo; collapse a folder and see the dot on **Save**
+  keyboard, undo and redo; confirm that an empty name and a duplicate name in
+  the same parent are refused; collapse a folder and see the dot on **Save**
   without a history entry; reload, export, import, and copy a link, and
   find the folders and their collapsed state again.
 - [ ] Type `# note` with bold, italic, inline code, an `https` link, and a
@@ -105,7 +110,7 @@ To be completed on every browser in the table above, on the release build.
 - [ ] Open the 0.1.0 and 0.2.0 regression documents and a 0.2.0 scene link
   unchanged; after running 0.2.0 in the same profile, open 0.3.0 and confirm
   the 0.2.0 library is listed with every graph.
-- [ ] Narrow the window below the breakpoint: the library panel opens as an
+- [ ] Narrow the window below 720 px: the library panel opens as an
   overlay, closes on Escape, and returns focus to **Library**; nothing else
   collapses.
 - [ ] Repeat the keyboard, focus, accessible-name, screen-reader, 200 % zoom,

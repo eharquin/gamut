@@ -259,8 +259,10 @@ They are stored in canonical format version 8.
   item identities and source. A folder's collapsed state is document content:
   it is saved, exported, and carried by scene links and library graphs, and
   changing it counts as an unsaved change, but it creates no history entry.
-  Collapsing a folder hides its rows in the expression panel only. Folders do
-  not count towards the item limit and have their own limits. The same folder
+  Collapsing a folder hides its rows in the expression panel only. A folder
+  name is never empty, and two folders with the same parent never share a
+  name. Folders do not count towards the 1,000 items per document and have
+  their own limits. The same folder
   model, and where possible the same interface component, serves the library
   folders of STORE-016 and the archive directories of STORE-017.
 - **DOC-014:** The persistent display setting `valuesVisible`, `true` by
@@ -501,7 +503,9 @@ unchanged.
   panel docked on the right of the page, beside the viewport, which resizes
   instead of being covered; below the width breakpoint of A11Y-012 the panel
   is an overlay. The panel has a **My library** section, on which it opens,
-  and an **Examples** section. **My library** lists the graphs of STORE-013
+  and an **Examples** section. A filter at the top of the panel (All, VGA,
+  PGA) replaces the grouping by algebra of STORE-013; folders are the
+  structure. **My library** lists the graphs of STORE-013
   with their name and last update and offers New, Open, Rename, Duplicate,
   Delete, and Save as new graph, with the confirmations of STORE-013 shown
   inside the panel. Opening the panel reads storage and writes nothing. The
@@ -523,13 +527,16 @@ unchanged.
   [limits and interaction constants](specifications/limits-and-constants.md#21-folders).
   Graphs outside any folder are listed at the root. In **My library** the user
   can create, rename, nest, and delete folders and move a graph into or out of
-  a folder by a menu action and by drag and drop; deleting a folder that is
-  not empty requires a confirmation inside the panel that states how many
-  graphs it contains. The index keeps `version: 1`: an entry gains an
-  optional `folder` field naming its folder path, and an entry without
-  `folder`, or with a folder that cannot be resolved, is listed at the root.
-  Empty folders, which no entry names, are stored under a separate key that
-  earlier versions ignore. An index written under this requirement shall
+  a folder by a menu action and by drag and drop. Deleting a folder that is
+  not empty deletes its graphs and subfolders, after a confirmation inside
+  the panel that states how many graphs are deleted. Folder names follow the
+  rules of DOC-013 and may contain `/`. The index keeps `version: 1`: an
+  entry gains an optional `folder` field, the list of folder names from the
+  root (for example `["VGA", "Rotors"]`), and an entry without `folder`, with
+  an empty list, or with a value that is not a valid list of names, is listed
+  at the root. Empty folders, which no entry names, are stored as folder name
+  lists under the separate key `gamut.library.v1.folders`, which earlier
+  versions ignore. An index written under this requirement shall
   remain readable by the 0.2.0 parsing rules with every entry kept; saving a
   graph from 0.2.0 rewrites its entry without `folder` and so moves it to the
   root, which is accepted. The collapsed state of library folders is a
@@ -539,8 +546,9 @@ unchanged.
   as one `.zip` archive named `gamut-library-<date>.zip`, containing one
   canonical JSON document per graph, identical to its single-graph export
   (STORE-008), in directories that reproduce the library folders, and a
-  versioned manifest that records the export date and each graph's name,
-  identity, and last update. Entry names are written as UTF-8 with the
+  versioned manifest `{ version, exportedAt, entries: [{ path, name, id,
+  updatedAt }] }` that records the export instant and, for each archive
+  entry, its path and the graph's name, identity, and last update. Entry names are written as UTF-8 with the
   archive's UTF-8 flag set; characters that are unsafe in a path, such as
   `/`, `\`, and `:`, are replaced, and colliding names in one directory get a
   suffix, while the manifest and the documents keep the real names. The
@@ -554,7 +562,8 @@ unchanged.
   same validation and migration as a single-file import (STORE-002); invalid
   entries are skipped and listed in a summary with their diagnostics, and
   valid ones are imported. Imported graphs go into a new top-level folder
-  `Imported <date>`, keeping their archive folders below it; an import never
+  `Imported YYYY-MM-DD`, named with the import date and keeping their archive
+  folders below it; an import never
   replaces or overwrites a graph and never asks per graph, and a graph whose
   identity is already in the library is stored under a new identity. Storage
   failures, including a full quota, are reported, and an interrupted import
@@ -682,13 +691,13 @@ or hidden values, starting with
   keyboard equivalent, including moving an item or graph into and out of a
   folder without drag and drop. After a move, focus stays on the moved row,
   and its new folder and position are announced once.
-- **A11Y-012:** Below a width breakpoint at which the expression panel, the
-  library panel, and a usable viewport do not fit side by side, the library
-  panel shall open as an overlay over the viewport that closes on Escape and
+- **A11Y-012:** Below a window width of 720 CSS pixels, where the expression
+  panel, the library panel, and a usable viewport do not fit side by side,
+  the library panel shall open as an overlay over the viewport that closes on Escape and
   returns focus to the **Library** button; opening it collapses nothing else.
   At 200 % browser zoom on the supported desktop browsers, the expression
   panel, the library panel, and their menus remain readable and operable
-  without loss of content or function. The breakpoint value is owned by the
+  without loss of content or function. The breakpoint is owned by the
   [limits and interaction constants](specifications/limits-and-constants.md#6-interaction-constants).
   Mobile browsers and touch input are not claimed
   ([#120](https://github.com/eharquin/gamut/issues/120)).
