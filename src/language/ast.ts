@@ -67,6 +67,17 @@ export type TupleNode = Readonly<{
   span: SourceSpan
 }>
 
+/**
+ * What a coordinate tuple means in an algebra: the registered constructor it
+ * denotes and the numbers of components it accepts, each an arity of that
+ * constructor (language section 7). Algebra engines declare it; the language
+ * and its editing services read it.
+ */
+export type TupleConstructor = Readonly<{
+  constructor: string
+  arities: readonly number[]
+}>
+
 export type CallExpressionNode = Readonly<{
   kind: 'call-expression'
   callee: string

@@ -632,19 +632,15 @@ class Parser {
 
   /**
    * A coordinate tuple after its first component: `(a,)` or `(a, b, …)`.
-   * Every arity parses; the active algebra checks it at evaluation.
+   * Every arity and every component expression parses; the active algebra
+   * checks the arity, and its constructor the scalar components, at
+   * evaluation, exactly as for the constructor call (language section 7).
    */
   private parseTuple(
     leftParenthesis: Token,
     first: SurfaceExpressionNode,
   ): NodeResult {
     const components: SurfaceExpressionNode[] = [first]
-    const scalarComponent = (node: SurfaceExpressionNode): Diagnostic | null =>
-      isScalarExpression(node)
-        ? null
-        : syntaxDiagnostic('Tuple components must be scalar expressions.', node.span)
-    const firstInvalid = scalarComponent(first)
-    if (firstInvalid) return { ok: false, diagnostic: firstInvalid }
     this.consume('comma')
     // A trailing comma after a single component makes it a one-component
     // tuple, so `(1,)` differs from the parenthesized scalar `(1)`.
@@ -652,10 +648,18 @@ class Parser {
       for (;;) {
         const component = this.parseAdditive()
         if (!component.ok) return component
-        const invalid = scalarComponent(component.node)
-        if (invalid) return { ok: false, diagnostic: invalid }
         components.push(component.node)
-        if (!this.consume('comma')) break
+        const comma = this.consume('comma')
+        if (!comma) break
+        if (this.current().kind === 'right-parenthesis') {
+          return {
+            ok: false,
+            diagnostic: syntaxDiagnostic(
+              'Only a one-component tuple takes a trailing comma.',
+              comma.span,
+            ),
+          }
+        }
       }
     }
     const rightParenthesis = this.consume('right-parenthesis')
@@ -689,17 +693,10 @@ class Parser {
       }
     }
 
+    // Components are any expressions; the constructor rejects a non-scalar
+    // one at evaluation, as for every other constructor call.
     const first = this.parseAdditive()
     if (!first.ok) return first
-    if (!isScalarExpression(first.node)) {
-      return {
-        ok: false,
-        diagnostic: syntaxDiagnostic(
-          'Vector components must be scalar expressions.',
-          first.node.span,
-        ),
-      }
-    }
     if (!this.consume('comma')) {
       return {
         ok: false,
@@ -712,15 +709,6 @@ class Parser {
 
     const second = this.parseAdditive()
     if (!second.ok) return second
-    if (!isScalarExpression(second.node)) {
-      return {
-        ok: false,
-        diagnostic: syntaxDiagnostic(
-          'Vector components must be scalar expressions.',
-          second.node.span,
-        ),
-      }
-    }
     const rightParenthesis = this.consume('right-parenthesis')
     if (!rightParenthesis) {
       return {

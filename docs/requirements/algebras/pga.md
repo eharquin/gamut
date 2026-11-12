@@ -67,15 +67,6 @@ milestone:
   parameters, definition and convention versions, and the interpretation and
   visualizer identifiers using the existing document format; no PGA-specific
   schema fork is permitted.
-- **PGA-015:** The PGA definition shall declare `point` as the constructor a
-  coordinate tuple denotes ([language section 7](../../specifications/language.md#7-vectors-and-tuples)):
-  in PGA(2), `(x, y)` shall evaluate exactly as `point(x, y)` and `(x, y, w)`
-  as the homogeneous `point(x, y, w)`, so `(x, y, 0)` is the ideal point in
-  direction `(x, y)`. A triple shall never denote a line, and no short alias
-  such as `p(…)` or `l(…)` is registered. Any other number of components shall
-  receive the tuple arity diagnostic at the tuple's span, which shall not
-  mention `vector`. A tuple is accepted wherever its point is, including
-  position fields, and a drag keeps the tuple spelling (PGA-VIZ-003).
 - **PGA-013:** `log` shall return the principal logarithm of a unit motor
   defined by [convention section 8.1](../../specifications/pga-conventions.md#81-logarithm-and-square-root-of-a-motor),
   under the capability `org.multivector.capability.motor-logarithm`. A
@@ -87,6 +78,19 @@ milestone:
   `org.multivector.capability.motor-square-root`, with the same diagnostics
   and scalar branch as PGA-013. `sqrt(M) * sqrt(M) = M` and
   `exp(log(M) / 2) = sqrt(M)` shall be conformance fixtures.
+- **PGA-015:** The PGA definition shall declare `point` as the constructor a
+  coordinate tuple denotes ([language section 7](../../specifications/language.md#7-vectors-and-tuples)):
+  in PGA(2), `(x, y)` shall evaluate exactly as `point(x, y)` and `(x, y, w)`
+  as the homogeneous `point(x, y, w)`, so `(x, y, 0)` is the ideal point in
+  direction `(x, y)`. Its components are any expressions, as the arguments of
+  `point` are: a non-scalar one receives the `point` scalar diagnostic at
+  evaluation and a list broadcasts. A triple shall never denote a line, and no short alias
+  such as `p(…)` or `l(…)` is registered. Any other number of components shall
+  receive the tuple arity diagnostic at the tuple's span, which shall not
+  mention `vector`. A tuple is accepted wherever its point is, including
+  position fields, and a drag keeps the tuple spelling (PGA-VIZ-003). A
+  position the viewport writes where there was none, by a base drag, is
+  written with the constructor, `point(x, y)`.
 
 ## 3. Plane-based geometry interpretation
 

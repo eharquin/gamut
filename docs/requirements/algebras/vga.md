@@ -49,15 +49,17 @@ Core or VGA 2D Foundation milestones:
 
 - **VEC-001:** `vector(...)` and tuple syntax shall create one N-dimensional
   vector abstraction. The VGA definition declares `vector` as the constructor
-  a coordinate tuple denotes, with exactly N components, so a VGA(2) tuple
-  `(x, y)` is `vector(x, y)` and every other arity, including `(x,)` and
-  `(x, y, z)`, receives the tuple arity diagnostic of
+  a coordinate tuple denotes. Until VGA Core (VGAC-004), VGA(2) accepts
+  exactly two components: `(x, y)` is `vector(x, y)`, and every other arity,
+  including `(x,)` and `(x, y, z)`, receives the tuple arity diagnostic of
   [language section 7](../../specifications/language.md#7-vectors-and-tuples),
-  which does not name `vector`. Shorter and longer tuples are fixed with
-  higher dimensions (VGAC-004).
-- **VEC-002:** Missing components shall be zero-filled in higher dimensions.
+  which does not name `vector`. The zero-filled and inactive components of
+  VEC-002, VEC-003 and VEC-005 apply once VGAC-004 accepts shorter and longer
+  tuples.
+- **VEC-002:** Missing components shall be zero-filled in higher dimensions
+  (from VGAC-004; VGA(2) rejects other arities, VEC-001).
 - **VEC-003:** Excess source components shall remain stored but inactive in
-  lower dimensions.
+  lower dimensions (from VGAC-004, as VEC-002).
 - **VEC-004:** Components shall evaluate to pure grade-zero values.
 - **VEC-005:** Dimension changes shall preserve sources, item identities, and
   inactive components, then deterministically reevaluate the document.

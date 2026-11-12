@@ -1,6 +1,7 @@
 import { type AlgebraBasis } from '../domain/algebraBasis'
 import { type OwnedMultivector } from '../domain/multivector'
 import { type ScalarFunctionName } from '../domain/scalarFunctions'
+import { type TupleConstructor } from '../language/ast'
 
 /**
  * The operation contract every registered algebra definition provides.
@@ -52,12 +53,6 @@ export type AlgebraEngine = Readonly<{
   exp(value: OwnedMultivector): OwnedMultivector
   /** A built-in scalar function of language section 10 on scalar arguments. */
   scalarFunction(name: ScalarFunctionName, args: readonly OwnedMultivector[]): OwnedMultivector
-}>
-
-/** What a coordinate tuple `(a, b, …)` means in an algebra. */
-export type TupleConstructor = Readonly<{
-  constructor: string
-  arities: readonly number[]
 }>
 
 /** The Euclidean norm `norm` or the ideal norm `inorm`. */
