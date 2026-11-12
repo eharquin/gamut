@@ -244,6 +244,42 @@ nodes are specified in the
   stored content, but not evaluation, source mutation, or resaving over the
   original local record.
 
+DOC-013 and DOC-014 have **Milestone** commitment and apply to milestones that
+explicitly include them, starting with
+[Library and Expression Organization](requirements/milestones/library-and-expression-organization.md).
+They are stored in canonical format version 8.
+
+- **DOC-013:** A document may organize its items in named, nestable,
+  collapsible expression folders stored in the canonical document. Folders
+  are structural only: they have no value, name binding, or dependency, do
+  not override appearance or position, and do not change evaluation or the
+  canvas draw order, which stays the item order. Removing a folder keeps its
+  items at the folder's position in its parent. Creating, renaming, removing,
+  nesting folders and moving items are undoable commands; a move preserves
+  item identities and source. A folder's collapsed state is document content:
+  it is saved, exported, and carried by scene links and library graphs, and
+  changing it counts as an unsaved change, but it creates no history entry.
+  Collapsing a folder hides its rows in the expression panel only. Folders do
+  not count towards the item limit and have their own limits. The same folder
+  model, and where possible the same interface component, serves the library
+  folders of STORE-016 and the archive directories of STORE-017.
+- **DOC-014:** The persistent display setting `valuesVisible`, `true` by
+  default, shall hide the multivector value shown under each expression when
+  it is `false`. Descriptions, diagnostics, controls, and the viewport drawing
+  are unchanged, and turning the setting back on reveals every value at once.
+  The setting is document content like the other display settings (APP-006):
+  it is saved, exported, and carried by scene links and library graphs. It is
+  a teaching aid, not a protection: the values remain in the document.
+
+Moving the canonical format from version 7 to version 8 for DOC-013 and
+DOC-014 follows DOC-003: earlier documents migrate on load. An earlier
+release cannot open a version 8 document: 0.2.0 replaces a stored version 8
+active document with its example on reload and reports a version 8 library
+graph as unreadable when it is opened. Protecting an older
+release against a newer format is deferred to
+[#275](https://github.com/eharquin/gamut/issues/275) and accepted while GAMUT
+has no users.
+
 ## 8. Language and evaluation
 
 The normative language is specified in
@@ -371,6 +407,13 @@ animation.
   restores the snapshot without a history entry.
 - **ANIM-005:** Reduced-motion mode shall never auto-start animation and shall
   provide equivalent manual scalar controls.
+- **ANIM-006:** Saving a graph, from **Save** or from the library, while
+  scalars are playing shall first stop every active playback as pausing does
+  (ANIM-004), then save the values they stopped on, so that the saved graph
+  shows no unsaved change until the next edit or playback. The playback
+  announcement states that saving stopped the animation. ANIM-006 has
+  **Milestone** commitment and applies to
+  [Library and Expression Organization](requirements/milestones/library-and-expression-organization.md).
 
 ## 11. Persistence, import, export, and sharing
 
@@ -445,6 +488,80 @@ requirement STORE-012, have **Milestone** commitment.
   corrupted graph is reported as unreadable when opened, renamed, or
   duplicated, and never hides the others.
 
+The library panel, example, folder, and archive requirements STORE-014 through
+STORE-018 have **Milestone** commitment and apply to milestones that
+explicitly include them, starting with
+[Library and Expression Organization](requirements/milestones/library-and-expression-organization.md).
+Where they apply, the library panel of STORE-014 replaces the library menu of
+STORE-013; every other STORE-013 guarantee (storage keys, write order,
+recovery, unsaved-changes state, and tolerance of unavailable storage) is
+unchanged.
+
+- **STORE-014:** The **Library** header button shall open and close a library
+  panel docked on the right of the page, beside the viewport, which resizes
+  instead of being covered; below the width breakpoint of A11Y-012 the panel
+  is an overlay. The panel has a **My library** section, on which it opens,
+  and an **Examples** section. **My library** lists the graphs of STORE-013
+  with their name and last update and offers New, Open, Rename, Duplicate,
+  Delete, and Save as new graph, with the confirmations of STORE-013 shown
+  inside the panel. Opening the panel reads storage and writes nothing. The
+  temporary-session behavior of the panel is specified in
+  [scene links](specifications/scene-links.md#temporary-sessions-and-storage).
+- **STORE-015:** Examples shall be canonical documents shipped in the source
+  tree in the current format version, in a fixed folder tree, and shall pass
+  the common validation of STORE-002. They are read-only: they cannot be
+  renamed, moved, deleted, or overwritten (STORE-004). Opening an example
+  shows it unbound from any library entry, like a new document. **Add to my
+  library** stores a copy with a new document identity (DOC-007) in **My
+  library**, under the example's folder path, creating the folders that are
+  missing; it never asks where to put it. Each algebra definition names one
+  example as its showcase; the first run and switching to that algebra load
+  exactly that example, so the showcase has one source.
+- **STORE-016:** **My library** and **Examples** shall be organized in
+  nestable folders following the common folder model of DOC-013 and the
+  folder limits of the
+  [limits and interaction constants](specifications/limits-and-constants.md#21-folders).
+  Graphs outside any folder are listed at the root. In **My library** the user
+  can create, rename, nest, and delete folders and move a graph into or out of
+  a folder by a menu action and by drag and drop; deleting a folder that is
+  not empty requires a confirmation inside the panel that states how many
+  graphs it contains. The index keeps `version: 1`: an entry gains an
+  optional `folder` field naming its folder path, and an entry without
+  `folder`, or with a folder that cannot be resolved, is listed at the root.
+  Empty folders, which no entry names, are stored under a separate key that
+  earlier versions ignore. An index written under this requirement shall
+  remain readable by the 0.2.0 parsing rules with every entry kept; saving a
+  graph from 0.2.0 rewrites its entry without `folder` and so moves it to the
+  root, which is accepted. The collapsed state of library folders is a
+  per-browser preference, not document content, and is tolerant of
+  unavailable storage.
+- **STORE-017:** **Export library** shall download the whole of **My library**
+  as one `.zip` archive named `gamut-library-<date>.zip`, containing one
+  canonical JSON document per graph, identical to its single-graph export
+  (STORE-008), in directories that reproduce the library folders, and a
+  versioned manifest that records the export date and each graph's name,
+  identity, and last update. Entry names are written as UTF-8 with the
+  archive's UTF-8 flag set; characters that are unsafe in a path, such as
+  `/`, `\`, and `:`, are replaced, and colliding names in one directory get a
+  suffix, while the manifest and the documents keep the real names. The
+  archive is written with the browser's `deflate-raw` compression already
+  used by scene links, without a new dependency. Export reads storage only
+  and remains available in a temporary session.
+- **STORE-018:** **Import library**, and dropping one `.zip` file on the
+  application window, shall import an archive of STORE-017 through one path.
+  An archive that fails a SEC-010 check is rejected as a whole with a
+  diagnostic and writes nothing. Otherwise every document entry passes the
+  same validation and migration as a single-file import (STORE-002); invalid
+  entries are skipped and listed in a summary with their diagnostics, and
+  valid ones are imported. Imported graphs go into a new top-level folder
+  `Imported <date>`, keeping their archive folders below it; an import never
+  replaces or overwrites a graph and never asks per graph, and a graph whose
+  identity is already in the library is stored under a new identity. Storage
+  failures, including a full quota, are reported, and an interrupted import
+  leaves an index in which every stored graph has its entry (STORE-013).
+  **Import library** is unavailable in a temporary session, with a message
+  explaining why.
+
 ## 12. Diagnostics, limits, and security
 
 Diagnostics shall contain a stable code, severity, affected item or property,
@@ -495,6 +612,39 @@ accessible-name policy are specified in
   in-memory source. Recovery shall include copying source and exporting any
   structurally valid document.
 
+SEC-010 through SEC-012 have **Milestone** commitment and apply to milestones
+that explicitly include library archives or comment rows, starting with
+[Library and Expression Organization](requirements/milestones/library-and-expression-organization.md).
+
+- **SEC-010:** A library archive (STORE-018) is untrusted input. Before
+  writing anything, import shall enforce the archive size, entry count,
+  per-document decoded size, and total decompressed size limits of the
+  [limits and interaction constants](specifications/limits-and-constants.md#22-library-archives),
+  checking decompressed sizes and the expansion ratio while inflating rather
+  than trusting declared sizes. It shall reject entry paths that are empty,
+  absolute, or contain a `..` segment, a backslash, or a control character;
+  paths over the folder depth, name-length, or path-length limits; names that
+  are not valid UTF-8; duplicate paths after normalization; encrypted entries;
+  ZIP64 records; compression methods other than stored and `deflate`; and CRC
+  mismatches. A failed check rejects the whole archive with a diagnostic and
+  never supplies a partial document to validation.
+- **SEC-011:** The manifest of a library archive shall be only a hint. Graph
+  names and identities come from the validated documents, and folders from
+  the validated archive paths; a manifest that is missing, malformed,
+  over its size limit, or inconsistent with the entries never makes a valid
+  document entry fail and is never trusted over the documents.
+- **SEC-012:** Annotation text shall be rendered as a restricted Markdown
+  subset, specified in [language §3](specifications/language.md#3-items-names-and-annotations):
+  bold and italic with delimiters that leave intraword and mathematical text
+  such as `a*b*c`, `2*3`, and `x_1` literal, inline code, backslash escapes,
+  and links. Rendering shall build interface elements and never parse or
+  inject HTML (SEC-002): raw HTML, images, headings, and lists are shown as
+  text. A link is active only when its scheme is `http`, `https`, or
+  `mailto`; any other destination, including `javascript:`, `data:`, and
+  relative URLs, is shown as plain text. Active links open in a new browsing
+  context with `rel="noopener noreferrer"`, and their destination is exposed
+  in a tooltip and the accessible description.
+
 ## 13. Accessibility
 
 - **A11Y-001:** Document and editor actions shall be keyboard-operable.
@@ -516,6 +666,39 @@ accessible-name policy are specified in
 - **A11Y-009:** Automated accessibility checks and manual keyboard,
   screen-reader, contrast, zoom, and reduced-motion checks shall be completion
   evidence for product milestones.
+
+A11Y-010 through A11Y-014 have **Milestone** commitment and apply to
+milestones that explicitly include the library panel, folders, comment rows,
+or hidden values, starting with
+[Library and Expression Organization](requirements/milestones/library-and-expression-organization.md).
+
+- **A11Y-010:** The library panel shall be a labelled region. The **Library**
+  button exposes its expanded state; opening the panel moves focus into it,
+  and closing it returns focus to the **Library** button. Both sections, every
+  graph and example action, and every confirmation are reachable and
+  operable by keyboard, and Escape dismisses a confirmation before the panel.
+- **A11Y-011:** Expression and library folders shall expose their name,
+  nesting level, and expanded state, and every folder operation shall have a
+  keyboard equivalent, including moving an item or graph into and out of a
+  folder without drag and drop. After a move, focus stays on the moved row,
+  and its new folder and position are announced once.
+- **A11Y-012:** Below a width breakpoint at which the expression panel, the
+  library panel, and a usable viewport do not fit side by side, the library
+  panel shall open as an overlay over the viewport that closes on Escape and
+  returns focus to the **Library** button; opening it collapses nothing else.
+  At 200 % browser zoom on the supported desktop browsers, the expression
+  panel, the library panel, and their menus remain readable and operable
+  without loss of content or function. The breakpoint value is owned by the
+  [limits and interaction constants](specifications/limits-and-constants.md#6-interaction-constants).
+  Mobile browsers and touch input are not claimed
+  ([#120](https://github.com/eharquin/gamut/issues/120)).
+- **A11Y-013:** When values are hidden (DOC-014), each affected row shall
+  announce that its value is hidden and never expose the hidden coefficients
+  through its accessible name, description, or live announcements.
+- **A11Y-014:** An annotation row shall keep its accessible name
+  (“Annotation N”) and expose its text without Markdown delimiters. Its links
+  are reachable with Tab in reading order and expose their destination
+  (SEC-012).
 
 ## 14. Verification
 
@@ -567,6 +750,10 @@ only to milestones that deliver a public application:
 - [PGA 2D Foundation](requirements/milestones/pga-2d-foundation.md) is the
   planned product milestone that introduces the second algebra through the
   registered-algebra boundary.
+- [Library and Expression Organization](requirements/milestones/library-and-expression-organization.md)
+  is the product milestone of release 0.3.0: the library panel with examples,
+  folders, library archives, expression folders, comment rows, hidden values,
+  and algebra-owned coordinate tuples.
 
 Later product milestones add VGA 3D, PGA 2D and 3D, and CGA 2D and 3D visual
 workflows. A VGA 1D visualizer and 1D workflows for other algebra families are
