@@ -26,6 +26,21 @@ dimensions:
 - versioned conventions, numerical policy, examples, and acceptance evidence;
 - a documented installation, verification, and release process.
 
+## 0.2 — Multi-algebra foundation
+
+Released as [0.2.0](docs/releases/0.2.0.md) on 2026-11-10. Demonstrates that
+the architecture is not a VGA-specific application:
+
+- a registered algebra-definition and capability boundary;
+- PGA(2) with versioned projective conventions;
+- points, ideal entities, lines, incidence, join/meet, and Euclidean motions;
+- canonical documents that preserve algebra identity and configuration.
+
+Still open from this foundation: the accepted PGA(2) research workflow
+([#192](https://github.com/eharquin/gamut/issues/192), planned for 0.3) and
+comparative reference fixtures
+([#19](https://github.com/eharquin/gamut/issues/19)).
+
 ## 0.3 — Library and expression organisation
 
 Make documents easier to organise, find and teach with
@@ -35,19 +50,8 @@ Make documents easier to organise, find and teach with
   exportable and importable as a `.zip`;
 - expression folders, comment rows, and a setting that hides multivector values;
 - coordinate tuples owned by the active algebra, as points in PGA(2);
-- `App.tsx` reduced to a composition shell;
+- the first extractions out of `App.tsx`, so that new interface lands outside it;
 - the completed PGA(2) foundation acceptance of 0.2.0.
-
-## 0.5 — Multi-algebra foundation
-
-Demonstrate that the architecture is not a VGA-specific application:
-
-- a registered algebra-definition and capability boundary;
-- PGA(2) with versioned projective conventions;
-- points, ideal entities, lines, incidence, join/meet, and Euclidean motions;
-- accepted VGA(2) and PGA(2) research workflows;
-- canonical documents that preserve algebra identity and configuration;
-- comparative and independent reference fixtures.
 
 ## 0.7 — Broader research workflows
 
