@@ -20,12 +20,14 @@ describe('surface-to-core lowering', () => {
     })
   })
 
-  it('lowers tuple vector syntax through the same constructor call', () => {
+  it('lowers a tuple to an algebra-neutral node, never a hidden vector call (#180)', () => {
     expect(lowerExpression(parse('(1, 2)'))).toMatchObject({
-      kind: 'call',
-      name: 'vector',
-      arguments: [{ kind: 'scalar', value: 1 }, { kind: 'scalar', value: 2 }],
+      kind: 'tuple',
+      components: [{ kind: 'scalar', value: 1 }, { kind: 'scalar', value: 2 }],
+      origin: { start: 0, end: 6 },
     })
+    expect(lowerExpression(parse('(1, 2, 0)'))).toMatchObject({ kind: 'tuple', components: [{}, {}, { value: 0 }] })
+    expect(lowerExpression(parse('vector(1, 2)'))).toMatchObject({ kind: 'call', name: 'vector' })
   })
 
   it('lowers any other call to a call resolved at evaluation', () => {

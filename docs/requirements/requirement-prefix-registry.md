@@ -53,3 +53,4 @@ available for reuse.
 | `F2D` | Acceptance criteria for the VGA 2D foundation milestone | `docs/requirements/milestones/vga-2d-foundation.md` |
 | `M2D` | Acceptance criteria for the VGA 2D visual workflow milestone | `docs/requirements/milestones/vga-2d-visual-workflow.md` |
 | `P2D` | Acceptance criteria for the PGA 2D foundation milestone | `docs/requirements/milestones/pga-2d-foundation.md` |
+| `LEO` | Acceptance criteria for the Library and Expression Organization milestone | `docs/requirements/milestones/library-and-expression-organization.md` |

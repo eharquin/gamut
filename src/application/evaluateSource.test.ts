@@ -479,8 +479,9 @@ describe('source evaluation pipeline', () => {
     expect(evaluateSource('exp(1, 2)', context)).toMatchObject({
       status: 'invalid', diagnostic: { code: 'LANG_SYNTAX' },
     })
+    // A non-scalar component reaches the constructor, which rejects it.
     expect(evaluateSource('vector(e1, 2)', context)).toMatchObject({
-      status: 'invalid', diagnostic: { code: 'LANG_SYNTAX' },
+      status: 'invalid', diagnostic: { code: 'ALG_DOMAIN', message: 'A vector component must be scalar.' },
     })
   })
 

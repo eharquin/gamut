@@ -1,4 +1,4 @@
-import type { SurfaceExpressionNode } from './ast'
+import type { SurfaceExpressionNode, TupleConstructor } from './ast'
 import { formatScalarSource } from './directScalarEdit'
 import { parseDocumentExpression, parseExpression } from './parseExpression'
 
@@ -31,12 +31,19 @@ function componentEdit(node: SurfaceExpressionNode): ConstructorComponentEdit | 
     : null
 }
 
-/** The argument nodes of a constructor call, whichever surface syntax wrote it. */
+/**
+ * The argument nodes of a constructor call, whichever surface syntax wrote
+ * it: the call, `vector(…)`, or a coordinate tuple when the active algebra's
+ * tuple denotes that constructor at that arity.
+ */
 function constructorArguments(
   node: SurfaceExpressionNode,
   constructor: string,
+  tuple: TupleConstructor | null,
 ): readonly SurfaceExpressionNode[] | null {
   if (constructor === 'vector' && node.kind === 'vector-constructor') return node.components
+  if (node.kind === 'tuple' && tuple?.constructor === constructor &&
+      tuple.arities.includes(node.components.length)) return node.components
   if (node.kind === 'call-expression' && node.callee === constructor) return node.arguments
   return null
 }
@@ -45,8 +52,9 @@ function componentsOf(
   node: SurfaceExpressionNode,
   constructor: string,
   arity: number,
+  tuple: TupleConstructor | null,
 ): readonly ConstructorComponentEdit[] | null {
-  const args = constructorArguments(node, constructor)
+  const args = constructorArguments(node, constructor, tuple)
   if (!args || args.length !== arity) return null
   const components = args.map(componentEdit)
   return components.every((component) => component !== null)
@@ -57,17 +65,19 @@ function componentsOf(
 /**
  * The direct-edit components of an item source — a named declaration or an
  * anonymous expression — that is a call to `constructor` with `arity`
- * arguments, each a literal or a signed name; `null` when the source cannot
- * be rewritten in place (EDIT-003).
+ * arguments, or a tuple the active algebra reads as that call, each a literal
+ * or a signed name; `null` when the source cannot be rewritten in place
+ * (EDIT-003). Rewriting the literals keeps the spelling, tuple or call.
  */
 export function directItemConstructorComponents(
   source: string,
   constructor: string,
   arity: number,
+  tuple: TupleConstructor | null = null,
 ): readonly ConstructorComponentEdit[] | null {
   const parsed = parseDocumentExpression(source)
   if (!parsed.ok) return null
-  return componentsOf(parsed.source.expression, constructor, arity)
+  return componentsOf(parsed.source.expression, constructor, arity, tuple)
 }
 
 /** The same for a bare expression, such as a position source. */
@@ -75,9 +85,74 @@ export function directConstructorComponents(
   source: string,
   constructor: string,
   arity: number,
+  tuple: TupleConstructor | null = null,
 ): readonly ConstructorComponentEdit[] | null {
   const parsed = parseExpression(source)
-  return parsed.ok ? componentsOf(parsed.expression, constructor, arity) : null
+  return parsed.ok ? componentsOf(parsed.expression, constructor, arity, tuple) : null
+}
+
+/**
+ * The spellings a drag may rewrite for one entity: `constructor` with
+ * `arity` arguments, and, with `weightedConstructor`, the same call with one
+ * more trailing weight argument, such as `point(x, y, w)`.
+ */
+export type LiteralEditSpelling = Readonly<{
+  constructor: string
+  arity: number
+  weightedConstructor?: string
+}>
+
+/**
+ * What a drag rewrites in an item source: the leading `components`, and for
+ * a weighted spelling its `weight`, which the drag never rewrites.
+ */
+export type LiteralEditTarget = Readonly<{
+  components: readonly ConstructorComponentEdit[]
+  weight: ConstructorComponentEdit | null
+}>
+
+/**
+ * The direct-edit target of an item source under `edit`, trying the plain
+ * spelling first, then the weighted one (PGA-VIZ-003). A weight written as a
+ * name that is also an edited component is refused: rewriting that component
+ * would change the weight.
+ */
+export function directItemLiteralEdit(
+  source: string,
+  edit: LiteralEditSpelling,
+  tuple: TupleConstructor | null = null,
+): LiteralEditTarget | null {
+  const plain = directItemConstructorComponents(source, edit.constructor, edit.arity, tuple)
+  if (plain) return { components: plain, weight: null }
+  if (!edit.weightedConstructor) return null
+  const weighted = directItemConstructorComponents(
+    source, edit.weightedConstructor, edit.arity + 1, tuple)
+  if (!weighted) return null
+  const components = weighted.slice(0, edit.arity)
+  const weight = weighted[edit.arity]
+  if (weight.kind === 'reference' && components.some((component) =>
+    component.kind === 'reference' && component.name === weight.name)) return null
+  return { components, weight }
+}
+
+/**
+ * The value of a literal component, such as a weight, read from its source
+ * span; `null` for a name.
+ */
+export function literalComponentValue(
+  source: string,
+  component: ConstructorComponentEdit,
+): number | null {
+  if (component.kind !== 'literal') return null
+  const parsed = parseExpression(source.slice(component.span.start, component.span.end))
+  if (!parsed.ok) return null
+  let node = parsed.expression
+  let sign = 1
+  while (node.kind === 'unary-expression' && (node.operator === '+' || node.operator === '-')) {
+    if (node.operator === '-') sign = -sign
+    node = node.operand
+  }
+  return node.kind === 'scalar-literal' ? sign * node.value : null
 }
 
 /**

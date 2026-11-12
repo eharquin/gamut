@@ -131,6 +131,13 @@ export function lowerExpression(
             expression.span,
           )
     }
+    case 'tuple':
+      // The tuple stays algebra-neutral: the active algebra resolves it.
+      return {
+        kind: 'tuple',
+        components: expression.components.map(lowerExpression),
+        origin: expression.span,
+      }
     case 'vector-constructor':
       return {
         kind: 'call',
