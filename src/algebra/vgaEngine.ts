@@ -164,6 +164,8 @@ export function createVga2Engine(): AlgebraEngine {
   return {
     basis,
     functions: new Map([['vector', [2]]]),
+    // A VGA(2) tuple has exactly the dimension's two components (#180).
+    tuple: { constructor: 'vector', arities: [2] },
     call(name, args) {
       if (name !== 'vector') {
         throw new AlgebraOperationError('ALG_UNSUPPORTED_FUNCTION', `The function “${name}” is not provided by this algebra.`)
