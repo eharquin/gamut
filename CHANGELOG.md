@@ -84,8 +84,12 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   stores a copy. The first examples are the VGA(2) and PGA(2) showcases (#266).
 - In a temporary shared-scene session, **My library** states that browser
   storage is not used, and its **Add to my library** copies the scene into
-  the library, opens the copy, and ends the session, like **Save local copy**
-  (#266).
+  the library, opens the copy, and ends the session (#266).
+- A scene opened from a link no longer shows the “Temporary session. Changes
+  are not saved automatically.” banner or its **Save local copy** button
+  (#287). **Save**, with the dot that shows unsaved changes, does the same: it
+  asks for a name, stores the scene in the library with a new identity, opens
+  the copy, and ends the session. The name “Shared scene (temporary)” stays.
 
 ### Fixed
 

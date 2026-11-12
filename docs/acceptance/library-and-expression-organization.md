@@ -90,6 +90,10 @@ To be completed on every browser in the table above, on the release build.
   **Export library** works, and nothing is written until an explicit save;
   **Add to my library** copies the scene into the library, opens the copy,
   and ends the temporary session.
+- [ ] Open a scene link: no banner is shown, the header names the graph
+  “Shared scene (temporary)”, and **Save** shows the unsaved-changes dot;
+  **Save** asks for a name, stores the copy in the library, opens it, ends the
+  session, and removes the scene fragment from the address (#287).
 - [ ] Create nested expression folders, move rows in and out by pointer and
   keyboard, undo and redo; confirm that an empty name and a duplicate name in
   the same parent are refused; collapse a folder and see the dot on **Save**

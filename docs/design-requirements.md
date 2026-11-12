@@ -461,8 +461,8 @@ requirement STORE-012, have **Milestone** commitment.
   document identity. The open graph remains the autosaved active document,
   and `gamut.library.v1.open` records which library graph it is, if any.
   **Save** stores it in the library under its name, asking for a name in the
-  library menu the first time, and in a temporary scene-link session acts as
-  Save local copy. Save shall never overwrite another graph: a document that
+  library menu the first time, and in a temporary scene-link session stores a copy under a new identity,
+  opens it, and ends the session (no banner is shown). Save shall never overwrite another graph: a document that
   is not the library graph of its identity (a default, imported, or recovery
   document) takes a fresh identity when the library already holds its own.
   The header shows the open graph's name left of **Save**, editable in place
