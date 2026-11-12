@@ -6,7 +6,7 @@
 **Depends on:** PGA 2D Foundation (release 0.2.0), whose acceptance record is
 completed by [#192](https://github.com/eharquin/gamut/issues/192)
 **Acceptance:** [Library and Expression Organization Acceptance Record](../../acceptance/library-and-expression-organization.md)
-**Applies:** STORE-013 through STORE-018; DOC-001 through DOC-014; ANIM-003,
+**Applies:** STORE-013 through STORE-019; DOC-001 through DOC-014; ANIM-003,
 ANIM-004, and ANIM-006; CMD-001 through CMD-008; APP-006; SEC-001, SEC-002,
 SEC-007, and SEC-010 through SEC-012; A11Y-001 through A11Y-014;
 VIEW2D-008; [language §3 and §7](../../specifications/language.md); VEC-001,
@@ -141,6 +141,15 @@ excluded.
   passes on the release commit; the PGA 2D Foundation acceptance record is
   complete (#192); and the package version, changelog, citation metadata, and
   release notes are updated together.
+- **LEO-013 — Embed mode:** A scene link opened in an iframe satisfies
+  STORE-019 under [scene links](../../specifications/scene-links.md#embed-mode):
+  only the viewport is shown and fills the frame at any size, free objects
+  stay draggable, **Open in GAMUT** reopens the same scene in the full
+  application, fullscreen is offered when the host allows it, and no browser
+  storage is read or written. Tests cover the activation rules and fragment
+  options, the absence of chrome, storage spies in production mode with a
+  positive control, and a drag; a manual check in a Slides.com iframe block
+  completes the evidence ([#215](https://github.com/eharquin/gamut/issues/215)).
 
 Completion claims an organized, shareable personal library with examples and
 structured documents in the supported desktop browsers, not a collaborative
