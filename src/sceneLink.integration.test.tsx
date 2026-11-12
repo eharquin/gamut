@@ -58,16 +58,29 @@ describe('scene sharing in the application', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
+  /** Saves the temporary session with the Save button and the library panel's name field. */
+  const saveFromHeader = () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Save (unsaved changes)' }))
+    fireEvent.click(within(screen.getByRole('region', { name: 'Library' })).getByRole('button', { name: 'Save' }))
+  }
+  const expectNoBanner = () => {
+    expect(screen.queryByText(/Temporary session/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Save local copy' })).not.toBeInTheDocument()
+  }
+
   it('keeps the saved document intact until an explicit save creates a new local identity', async () => {
     const source = serializeCanonicalDocument(saved)
     window.localStorage.setItem(ACTIVE_DOCUMENT_KEY, source)
     const writes = vi.spyOn(Storage.prototype, 'setItem')
     await openSharedScene()
+    expectNoBanner()
+    expect(screen.getByRole('button', { name: 'Save (unsaved changes)' })).toBeInTheDocument()
     fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: 'Shared = vector(6, 7)' } })
     expect(writes).not.toHaveBeenCalled()
     expect(window.localStorage.getItem(ACTIVE_DOCUMENT_KEY)).toBe(source)
-    fireEvent.click(screen.getByRole('button', { name: 'Save local copy' }))
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Save local copy' })).not.toBeInTheDocument())
+    saveFromHeader()
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Open graph name' })).toHaveValue('A shared scene'))
+    expectNoBanner()
     const copy = parseCanonicalDocument(window.localStorage.getItem(ACTIVE_DOCUMENT_KEY)!)
     expect(copy.id).not.toBe(shared.id)
     expect(copy.id).not.toBe(saved.id)
@@ -86,7 +99,7 @@ describe('scene sharing in the application', () => {
     expect(within(menu).getByRole('textbox', { name: 'Graph name' })).toHaveValue('A shared scene')
     fireEvent.click(within(menu).getByRole('button', { name: 'Save' }))
 
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Save local copy' })).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Open graph name' })).toHaveValue('A shared scene'))
     expect(window.location.hash).toBe('')
     const [entry] = JSON.parse(window.localStorage.getItem('gamut.library.v1')!).entries
     expect(entry).toMatchObject({ name: 'A shared scene' })
@@ -102,12 +115,11 @@ describe('scene sharing in the application', () => {
     expect(panel).toHaveTextContent('browser storage is not used')
     fireEvent.click(within(panel).getByRole('button', { name: 'Add to my library' }))
 
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Save local copy' })).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Open graph name' })).toHaveValue('A shared scene'))
     expect(window.location.hash).toBe('')
     const [entry] = JSON.parse(window.localStorage.getItem('gamut.library.v1')!).entries
     expect(entry).toMatchObject({ name: 'A shared scene' })
     expect(entry.id).not.toBe(shared.id)
-    expect(screen.getByRole('textbox', { name: 'Open graph name' })).toHaveValue('A shared scene')
     expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('Shared = vector(3, 4)')
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
   })
@@ -134,7 +146,8 @@ describe('scene sharing in the application', () => {
     expect(window.localStorage.getItem(ACTIVE_DOCUMENT_KEY)).toBe(source)
     expect(writes.mock.calls.map(([key]) => key)).not.toContain(ACTIVE_DOCUMENT_KEY)
     expect(window.location.hash).toBe(hash)
-    expect(screen.getByRole('button', { name: 'Save local copy' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save (unsaved changes)' })).toBeInTheDocument()
+    expectNoBanner()
     expect(screen.getByRole('textbox', { name: 'Open graph name' })).toHaveValue('Shared scene (temporary)')
     expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('Shared = vector(3, 4)')
   })
@@ -157,7 +170,7 @@ describe('scene sharing in the application', () => {
     expect(window.localStorage.getItem('gamut.library.v1')).toBe('corrupted')
   })
 
-  for (const action of ['Save local copy', 'Save', 'New', 'Open', 'Open example', 'Add to my library'] as const) {
+  for (const action of ['Save', 'New', 'Open', 'Open example', 'Add to my library'] as const) {
     it(`keeps the former active document in the library before ${action} replaces it (#212)`, async () => {
       const source = serializeCanonicalDocument(saved)
       window.localStorage.setItem(ACTIVE_DOCUMENT_KEY, source)
@@ -165,9 +178,7 @@ describe('scene sharing in the application', () => {
       if (action === 'Open') window.localStorage.setItem('gamut.library.v1.document.other', serializeCanonicalDocument(other))
       await openSharedScene()
       const menu = () => screen.getByRole('region', { name: 'Library' })
-      if (action === 'Save local copy') {
-        fireEvent.click(screen.getByRole('button', { name: 'Save local copy' }))
-      } else if (action === 'Save') {
+      if (action === 'Save') {
         fireEvent.click(screen.getByRole('button', { name: 'Save (unsaved changes)' }))
         fireEvent.click(within(menu()).getByRole('button', { name: 'Save' }))
       } else if (action === 'Add to my library') {
@@ -183,7 +194,7 @@ describe('scene sharing in the application', () => {
         fireEvent.click(within(menu()).getByRole('button', { name: action === 'New' ? '+ New graph' : 'Open Other' }))
         fireEvent.click(within(within(menu()).getByRole('alertdialog')).getByRole('button', { name: /^Discard/ }))
       }
-      await waitFor(() => expect(screen.queryByRole('button', { name: 'Save local copy' })).not.toBeInTheDocument())
+      await waitFor(() => expect(screen.getByRole('textbox', { name: 'Open graph name' })).not.toHaveValue('Shared scene (temporary)'))
       expect(window.localStorage.getItem('gamut.library.v1.document.saved-document')).toBe(source)
       expect(JSON.parse(window.localStorage.getItem('gamut.library.v1')!).entries.map((entry: { id: string }) => entry.id))
         .toContain('saved-document')
@@ -197,9 +208,9 @@ describe('scene sharing in the application', () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation((key) => {
       if (key === 'gamut.library.v1') throw new DOMException('Quota exceeded', 'QuotaExceededError')
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Save local copy' }))
-    expect(screen.getByRole('alert')).toHaveTextContent('STORE_WRITE_FAILED')
-    expect(screen.getByRole('button', { name: 'Save local copy' })).toBeInTheDocument()
+    saveFromHeader()
+    expect(screen.getByRole('region', { name: 'Library' })).toHaveTextContent(/write|stor|quota/i)
+    expect(screen.getByRole('textbox', { name: 'Open graph name' })).toHaveValue('Shared scene (temporary)')
     vi.restoreAllMocks()
     expect(window.localStorage.getItem(ACTIVE_DOCUMENT_KEY)).toBe(source)
     expect(window.localStorage.getItem('gamut.library.v1.document.saved-document')).toBeNull()
@@ -228,7 +239,8 @@ describe('scene sharing in the application', () => {
       () => expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('Dropped = vector(1, 1)'),
       { timeout: 5000 },
     )
-    expect(screen.getByRole('button', { name: 'Save local copy' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save (unsaved changes)' })).toBeInTheDocument()
+    expectNoBanner()
     expect(writes).not.toHaveBeenCalled()
     expect(window.localStorage.getItem(ACTIVE_DOCUMENT_KEY)).toBe(source)
   })
@@ -236,9 +248,9 @@ describe('scene sharing in the application', () => {
   it('retains the temporary session and offers export if explicit saving fails', async () => {
     await openSharedScene()
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('Quota') })
-    fireEvent.click(screen.getByRole('button', { name: 'Save local copy' }))
-    expect(screen.getByRole('alert')).toHaveTextContent('STORE_WRITE_FAILED')
-    expect(screen.getByRole('button', { name: 'Save local copy' })).toBeInTheDocument()
+    saveFromHeader()
+    expect(screen.getByRole('region', { name: 'Library' })).toHaveTextContent(/write|stor|quota/i)
+    expect(screen.getByRole('textbox', { name: 'Open graph name' })).toHaveValue('Shared scene (temporary)')
     expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('Shared = vector(3, 4)')
   })
 

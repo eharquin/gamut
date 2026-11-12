@@ -61,7 +61,7 @@ export type LibraryPanelProps = Readonly<{
   onOpenExample(example: LibraryExample): void
   /** Stores a copy of an example in My library. */
   onAddExample(example: LibraryExample): void
-  /** In a temporary session: copies the scene into the library, as Save local copy does. */
+  /** In a temporary session: copies the scene into the library. */
   onAddScene(): void
   onClose(): void
 }>

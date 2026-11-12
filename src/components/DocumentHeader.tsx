@@ -145,9 +145,6 @@ export function DocumentHeader({
 export type ShareResult = Readonly<{ content: string; label: string; message: string }>
 
 export type DocumentNoticesProps = Readonly<{
-  /** Set in a temporary scene-link session, which offers to save a local copy. */
-  temporarySession: boolean
-  onSaveLocalCopy(): void
   /** The transient notice after a link is copied, or `null`. */
   copyNotice: string | null
   shareResult: ShareResult | null
@@ -158,12 +155,10 @@ export type DocumentNoticesProps = Readonly<{
 
 /**
  * The notices under the header that report on the document commands: the
- * temporary-session banner, the copied-link notice, the scene link to copy
+ * copied-link notice, the scene link to copy
  * by hand, and the document diagnostic.
  */
 export function DocumentNotices({
-  temporarySession,
-  onSaveLocalCopy,
   copyNotice,
   shareResult,
   onCloseShare,
@@ -171,12 +166,6 @@ export function DocumentNotices({
 }: DocumentNoticesProps) {
   return (
     <>
-      {temporarySession && (
-        <div className="shared-session-notice">
-          <span>Temporary session. Changes are not saved automatically.</span>
-          <button type="button" className="document-command" onClick={onSaveLocalCopy}>Save local copy</button>
-        </div>
-      )}
       <p className="copy-notice" role="status" hidden={copyNotice === null}>{copyNotice}</p>
       {shareResult && (
         <section className="share-result" aria-label="Share scene">
