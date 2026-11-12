@@ -6,7 +6,6 @@ import {
   useReducer,
   useRef,
   useState,
-  type ChangeEvent,
   type CSSProperties,
   type KeyboardEvent,
   type MouseEvent as ReactMouseEvent,
@@ -15,20 +14,20 @@ import {
 } from 'react'
 import { showcaseMetadata } from './algebra/algebraDefinition'
 import { createBuiltinAlgebraRegistry } from './algebra/builtinAlgebras'
-import { evaluateDocument } from './application/evaluateDocument'
+import { declarationDependsOn, evaluateDocument } from './application/evaluateDocument'
 import { AlgebraInfoDialog } from './components/AlgebraInfoDialog'
-import { AlgebraMenu } from './components/AlgebraMenu'
-import { DocumentCommands, GraphNameField, LibraryCommands } from './components/DocumentCommands'
+import {
+  DocumentHeader,
+  DocumentNotices,
+  type DocumentHeaderActions,
+  type DocumentHeaderRefs,
+} from './components/DocumentHeader'
 import { ExpressionReference } from './components/ExpressionReference'
 import type { ReferenceExample } from './language/expressionReference'
 import { ClearExpressionsButton } from './components/ClearExpressionsButton'
 import { ExpressionRow, type ExpressionRowActions, type ExpressionRowRefs } from './components/ExpressionRow'
 import { ZoomLevelField } from './components/ZoomLevelField'
-import {
-  SettingsMenu,
-  type DisplaySettings,
-} from './components/SettingsMenu'
-import { ThemeToggle } from './components/ThemeToggle'
+import type { DisplaySettings } from './components/SettingsMenu'
 import { resolveItemAppearance } from './components/appearancePalette'
 import { OPAQUE_INTERPRETATION, type InterpretedEntity, type Point2d } from './geometry/interpretation'
 import type { VisualizationPrimitive } from './visualization/primitives'
@@ -60,6 +59,8 @@ import {
 import {
   creationSource,
   formatViewportCoordinate,
+  weightedDragSupported,
+  weightedViewportCoordinates,
   nextObjectName,
 } from './visualization/viewportCreation'
 import { describeViewport } from './visualization/viewportDescription'
@@ -79,19 +80,18 @@ import {
   DocumentFormatError,
   fromCanonicalDocument,
   parseCanonicalDocument,
-  parseCanonicalDocumentBytes,
   resolveCanonicalImport,
-  serializeCanonicalDocument,
   toCanonicalDocument,
   type CanonicalDocument,
   type ThemeMode,
 } from './document/canonicalDocument'
+import { documentFileDiagnostic, downloadDocumentFile, readDocumentFile } from './document/documentFile'
 import { ACTIVE_DOCUMENT_KEY, browserDocumentStorage } from './document/documentStorage'
 import {
+  addCopyToLibrary,
   browserLibraryStorage,
   comparableSource,
   duplicateInLibrary,
-  groupLibraryEntries,
   LIBRARY_DOCUMENT_PREFIX,
   LIBRARY_INDEX_KEY,
   LIBRARY_OPEN_KEY,
@@ -106,7 +106,8 @@ import {
   type LibraryEntry,
   type LibraryRead,
 } from './document/documentLibrary'
-import { LibraryMenu } from './components/LibraryMenu'
+import { LibraryPanel } from './components/LibraryPanel'
+import type { LibraryExample } from './examples'
 import { selectDroppedDocument } from './document/droppedDocument'
 import { createSceneLink, decodeSceneFragment, hasSceneFragment, SHARE_URL_WARNING_LENGTH } from './document/sceneLink'
 import { formatDisplayNumber } from './presentation/formatNumber'
@@ -117,7 +118,8 @@ import { DEFAULT_POINT_SIZE, POINT_OUTER_SCALE } from './visualization/stroke'
 import { directScalarEdit } from './language/directScalarEdit'
 import {
   directConstructorComponents,
-  directItemConstructorComponents,
+  directItemLiteralEdit,
+  literalComponentValue,
   rewriteConstructorLiterals,
   type ConstructorComponentEdit,
 } from './language/constructorLiteralEdit'
@@ -361,7 +363,6 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const removedEditorFallbacks = useRef(new Map<string, EditorFocus>())
   const viewportCreatedItemIds = useRef(new Set<string>())
   const addButtonRef = useRef<HTMLButtonElement>(null)
-  const importInputRef = useRef<HTMLInputElement>(null)
   const algebraInfoButtonRef = useRef<HTMLButtonElement>(null)
   const expressionReferenceButtonRef = useRef<HTMLButtonElement>(null)
   const resizeDrag = useRef<Readonly<{ startX: number; startWidth: number }> | null>(
@@ -685,7 +686,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     itemId: string,
     kind: ManipulationKind,
     point: Readonly<{ x: number; y: number }>,
-  ) => {
+  ): Point2d | undefined => {
     const item = expressionDoc.items.find((candidate) => candidate.id === itemId)
     const rendered = renderedPrimitives.find((candidate) => candidate.id === itemId)
     if (!item || !rendered) return
@@ -783,10 +784,14 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     }
     if (!interpretation.supportsPosition(rendered.entity)) {
       // The entity carries its own location: rewrite its constructor literal
-      // (PGA-VIZ-003) with the pointer's grid-rounded coordinates.
-      const components = literalEditComponents(item, rendered.entity)
-      if (!components) return
-      const values = [target.x, target.y]
+      // (PGA-VIZ-003) with the pointer's grid-rounded coordinates, scaled by
+      // the kept weight of a weighted point (#181).
+      const edit = literalEditTarget(item, rendered.entity)
+      if (!edit) return
+      const { components } = edit
+      const weight = edit.weight ? weightValue(item.source, edit.weight) : 1
+      const values = weight === null ? null : weightedViewportCoordinates(point, weight, pixelsPerUnit)
+      if (weight === null || !values) return
       const rewritten = rewriteConstructorLiterals(item.source, components, values)
       if (rewritten !== item.source) executeCommand({
         kind: 'update-source', itemId, source: rewritten,
@@ -802,7 +807,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           value: values[index] * component.sign,
         })
       })
-      return
+      // Where the point is now drawn, for the keyboard announcement.
+      return { x: values[0] / weight, y: values[1] / weight }
     }
     const literalPosition = interpretation.formatPosition(
       coordinate(target.x), coordinate(target.y),
@@ -912,13 +918,33 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       declaredName(candidate.source) === component.name &&
       directScalarEdit(candidate.source) !== null).length === 1)
   }
-  const literalEditComponents = (item: ExpressionItem, entity: InterpretedEntity) => {
+  const literalEditTarget = (item: ExpressionItem, entity: InterpretedEntity) => {
     const edit = interpretation.literalEdit(entity)
-    return edit ? directItemConstructorComponents(item.source, edit.constructor, edit.arity) : null
+    const target = edit ? directItemLiteralEdit(item.source, edit, engine.tuple ?? null) : null
+    // A weight that depends on a rewritten coordinate would change with it.
+    const rewritten = new Set(target?.components.flatMap((component) =>
+      component.kind === 'reference' ? [component.name] : []))
+    return target?.weight?.kind === 'reference' &&
+      declarationDependsOn(expressionDoc.items, target.weight.name, rewritten)
+      ? null
+      : target
   }
-  /** A position source is a two-argument literal of the interpretation's creation constructor. */
+  const literalEditComponents = (item: ExpressionItem, entity: InterpretedEntity) =>
+    literalEditTarget(item, entity)?.components ?? null
+  /** The current value of a kept weight: its literal, or the scalar its name declares. */
+  const weightValue = (source: string, weight: ConstructorComponentEdit): number | null => {
+    if (weight.kind === 'literal') return literalComponentValue(source, weight)
+    const evaluation = evaluatedItems.find(({ item }) => declaredName(item.source) === weight.name)?.evaluation
+    if (evaluation?.status !== 'valid' || evaluation.valueType !== 'single' ||
+        evaluation.value.coefficients.some((coefficient, index) => index > 0 && coefficient !== 0)) return null
+    return evaluation.value.coefficients[0] * weight.sign
+  }
+  /**
+   * A position source is a two-argument literal of the interpretation's
+   * creation constructor, or a tuple the active algebra reads as one.
+   */
   const positionComponents = (positionSource: string) =>
-    directConstructorComponents(positionSource, interpretation.creation.constructor, 2)
+    directConstructorComponents(positionSource, interpretation.creation.constructor, 2, engine.tuple ?? null)
   const headMovable = (item: ExpressionItem, entity: InterpretedEntity): boolean =>
     interpretation.supportsHead(entity) && componentsMovable(literalEditComponents(item, entity))
   const objectBaseMovable = (item: ExpressionItem, entity: InterpretedEntity): boolean =>
@@ -926,7 +952,14 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       ? !item.positionSource ||
         directPositionAnchorReference(item.positionSource) !== null ||
         componentsMovable(positionComponents(item.positionSource))
-      : componentsMovable(literalEditComponents(item, entity))
+      : locatedMovable(item, entity)
+  /** A located entity's literal, with a weight this zoom can keep (#181). */
+  const locatedMovable = (item: ExpressionItem, entity: InterpretedEntity): boolean => {
+    const target = literalEditTarget(item, entity)
+    if (!target || !componentsMovable(target.components)) return false
+    const weight = target.weight ? weightValue(item.source, target.weight) : 1
+    return weight !== null && weightedDragSupported(weight, viewport.pixelsPerUnit)
+  }
   const manipulateWithKeyboard = (
     event: KeyboardEvent<SVGElement>,
     itemId: string,
@@ -1028,13 +1061,14 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           return { x: current.x + normal.x * length + delta.x, y: current.y + normal.y * length + delta.y }
         })()
       : { x: current.x + delta.x, y: current.y + delta.y }
-    updateManipulatedItem(itemId, kind, target)
+    // A weighted point is drawn where its rounded coordinates put it.
+    const moved = updateManipulatedItem(itemId, kind, target) ?? target
     dispatchHistory({ type: 'commit-transaction', origin: keyboardOrigin })
     setViewportAnnouncement(kind === 'normal'
       ? `${gestureLabel(kind)} rotated.`
       : `${gestureLabel(kind)} moved to ${
-          formatViewportCoordinate(current.x + delta.x, viewport.pixelsPerUnit)}, ${
-          formatViewportCoordinate(current.y + delta.y, viewport.pixelsPerUnit)}.`)
+          formatViewportCoordinate(moved.x, viewport.pixelsPerUnit)}, ${
+          formatViewportCoordinate(moved.y, viewport.pixelsPerUnit)}.`)
   }
   const moveViewportPan = (event: ReactPointerEvent<SVGSVGElement>) => {
     const pressed = manipulationDrag.current
@@ -1855,13 +1889,6 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     handle.addEventListener('pointercancel', end)
   }
 
-  const importDocument = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (!file) return
-    await importDocumentFile(file)
-  }
-
   /**
    * Opens a chosen or dropped document file: size limit, parsing, migration,
    * validation, the replace or duplicate choice, and diagnostics. A temporary
@@ -1870,7 +1897,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   const importDocumentFile = async (file: File) => {
     if (playback.anyPlaying) playback.stopAll()
     try {
-      const parsed = parseCanonicalDocumentBytes(new Uint8Array(await file.arrayBuffer()))
+      const parsed = await readDocumentFile(file)
       const collision = parsed.id === expressionDoc.id
       const choice = collision && !window.confirm(
         'A document with this identity is already open. Choose OK to replace it, or Cancel to duplicate the import with fresh identities.',
@@ -1887,6 +1914,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       // An imported graph is not a library graph, even with a library identity.
       setBoundId(null)
       setSavedRevision(null)
+      setExampleRevision(null)
       setTheme(imported.theme)
       setAppearanceItemId(null)
       setExpandedListIds(new Set())
@@ -1895,9 +1923,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       setDocumentDiagnostic(imported.recoveryDiagnostic)
     } catch (error) {
       setDocumentDiagnostic(
-        error instanceof DocumentFormatError
-          ? error.code + ': ' + error.message
-          : 'DOCUMENT_IMPORT_FAILED: The document could not be imported.',
+        documentFileDiagnostic(error, 'DOCUMENT_IMPORT_FAILED: The document could not be imported.'),
       )
     }
   }
@@ -1967,7 +1993,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
         setShareResult({ content: url, label: 'Scene link', message: 'Select and copy the text below.' + warning })
       }
     } catch (error) {
-      setDocumentDiagnostic(error instanceof DocumentFormatError ? error.code + ': ' + error.message : 'SHARE_EXPORT_FAILED: The scene link could not be created. Use JSON export instead.')
+      setDocumentDiagnostic(documentFileDiagnostic(error, 'SHARE_EXPORT_FAILED: The scene link could not be created. Use JSON export instead.'))
     } finally { setSharing(false) }
   }
 
@@ -2038,11 +2064,19 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   /** The last saved revision of the open graph, which unsaved changes are measured against. */
   const [savedRevision, setSavedRevision] = useState<CanonicalDocument | null>(libraryStart.saved)
   const markSavedOnRender = useRef(false)
+  /**
+   * The example the open graph was opened from, as rendered, while the graph is
+   * not in the library: leaving it asks for confirmation only once it differs.
+   */
+  const [exampleRevision, setExampleRevision] = useState<CanonicalDocument | null>(null)
+  const markExampleOnRender = useRef(false)
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [libraryNaming, setLibraryNaming] = useState<Readonly<{ initialName: string }> | null>(null)
   const saveButtonRef = useRef<HTMLButtonElement | null>(null)
   const libraryButtonRef = useRef<HTMLButtonElement | null>(null)
   const libraryReturnFocusRef = useRef<HTMLButtonElement | null>(null)
+  /** The viewport the library panel is laid over on a narrow window. */
+  const [viewportHost, setViewportHost] = useState<HTMLElement | null>(null)
   const currentCanonical = useMemo(
     () => toCanonicalDocument(expressionDoc, theme, resolvedStyles, resolvedOrientation),
     [expressionDoc, theme, resolvedStyles, resolvedOrientation],
@@ -2054,6 +2088,11 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     markSavedOnRender.current = false
     setSavedRevision(currentCanonical)
   }, [currentCanonical])
+  useLayoutEffect(() => {
+    if (!markExampleOnRender.current) return
+    markExampleOnRender.current = false
+    setExampleRevision(currentCanonical)
+  }, [currentCanonical])
   /**
    * Whether the open graph differs from its last saved revision; a graph that
    * was never saved has changes once it has content. The viewport centre and
@@ -2063,6 +2102,14 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     if (boundId === null || savedRevision === null) return hasContent(expressionDoc)
     return comparableSource(currentCanonical) !== comparableSource(savedRevision)
   }, [boundId, savedRevision, currentCanonical, expressionDoc])
+  /**
+   * Whether leaving the open graph discards work: its unsaved changes, except
+   * that an example opened unchanged can be left without confirmation, although
+   * Save still shows it as unsaved until it is in the library.
+   */
+  const discardableChanges = boundId === null && exampleRevision !== null
+    ? comparableSource(currentCanonical) !== comparableSource(exampleRevision)
+    : unsavedChanges
   const graphName = ephemeral ? 'Shared scene (temporary)' : boundId === null ? '' : expressionDoc.title.trim() || 'Untitled graph'
   useEffect(() => {
     document.title = `${graphName || 'Untitled'} · GAMUT`
@@ -2123,7 +2170,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       closeLibrary()
       return
     }
-    // Opening the menu reads the library again and writes nothing.
+    // Opening the panel reads the library again and writes nothing.
     setLibrary(readLibrary(browserLibraryStorage(), libraryOptions()))
     libraryReturnFocusRef.current = libraryButtonRef.current
     setLibraryNaming(null)
@@ -2189,7 +2236,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       commitLibrarySave(expressionDoc.title.trim() || 'Untitled graph')
       return
     }
-    // The first save asks for a name in the library menu.
+    // The first save asks for a name in the library panel.
     currentLibrary()
     libraryReturnFocusRef.current = saveButtonRef.current
     setLibraryNaming({ initialName: expressionDoc.title.trim() || 'Untitled graph' })
@@ -2211,6 +2258,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     nextId.current = document.items.length + 1
     setDocumentDiagnostic(diagnostic)
     setBoundId(libraryId)
+    setExampleRevision(null)
     setSavedRevision(null)
     markSavedOnRender.current = libraryId !== null
     if (ephemeral) {
@@ -2296,30 +2344,42 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       setSavedRevision(null)
     }
   }
-  const algebraBadges = new Map(algebraRegistry.definitions().map((definition) => [definition.algebraId, definition.badge]))
-  const libraryGroups = groupLibraryEntries(library?.entries ?? [], [...algebraBadges.keys()])
-    .map((group) => ({ ...group, label: algebraBadges.get(group.algebraId) ?? (group.algebraId || 'Unknown algebra') }))
+  /** Opens a shipped example unbound from the library, as a new graph with its own identity (#266). */
+  const openExample = (example: LibraryExample) => {
+    const restored = fromCanonicalDocument({ ...example.document, id: crypto.randomUUID() }, restoreOptions)
+    try {
+      requireAvailableAlgebra(algebraRegistry, restored.document.algebra)
+    } catch (error) {
+      reportLibraryFailure(error, `EXAMPLE_INVALID: “${example.name}” could not be opened.${
+        error instanceof DocumentFormatError ? ` ${error.code}: ${error.message}` : ''}`)
+      return
+    }
+    if (!keepFormerDocument()) return
+    // An example stores the system theme only because a canonical document
+    // needs one; it is not a choice of its author, so the reader's theme stays.
+    openGraph(restored.document, theme, restored.recoveryDiagnostic, null)
+    markExampleOnRender.current = true
+  }
+  const addExampleToLibrary = (example: LibraryExample) => {
+    try {
+      const added = addCopyToLibrary(browserLibraryStorage(), example.document, libraryOptions())
+      reportLibrary(added.entries, null)
+      setCopyNotice({ message: `Added “${added.name}” to my library.`, durationMs: 2500 })
+    } catch (error) {
+      reportLibraryFailure(error, `LIBRARY_WRITE_FAILED: “${example.name}” could not be added to the library.`)
+    }
+  }
 
   const exportDocument = () => {
     try {
-      const source = serializeCanonicalDocument(
+      downloadDocumentFile(
         toCanonicalDocument(expressionDoc, theme, resolvedStyles, resolvedOrientation),
+        expressionDoc.title,
       )
-      const blob = new Blob([source], { type: 'application/json;charset=utf-8' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      const basename = (expressionDoc.title || 'gamut-document')
-        .replace(/[^a-z0-9_-]+/gi, '-').replace(/^-|-$/g, '') || 'gamut-document'
-      link.href = url
-      link.download = basename + '.gamut.json'
-      link.click()
-      URL.revokeObjectURL(url)
       setDocumentDiagnostic(null)
     } catch (error) {
       setDocumentDiagnostic(
-        error instanceof DocumentFormatError
-          ? error.code + ': ' + error.message
-          : 'DOCUMENT_EXPORT_FAILED: The document could not be exported.',
+        documentFileDiagnostic(error, 'DOCUMENT_EXPORT_FAILED: The document could not be exported.'),
       )
     }
   }
@@ -2481,100 +2541,60 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       return next
     }),
   }
+  const documentHeaderRefs: DocumentHeaderRefs = {
+    algebraInfoButtonRef,
+    saveButtonRef,
+    libraryButtonRef,
+  }
+  const documentHeaderActions: DocumentHeaderActions = {
+    selectAlgebra,
+    showAlgebraInfo: () => setInfoDialog('algebra'),
+    renameGraph: renameOpenGraph,
+    saveToLibrary: saveToLibraryRequest,
+    toggleLibrary,
+    importFile: importDocumentFile,
+    exportDocument,
+    copyLink: () => void copyScene(),
+    changeTheme: setTheme,
+    changeDisplay: updateDisplay,
+  }
   return (
     <div className="app-shell">
-      <header className="app-header">
-        <a
-          className="app-title"
-          href={import.meta.env.BASE_URL}
-          aria-label="GAMUT home"
-        >
-          GAMUT
-        </a>
-        <AlgebraMenu
-          badge={algebraDefinition.badge}
-          choices={algebraRegistry.definitions().map((definition) => ({
-            algebraId: definition.algebraId,
-            badge: definition.badge,
-            name: definition.info({}).name,
-          }))}
-          selectedAlgebraId={algebraDefinition.algebraId}
-          onSelect={selectAlgebra}
-          onInfo={() => setInfoDialog('algebra')}
-          infoButtonRef={algebraInfoButtonRef}
-        />
-        <input
-          ref={importInputRef}
-          className="document-file-input"
-          type="file"
-          accept="application/json,.json,.gamut.json,.multivector.json"
-          aria-label="Import document file"
-          onChange={importDocument}
-        />
-        <div className="header-actions">
-          {/* Three groups: the open graph, the document file, the display. */}
-          <div className="header-group header-group-graph" role="group" aria-label="Graph">
-            <GraphNameField
-              name={graphName}
-              temporaryLabel={ephemeral ? graphName : null}
-              onRename={renameOpenGraph}
-            />
-            <LibraryCommands
-              onSave={saveToLibraryRequest}
-              unsavedChanges={unsavedChanges}
-              onLibrary={toggleLibrary}
-              libraryOpen={libraryOpen}
-              saveRef={saveButtonRef}
-              libraryRef={libraryButtonRef}
-            />
-          </div>
-          <div className="header-group" role="group" aria-label="Document file">
-            <DocumentCommands
-              onImport={() => importInputRef.current?.click()}
-              onExport={exportDocument}
-              onCopyLink={() => void copyScene()}
-              sharing={sharing}
-            />
-          </div>
-          <div className="header-group" role="group" aria-label="Display">
-            <ThemeToggle theme={theme} onThemeChange={setTheme} />
-            <SettingsMenu
-              display={expressionDoc.view.display}
-              theme={theme}
-              onDisplayChange={updateDisplay}
-              onThemeChange={setTheme}
-              renderingSettings={!noViz}
-            />
-          </div>
-        </div>
-      </header>
+      <DocumentHeader
+        algebraBadge={algebraDefinition.badge}
+        algebraChoices={algebraRegistry.definitions().map((definition) => ({
+          algebraId: definition.algebraId,
+          badge: definition.badge,
+          name: definition.info({}).name,
+        }))}
+        selectedAlgebraId={algebraDefinition.algebraId}
+        graphName={graphName}
+        temporarySession={ephemeral}
+        unsavedChanges={unsavedChanges}
+        libraryOpen={libraryOpen}
+        sharing={sharing}
+        theme={theme}
+        display={expressionDoc.view.display}
+        renderingSettings={!noViz}
+        refs={documentHeaderRefs}
+        actions={documentHeaderActions}
+      />
 
-      {ephemeral && (
-        <div className="shared-session-notice">
-          <span>Temporary session. Changes are not saved automatically.</span>
-          <button type="button" className="document-command" onClick={saveLocalCopy}>Save local copy</button>
-        </div>
-      )}
-      <p className="copy-notice" role="status" hidden={!copyNotice}>{copyNotice?.message}</p>
-      {shareResult && (
-        <section className="share-result" aria-label="Share scene">
-          <p role="status">{shareResult.message}</p>
-          <label>{shareResult.label}<textarea readOnly value={shareResult.content} onFocus={(event) => event.currentTarget.select()} /></label>
-          <button type="button" onClick={() => setShareResult(null)}>Close sharing</button>
-        </section>
-      )}
-
-      {documentDiagnostic && (
-        <div className="document-diagnostic" role="alert">
-          {documentDiagnostic}
-        </div>
-      )}
+      <DocumentNotices
+        temporarySession={ephemeral}
+        onSaveLocalCopy={saveLocalCopy}
+        copyNotice={copyNotice?.message ?? null}
+        shareResult={shareResult}
+        onCloseShare={() => setShareResult(null)}
+        documentDiagnostic={documentDiagnostic}
+      />
       {interpretationResolution.status === 'unavailable' && (
         <div className="document-diagnostic" role="alert">
           {interpretationResolution.code}: {interpretationResolution.message}
         </div>
       )}
 
+      <div className="workspace-frame">
       <main className="workspace" ref={workspaceRef}>
         <aside
           ref={expressionPanelRef}
@@ -2752,7 +2772,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           onKeyDown={resizePanelWithKeyboard}
         />}
 
-        {visualizerActive && <section className="visualizer" aria-label={visualizer?.regionName}>
+        {visualizerActive && <section ref={setViewportHost} className="visualizer" aria-label={visualizer?.regionName}>
           <div ref={canvasFrameRef} className="canvas-frame">
             {panelHidden && <button
               ref={expandPanelButtonRef}
@@ -3067,16 +3087,18 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
         </section>}
       </main>
       {libraryOpen && (
-        <LibraryMenu
-          // A save request asks for a name in a fresh menu.
+        <LibraryPanel
+          // A save request asks for a name in a fresh panel.
           key={libraryNaming ? 'naming' : 'browsing'}
-          anchorRef={libraryButtonRef}
           returnFocusRef={libraryReturnFocusRef}
-          groups={libraryGroups}
+          overlayHost={viewportHost}
+          entries={library?.entries ?? []}
+          algebras={algebraRegistry.definitions()}
           openId={ephemeral ? '' : boundId ?? ''}
           naming={libraryNaming}
           diagnostic={library?.diagnostic ?? null}
-          unsavedChanges={unsavedChanges}
+          unsavedChanges={discardableChanges}
+          temporarySession={ephemeral}
           onSaveAs={(name) => { commitLibrarySave(name) }}
           onSaveAsNew={(name) => { commitLibrarySave(name, true) }}
           currentName={expressionDoc.title.trim() || 'Untitled graph'}
@@ -3085,9 +3107,13 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           onRename={(entry, name) => { renameLibraryEntry(entry.id, name) }}
           onDuplicate={duplicateLibraryEntry}
           onDelete={deleteLibraryEntry}
+          onOpenExample={openExample}
+          onAddExample={addExampleToLibrary}
+          onAddScene={() => { commitLibrarySave(expressionDoc.title.trim() || 'Untitled graph') }}
           onClose={closeLibrary}
         />
       )}
+      </div>
       {infoDialog === 'algebra' && (
         <AlgebraInfoDialog
           info={algebraDefinition.info(algebraResolution.parameters)}

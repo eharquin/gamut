@@ -237,6 +237,7 @@ enter interpretation or rendering state.
 | `src/geometry` | Conversion from owned algebra values to renderer-independent semantic entities | Parsing, backend operations, screen coordinates, or SVG |
 | `src/visualization` | Renderer-neutral positioned primitives and explicit mathematical-to-screen transforms | Algebra identifiers, backend values, source parsing, or application state |
 | `src/application` | Document-wide declaration resolution, dependency ordering, use-case orchestration, and conversion of failures into application states | React rendering, DOM events, backend-specific operations, or CSS |
+| `src/examples` | The example scenes shipped with the application, one canonical document each in the current format version, and their index (`readExamples`) | Library storage, which stays in `src/document`, or interface state |
 | `src/presentation` | Pure display formatting of values, and parsing of untrusted annotation text into a restricted Markdown segment tree | DOM access, HTML, React elements, or evaluation |
 | `src/hooks` | React hooks that hold interaction state for the interface and call application logic, such as scalar playback (`useScalarPlayback`) | Business rules, which stay in `src/application` and the layers below and remain testable without React |
 | `src/App.tsx`, `src/components`, and styles | User input, accessible presentation, reference dialogs, and SVG composition from application state | Language rules, algebra semantics, or backend value inspection |

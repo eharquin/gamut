@@ -16,6 +16,7 @@ import {
   paletteEntry,
 } from './components/appearancePalette'
 import { CLEAR_HOLD_MS } from './components/ClearExpressionsButton'
+import { LIBRARY_OVERLAY_QUERY } from './components/LibraryPanel'
 import { serializeCanonicalDocument, toCanonicalDocument } from './document/canonicalDocument'
 import { ACTIVE_DOCUMENT_KEY } from './document/documentStorage'
 import { expressionDocument } from './document/expressionDocument'
@@ -3738,6 +3739,153 @@ describe('PGA 2D foundation workflow', () => {
     fireEvent.pointerUp(canvas, { pointerId: 33 })
     expect(first).toHaveValue('L = line(0.955, 0.296, 0)')
   })
+  // 72 pixels per unit, origin at (320, 240).
+  const at = (x: number, y: number) => ({ clientX: 320 + x * 72, clientY: 240 - y * 72 })
+  const dragHandle = (name: string, pointerId: number, x: number, y: number) => {
+    const canvas = viewportCanvas()
+    fireEvent.pointerDown(screen.getByRole('button', { name }), { button: 0, pointerId })
+    fireEvent.pointerMove(canvas, { pointerId, ...at(x, y) })
+    fireEvent.pointerUp(canvas, { pointerId })
+  }
+
+  it('drags a weighted point keeping its weight, as one undoable rewrite (#181)', () => {
+    selectPga()
+    const first = screen.getByRole('textbox', { name: 'Expression 1' })
+    fireEvent.change(first, { target: { value: 'P = point(4, 2, 2)' } })
+    sizeViewportCanvas(viewportCanvas())
+    expect(screen.getByText('Point')).toHaveTextContent('at (2, 1), weight 2')
+
+    dragHandle('Move P', 51, 3, 1)
+    expect(first).toHaveValue('P = point(6, 2, 2)')
+    expect(screen.getByText('Point')).toHaveTextContent('at (3, 1), weight 2')
+    fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
+    expect(first).toHaveValue('P = point(4, 2, 2)')
+
+    // Arrow keys move the drawn point by the step and announce where it is drawn.
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Move P' }), { key: 'ArrowRight', shiftKey: true })
+    expect(first).toHaveValue('P = point(6, 2, 2)')
+    expect(screen.getByText(/moved to 3, 1\.$/)).toBeInTheDocument()
+  })
+
+  it('keeps negative, fractional and named weights while dragging (#181)', () => {
+    selectPga()
+    const first = screen.getByRole('textbox', { name: 'Expression 1' })
+    sizeViewportCanvas(viewportCanvas())
+    for (const [source, dragged] of [
+      // Drawn at (2, 1); the sign of the weight, and the orientation, are kept.
+      ['P = point(-2, -1, -1)', 'P = point(-3, -1, -1)'],
+      ['P = point(1, 0.5, 0.5)', 'P = point(1.5, 0.5, 0.5)'],
+    ] as const) {
+      fireEvent.change(first, { target: { value: source } })
+      dragHandle('Move P', 52, 3, 1)
+      expect(first).toHaveValue(dragged)
+    }
+
+    fireEvent.change(first, { target: { value: 'w = 2' } })
+    fireEvent.keyDown(first, { key: 'Enter' })
+    const second = screen.getByRole('textbox', { name: 'Expression 2' })
+    fireEvent.change(second, { target: { value: 'P = point(4, 2, w)' } })
+    dragHandle('Move P', 53, 3, 1)
+    expect(second).toHaveValue('P = point(6, 2, w)')
+    expect(first).toHaveValue('w = 2')
+  })
+
+  const enterRows = (...sources: string[]) => sources.forEach((source, index) => {
+    const row = screen.getByRole('textbox', { name: `Expression ${index + 1}` })
+    fireEvent.change(row, { target: { value: source } })
+    if (index < sources.length - 1) fireEvent.keyDown(row, { key: 'Enter' })
+  })
+
+  it('announces where a weighted point is drawn after an arrow key (#181)', () => {
+    selectPga()
+    sizeViewportCanvas(viewportCanvas())
+    enterRows('P = point(0.37, 0.37, 0.37)')
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Move P' }), { key: 'ArrowRight' })
+    // 1.1 · 0.37 = 0.407 is written 0.41, drawn at 0.41 / 0.37 = 1.108…
+    expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('P = point(0.41, 0.37, 0.37)')
+    expect(screen.getByText('Object base moved to 1.11, 1.')).toBeInTheDocument()
+  })
+
+  it('edits a coordinate name through its scalar and keeps a named negative weight (#181)', () => {
+    selectPga()
+    sizeViewportCanvas(viewportCanvas())
+    enterRows('a = 4', 'P = point(a, 2, 2)')
+    dragHandle('Move P', 59, 3, 1)
+    expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('a = 6')
+    expect(screen.getByRole('textbox', { name: 'Expression 2' })).toHaveValue('P = point(a, 2, 2)')
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: 'w = 1' } })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 2' }), { target: { value: 'P = point(4, 2, -w)' } })
+    expect(screen.getByText('Point')).toHaveTextContent('at (-4, -2), weight -1')
+    dragHandle('Move P', 60, 3, 1)
+    expect(screen.getByRole('textbox', { name: 'Expression 2' })).toHaveValue('P = point(-3, -1, -w)')
+    expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('w = 1')
+  })
+
+  it('shows no handle for a weight that a coordinate changes or that is too small to keep (#181)', () => {
+    selectPga()
+    sizeViewportCanvas(viewportCanvas())
+    enterRows('t = 1', 'w = 2*t', 'P = point(t, 1, w)')
+    expect(screen.getByText('Point')).toHaveTextContent('weight 2')
+    expect(screen.queryByRole('button', { name: 'Move P' })).not.toBeInTheDocument()
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 2' }), { target: { value: 'w = 2' } })
+    expect(screen.getByRole('button', { name: 'Move P' })).toBeInTheDocument()
+
+    // At 72 pixels per unit, |w| / 72 needs more than eight decimals.
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 3' }), { target: { value: 'P = point(1e-9, 1e-9, 1e-9)' } })
+    expect(screen.getByText('Point')).toHaveTextContent('at (1, 1)')
+    expect(screen.queryByRole('button', { name: 'Move P' })).not.toBeInTheDocument()
+  })
+
+  it('drags point(x, y, 0) and (x, y, 0) like an ideal point, keeping the zero (#181)', () => {
+    selectPga()
+    const first = screen.getByRole('textbox', { name: 'Expression 1' })
+    sizeViewportCanvas(viewportCanvas())
+    for (const [source, dragged] of [
+      ['D = point(1, 0, 0)', 'D = point(2, 2, 0)'],
+      ['D = (1, 0, 0)', 'D = (2, 2, 0)'],
+    ] as const) {
+      fireEvent.change(first, { target: { value: source } })
+      expect(screen.getByText('Ideal point')).toHaveTextContent('direction (1, 0)')
+      expect(screen.getByRole('button', { name: 'Move base of D' })).toBeInTheDocument()
+      dragHandle('Move head of D', 54, 2, 2)
+      expect(first).toHaveValue(dragged)
+    }
+  })
+
+  it('draws and drags a PGA tuple like the point it denotes, keeping the tuple (#180)', () => {
+    selectPga()
+    const first = screen.getByRole('textbox', { name: 'Expression 1' })
+    sizeViewportCanvas(viewportCanvas())
+    fireEvent.change(first, { target: { value: 'P = (1, 2)' } })
+    expect(screen.getByText('Point')).toHaveTextContent('at (1, 2)')
+    expect(screen.getByLabelText('P')).toHaveClass('point-marker')
+    dragHandle('Move P', 55, 2.5, 1)
+    expect(first).toHaveValue('P = (2.5, 1)')
+
+    fireEvent.change(first, { target: { value: 'P = (4, 2, 2)' } })
+    dragHandle('Move P', 56, 3, 1)
+    expect(first).toHaveValue('P = (6, 2, 2)')
+
+    // An arity PGA(2) does not accept is diagnosed without naming vector.
+    fireEvent.change(first, { target: { value: 'P = (1, 2, 3, 4)' } })
+    expect(screen.getByText('A coordinate tuple takes 2 or 3 components in this algebra, received 4.')).toBeInTheDocument()
+    expect(screen.queryByText(/vector/)).not.toBeInTheDocument()
+  })
+
+  it('accepts and keeps a tuple in a PGA position field (#180)', () => {
+    selectPga()
+    const first = screen.getByRole('textbox', { name: 'Expression 1' })
+    fireEvent.change(first, { target: { value: 'D = ipoint(1, 0)' } })
+    sizeViewportCanvas(viewportCanvas())
+    dragHandle('Move base of D', 57, 1, 1)
+    const position = screen.getByRole('textbox', { name: 'Position 1' })
+    expect(position).toHaveValue('point(1, 1)')
+    fireEvent.change(position, { target: { value: '(1, 1)' } })
+    expect(screen.queryByText(/coordinate tuples are not supported/)).not.toBeInTheDocument()
+    dragHandle('Move base of D', 58, 2, 1)
+    expect(screen.getByRole('textbox', { name: 'Position 1' })).toHaveValue('(2, 1)')
+  })
 })
 
 describe('stroke width and opacity from the appearance menu (#221)', () => {
@@ -3885,7 +4033,7 @@ describe('documents whose positions are turned off', () => {
 })
 
 describe('normalization chosen from the expression row (#185)', () => {
-  it('closes the normalization popover and the library menu on a press on the canvas', () => {
+  it('closes the normalization popover, but not the docked library panel, on a press on the canvas', () => {
     render(<App />)
     fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: '' } })
     fireEvent.click(screen.getByRole('button', { name: 'VGA · 2D. Change algebra' }))
@@ -3899,9 +4047,9 @@ describe('normalization chosen from the expression row (#185)', () => {
     expect(screen.queryByRole('dialog', { name: 'Normalize' })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Library' }))
-    expect(screen.getByRole('dialog', { name: 'Library' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Library' })).toBeInTheDocument()
     pressCanvas()
-    expect(screen.queryByRole('dialog', { name: 'Library' })).not.toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Library' })).toBeInTheDocument()
   })
 
   it('opens the choice in a popover that closes on Escape, a click outside, or its close button', () => {
@@ -4309,9 +4457,10 @@ describe('NoViz calculator mode (#55)', () => {
 describe('local library of named graphs (#212)', () => {
   afterEach(() => {
     vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
     window.localStorage.clear()
   })
-  const libraryMenu = () => screen.getByRole('dialog', { name: 'Library' })
+  const libraryMenu = () => screen.getByRole('region', { name: 'Library' })
   const openLibrary = () => {
     fireEvent.click(screen.getByRole('button', { name: 'Library' }))
     return libraryMenu()
@@ -4495,7 +4644,7 @@ describe('local library of named graphs (#212)', () => {
     expect(saveButton()).toHaveAccessibleName('Save')
   })
 
-  it('asks for a name in the library menu the first time, then saves under the title', () => {
+  it('asks for a name in the library panel the first time, then saves under the title', () => {
     const prompt = vi.spyOn(window, 'prompt')
     render(<App />)
     fireEvent.click(saveButton())
@@ -4506,20 +4655,21 @@ describe('local library of named graphs (#212)', () => {
     fireEvent.change(name, { target: { value: 'Rotation talk' } })
     fireEvent.click(within(menu).getByRole('button', { name: 'Save' }))
     expect(prompt).not.toHaveBeenCalled()
-    expect(screen.queryByRole('dialog', { name: 'Library' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Library' })).not.toBeInTheDocument()
     expect(screen.getByText('Saved “Rotation talk” to the library.')).toBeInTheDocument()
 
     // The next save does not ask again, and stores the current revision.
     fireEvent.change(source(), { target: { value: 'vector(5, 6)' } })
     fireEvent.click(saveButton())
-    expect(screen.queryByRole('dialog', { name: 'Library' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Library' })).not.toBeInTheDocument()
     expect(stored('local-document').metadata.title).toBe('Rotation talk')
     expect(stored('local-document').items[0].source).toBe('vector(5, 6)')
 
-    const group = within(openLibrary()).getByRole('region', { name: 'VGA · 2D' })
-    const open = within(group).getByRole('button', { name: 'Open Rotation talk' })
+    const open = within(openLibrary()).getByRole('button', { name: 'Open Rotation talk' })
     expect(open).toHaveAttribute('aria-current', 'true')
     expect(open.closest('li')!.querySelector('time')).toHaveAttribute('dateTime', expect.stringMatching(/^\d{4}-\d\d-\d\dT/))
+    // Each graph shows its algebra, which the filter replaces as grouping (#266).
+    expect(open.closest('li')!.querySelector('.library-algebra')).toHaveTextContent('VGA · 2D')
   })
 
   it('creates, opens, renames, duplicates, and deletes graphs, which survive a reload', () => {
@@ -4599,7 +4749,7 @@ describe('local library of named graphs (#212)', () => {
     render(<App />)
     expect(nameField()).toHaveValue('')
     expect(within(openLibrary()).getByRole('button', { name: 'Open Saved default' })).not.toHaveAttribute('aria-current')
-    fireEvent.click(screen.getByRole('button', { name: 'Close Library menu' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Close library' }))
     saveAs('This visit')
 
     expect(stored('local-document').items[0].source).toBe('Saved = vector(1, 1)')
@@ -4630,10 +4780,14 @@ describe('local library of named graphs (#212)', () => {
     expect(saveButton()).toHaveAccessibleName('Save')
     let menu = openLibrary()
     expect(window.localStorage.getItem('gamut.library.v1')).toBeNull()
-    expect(within(within(menu).getByRole('region', { name: 'VGA · 2D' })).getByRole('button', { name: 'Open Former scene' }))
-      .toHaveAttribute('aria-current', 'true')
-    expect(within(within(menu).getByRole('region', { name: 'PGA · 2D' })).getByRole('button', { name: 'Open Points' }))
-      .toBeInTheDocument()
+    expect(within(menu).getByRole('button', { name: 'Open Former scene' })).toHaveAttribute('aria-current', 'true')
+    expect(within(menu).getByRole('button', { name: 'Open Points' }).closest('li')!.querySelector('.library-algebra'))
+      .toHaveTextContent('PGA · 2D')
+    // The algebra filter replaces the grouping by algebra.
+    fireEvent.click(within(menu).getByRole('button', { name: 'PGA' }))
+    expect(within(menu).getAllByRole('button', { name: /^Open / }).map((button) => button.getAttribute('aria-label')))
+      .toEqual(['Open Points'])
+    fireEvent.click(within(menu).getByRole('button', { name: 'All' }))
 
     // Opening another graph stores the former document first.
     fireEvent.click(within(menu).getByRole('button', { name: 'Open Points' }))
@@ -4661,14 +4815,178 @@ describe('local library of named graphs (#212)', () => {
     ] }))
     act(() => { window.dispatchEvent(new StorageEvent('storage', { key: 'gamut.library.v1' })) })
     expect(within(menu).getByRole('button', { name: 'Open Other tab' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Close Library menu' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Close library' }))
 
     fireEvent.change(source(), { target: { value: 'vector(1, 1)' } })
     fireEvent.click(saveButton())
     expect(index().map((entry) => entry.name)).toEqual(['Mine', 'Other tab'])
   })
 
-  it('closes a confirmation with Escape and keeps the menu open', () => {
+  describe('library panel (#266)', () => {
+    const libraryButton = () => screen.getByRole('button', { name: 'Library' })
+
+    it('is a labelled region beside the viewport, opens on My library, and returns focus on close', () => {
+      render(<App />)
+      libraryButton().focus()
+      fireEvent.click(libraryButton())
+      const panel = libraryMenu()
+      expect(libraryButton()).toHaveAttribute('aria-expanded', 'true')
+      expect(libraryButton()).toHaveAttribute('aria-controls', panel.id)
+      // Docked next to the workspace, which resizes instead of being covered.
+      expect(panel).not.toHaveClass('is-overlay')
+      expect(panel.parentElement).toBe(screen.getByRole('main').parentElement)
+      const mine = within(panel).getByRole('tab', { name: 'My library' })
+      expect(mine).toHaveAttribute('aria-selected', 'true')
+      expect(mine).toHaveFocus()
+      expect(within(panel).getByRole('tabpanel')).toHaveAccessibleName('My library')
+
+      // Arrow keys move between the sections.
+      fireEvent.keyDown(mine, { key: 'ArrowRight' })
+      const examples = within(panel).getByRole('tab', { name: 'Examples' })
+      expect(examples).toHaveFocus()
+      expect(within(panel).getByRole('tabpanel')).toHaveAccessibleName('Examples')
+      fireEvent.keyDown(examples, { key: 'Home' })
+      expect(mine).toHaveFocus()
+      fireEvent.keyDown(mine, { key: 'End' })
+      expect(examples).toHaveFocus()
+      fireEvent.keyDown(examples, { key: 'ArrowLeft' })
+      expect(mine).toHaveFocus()
+      expect(mine).toHaveAttribute('aria-selected', 'true')
+      // Both tabs control a rendered panel; the other section is hidden.
+      for (const tab of within(panel).getAllByRole('tab')) {
+        expect(document.getElementById(tab.getAttribute('aria-controls')!)).toHaveAttribute('role', 'tabpanel')
+      }
+      expect(document.getElementById('library-section-examples')).not.toBeVisible()
+
+      // Docked, Escape elsewhere belongs to the editor and leaves the panel open.
+      source().focus()
+      fireEvent.keyDown(document.body, { key: 'Escape' })
+      expect(libraryMenu()).toBeInTheDocument()
+
+      fireEvent.click(libraryButton())
+      expect(screen.queryByRole('region', { name: 'Library' })).not.toBeInTheDocument()
+      expect(libraryButton()).toHaveAttribute('aria-expanded', 'false')
+      expect(libraryButton()).toHaveFocus()
+    })
+
+    const narrowWindow = () => vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === LIBRARY_OVERLAY_QUERY,
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+    }))
+
+    it('opens over the viewport below 720 pixels and closes on Escape', () => {
+      narrowWindow()
+      render(<App />)
+      fireEvent.click(libraryButton())
+      expect(libraryMenu()).toHaveClass('is-overlay')
+      // Laid over the viewport only: the expression panel stays uncovered,
+      // and opening the library collapses nothing else.
+      const expressions = screen.getByRole('complementary', { name: 'Expressions' })
+      expect(libraryMenu().closest('.visualizer')).not.toBeNull()
+      expect(expressions).not.toContainElement(libraryMenu())
+      expect(expressions).not.toHaveClass('is-collapsed')
+      source().focus()
+      fireEvent.keyDown(document.body, { key: 'Escape' })
+      expect(screen.queryByRole('region', { name: 'Library' })).not.toBeInTheDocument()
+      expect(libraryButton()).toHaveFocus()
+    })
+
+    it('dismisses a confirmation with Escape before the overlay', () => {
+      narrowWindow()
+      render(<App />)
+      saveAs('Kept')
+      const panel = openLibrary()
+      fireEvent.click(within(panel).getByRole('button', { name: 'Delete Kept' }))
+      expect(within(panel).getByRole('alertdialog', { name: 'Confirm' })).toBeInTheDocument()
+      fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+      expect(within(libraryMenu()).queryByRole('alertdialog')).not.toBeInTheDocument()
+      expect(index()).toMatchObject([{ name: 'Kept' }])
+      fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+      expect(screen.queryByRole('region', { name: 'Library' })).not.toBeInTheDocument()
+    })
+
+    it('leaves Escape to another open popover over the overlay', () => {
+      narrowWindow()
+      render(<App />)
+      fireEvent.change(source(), { target: { value: '' } })
+      fireEvent.click(screen.getByRole('button', { name: 'VGA · 2D. Change algebra' }))
+      fireEvent.click(within(screen.getByRole('menu')).getAllByRole('menuitemradio')[1])
+      fireEvent.click(libraryButton())
+      fireEvent.click(screen.getAllByRole('button', { name: 'Normalization: off' })[0])
+      const popover = screen.getByRole('dialog', { name: 'Normalize' })
+      const inside = within(popover).getAllByRole('button')[0]
+      inside.focus()
+      expect(popover).toContainElement(document.activeElement as HTMLElement)
+      fireEvent.keyDown(inside, { key: 'Escape' })
+      expect(libraryMenu()).toBeInTheDocument()
+    })
+
+    it('opens an example unbound, and adds a copy to my library without changing the example', () => {
+      render(<App />)
+      saveAs('Mine')
+      let panel = openLibrary()
+      fireEvent.click(within(panel).getByRole('tab', { name: 'Examples' }))
+      const exampleNames = () => within(panel).getAllByRole('button', { name: /^Open example / })
+        .map((button) => button.getAttribute('aria-label'))
+      expect(exampleNames()).toEqual(['Open example VGA 2D Rotation Example', 'Open example PGA 2D Triangle Example'])
+      fireEvent.click(within(panel).getByRole('button', { name: 'PGA' }))
+      expect(exampleNames()).toEqual(['Open example PGA 2D Triangle Example'])
+      fireEvent.click(within(panel).getByRole('button', { name: 'All' }))
+      // Examples are read-only.
+      expect(within(panel).queryByRole('button', { name: /^(Rename|Delete|Duplicate) / })).not.toBeInTheDocument()
+
+      fireEvent.click(within(panel).getByRole('button', { name: 'Add VGA 2D Rotation Example to my library' }))
+      expect(index().map((entry) => entry.name)).toEqual(['Mine', 'VGA 2D Rotation Example'])
+      const copy = index()[1]
+      expect(copy.id).not.toMatch(/^example-/)
+      expect(stored(copy.id).items[2].source).toBe('R = exp(0.5*a*e12)')
+      expect(screen.getByText('Added “VGA 2D Rotation Example” to my library.')).toBeInTheDocument()
+      expect(nameField()).toHaveValue('Mine')
+
+      // The open graph is saved, so the example opens at once, unbound.
+      fireEvent.click(within(panel).getByRole('button', { name: 'Open example PGA 2D Triangle Example' }))
+      expect(screen.queryByRole('region', { name: 'Library' })).not.toBeInTheDocument()
+      expect(source()).toHaveValue('A = point(-2, 1)')
+      expect(nameField()).toHaveValue('')
+      expect(saveButton()).toHaveAccessibleName('Save (unsaved changes)')
+      expect(index()).toHaveLength(2)
+
+      // An example opened unchanged is left without confirmation (#266).
+      panel = openLibrary()
+      expect(within(panel).getByRole('tab', { name: 'My library' })).toHaveAttribute('aria-selected', 'true')
+      expect(within(panel).getByRole('button', { name: 'Open VGA 2D Rotation Example' })).not.toHaveAttribute('aria-current')
+      fireEvent.click(within(panel).getByRole('tab', { name: 'Examples' }))
+      fireEvent.click(within(panel).getByRole('button', { name: 'Open example VGA 2D Rotation Example' }))
+      expect(screen.queryByRole('alertdialog', { name: 'Confirm' })).not.toBeInTheDocument()
+      expect(source()).toHaveValue('V1 = vector(0.66, 3.042)')
+      expect(saveButton()).toHaveAccessibleName('Save (unsaved changes)')
+      panel = openLibrary()
+      fireEvent.click(within(panel).getByRole('tab', { name: 'Examples' }))
+      fireEvent.click(within(panel).getByRole('button', { name: 'Open example PGA 2D Triangle Example' }))
+      expect(screen.queryByRole('alertdialog', { name: 'Confirm' })).not.toBeInTheDocument()
+      expect(source()).toHaveValue('A = point(-2, 1)')
+
+      // Once the example is edited, leaving it asks before discarding it.
+      fireEvent.change(source(), { target: { value: 'A = point(-3, 1)' } })
+      panel = openLibrary()
+      fireEvent.click(within(panel).getByRole('tab', { name: 'Examples' }))
+      fireEvent.click(within(panel).getByRole('button', { name: 'Open example VGA 2D Rotation Example' }))
+      fireEvent.click(within(within(panel).getByRole('alertdialog', { name: 'Confirm' })).getByRole('button', { name: 'Cancel' }))
+      expect(source()).toHaveValue('A = point(-3, 1)')
+
+      // Saving an opened example stores a new graph.
+      fireEvent.click(within(panel).getByRole('button', { name: 'Close library' }))
+      saveAs('Triangle')
+      expect(index().map((entry) => entry.name)).toEqual(['Mine', 'VGA 2D Rotation Example', 'Triangle'])
+      expect(index().some((entry) => entry.id.startsWith('example-'))).toBe(false)
+    })
+  })
+
+  it('closes a confirmation with Escape and keeps the panel open', () => {
     render(<App />)
     saveAs('Escaped')
     const menu = openLibrary()
@@ -4678,7 +4996,7 @@ describe('local library of named graphs (#212)', () => {
     expect(within(libraryMenu()).queryByRole('alertdialog')).not.toBeInTheDocument()
     expect(menu).toContainElement(document.activeElement as HTMLElement)
     fireEvent.keyDown(document, { key: 'Escape' })
-    expect(screen.queryByRole('dialog', { name: 'Library' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Library' })).not.toBeInTheDocument()
   })
 
   it('keeps editing and reports the problem when browser storage is unavailable', () => {
@@ -4711,5 +5029,18 @@ describe('local library of named graphs (#212)', () => {
     const menu = openLibrary()
     fireEvent.click(within(menu).getByRole('button', { name: 'Duplicate Broken' }))
     expect(within(menu).getByRole('alert')).toHaveTextContent(/^LIBRARY_ENTRY_INVALID/)
+  })
+})
+
+describe('VGA(2) coordinate tuples (#180)', () => {
+  it('shows the tuple arity diagnostic without naming vector', () => {
+    render(<App />)
+    const first = screen.getByRole('textbox', { name: 'Expression 1' })
+    fireEvent.change(first, { target: { value: 'V = (1, 2, 3)' } })
+    expect(screen.getByText('A coordinate tuple takes 2 components in this algebra, received 3.')).toBeInTheDocument()
+    fireEvent.change(first, { target: { value: 'V = (1,)' } })
+    expect(screen.getByText('A coordinate tuple takes 2 components in this algebra, received 1.')).toBeInTheDocument()
+    fireEvent.change(first, { target: { value: 'V = (2, 1)' } })
+    expect(screen.queryByText(/coordinate tuple takes/)).not.toBeInTheDocument()
   })
 })

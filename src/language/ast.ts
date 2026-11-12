@@ -56,6 +56,28 @@ export type VectorConstructorNode = Readonly<{
   span: SourceSpan
 }>
 
+/**
+ * A parenthesized coordinate list `(a, b, …)`, or `(a,)` with one component.
+ * It is algebra-neutral: the active algebra decides at evaluation which
+ * constructor and which arities a tuple denotes (language section 7).
+ */
+export type TupleNode = Readonly<{
+  kind: 'tuple'
+  components: readonly SurfaceExpressionNode[]
+  span: SourceSpan
+}>
+
+/**
+ * What a coordinate tuple means in an algebra: the registered constructor it
+ * denotes and the numbers of components it accepts, each an arity of that
+ * constructor (language section 7). Algebra engines declare it; the language
+ * and its editing services read it.
+ */
+export type TupleConstructor = Readonly<{
+  constructor: string
+  arities: readonly number[]
+}>
+
 export type CallExpressionNode = Readonly<{
   kind: 'call-expression'
   callee: string
@@ -93,6 +115,7 @@ export type SurfaceExpressionNode =
   | UnaryExpressionNode
   | BinaryExpressionNode
   | VectorConstructorNode
+  | TupleNode
   | CallExpressionNode
   | ListExpressionNode
   | RangeExpressionNode
@@ -136,6 +159,12 @@ export type CoreExpressionNode =
         kind: 'call'
         name: string
         arguments: readonly CoreExpressionNode[]
+      }>)
+  | (CoreNodeBase &
+      Readonly<{
+        /** A coordinate tuple, resolved by the active algebra's tuple constructor. */
+        kind: 'tuple'
+        components: readonly CoreExpressionNode[]
       }>)
   | (CoreNodeBase &
       Readonly<{

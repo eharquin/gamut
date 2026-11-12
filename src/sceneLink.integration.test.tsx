@@ -82,7 +82,7 @@ describe('scene sharing in the application', () => {
     expect(screen.getByRole('textbox', { name: 'Open graph name' })).toHaveValue('Shared scene (temporary)')
     expect(document.title).toBe('Shared scene (temporary) · GAMUT')
     fireEvent.click(screen.getByRole('button', { name: 'Save (unsaved changes)' }))
-    const menu = screen.getByRole('dialog', { name: 'Library' })
+    const menu = screen.getByRole('region', { name: 'Library' })
     expect(within(menu).getByRole('textbox', { name: 'Graph name' })).toHaveValue('A shared scene')
     fireEvent.click(within(menu).getByRole('button', { name: 'Save' }))
 
@@ -95,7 +95,51 @@ describe('scene sharing in the application', () => {
     await waitFor(() => expect(parseCanonicalDocument(window.localStorage.getItem(ACTIVE_DOCUMENT_KEY)!).id).toBe(entry.id))
   })
 
-  it('writes nothing when the library menu opens in a temporary session (#212)', async () => {
+  it('adds a temporary scene to my library from the library panel, which opens the copy and ends the session (#266)', async () => {
+    await openSharedScene()
+    fireEvent.click(screen.getByRole('button', { name: 'Library' }))
+    const panel = screen.getByRole('region', { name: 'Library' })
+    expect(panel).toHaveTextContent('browser storage is not used')
+    fireEvent.click(within(panel).getByRole('button', { name: 'Add to my library' }))
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Save local copy' })).not.toBeInTheDocument())
+    expect(window.location.hash).toBe('')
+    const [entry] = JSON.parse(window.localStorage.getItem('gamut.library.v1')!).entries
+    expect(entry).toMatchObject({ name: 'A shared scene' })
+    expect(entry.id).not.toBe(shared.id)
+    expect(screen.getByRole('textbox', { name: 'Open graph name' })).toHaveValue('A shared scene')
+    expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('Shared = vector(3, 4)')
+    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
+  })
+
+  it('adds an example to my library in a temporary session without ending the session (#266)', async () => {
+    const source = serializeCanonicalDocument(saved)
+    window.localStorage.setItem(ACTIVE_DOCUMENT_KEY, source)
+    await openSharedScene()
+    const hash = window.location.hash
+    const writes = vi.spyOn(Storage.prototype, 'setItem')
+    fireEvent.click(screen.getByRole('button', { name: 'Library' }))
+    const panel = screen.getByRole('region', { name: 'Library' })
+    fireEvent.click(within(panel).getByRole('tab', { name: 'Examples' }))
+    fireEvent.click(within(panel).getByRole('button', { name: 'Add VGA 2D Rotation Example to my library' }))
+
+    // The former active document is migrated, and the example copy is stored.
+    const entries: { id: string; name: string }[] = JSON.parse(window.localStorage.getItem('gamut.library.v1')!).entries
+    expect(entries.map((entry) => entry.id)).toContain('saved-document')
+    expect(window.localStorage.getItem('gamut.library.v1.document.saved-document')).toBe(source)
+    const copy = entries.find((entry) => entry.name === 'VGA 2D Rotation Example')!
+    expect(parseCanonicalDocument(window.localStorage.getItem(`gamut.library.v1.document.${copy.id}`)!).items[0].source)
+      .toBe('V1 = vector(0.66, 3.042)')
+    // The scene stays open and temporary; the active document is untouched.
+    expect(window.localStorage.getItem(ACTIVE_DOCUMENT_KEY)).toBe(source)
+    expect(writes.mock.calls.map(([key]) => key)).not.toContain(ACTIVE_DOCUMENT_KEY)
+    expect(window.location.hash).toBe(hash)
+    expect(screen.getByRole('button', { name: 'Save local copy' })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Open graph name' })).toHaveValue('Shared scene (temporary)')
+    expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('Shared = vector(3, 4)')
+  })
+
+  it('writes nothing when the library panel opens in a temporary session (#212)', async () => {
     const source = serializeCanonicalDocument(saved)
     window.localStorage.setItem(ACTIVE_DOCUMENT_KEY, source)
     window.localStorage.setItem('gamut.library.v1', 'corrupted')
@@ -104,28 +148,36 @@ describe('scene sharing in the application', () => {
     await openSharedScene()
     const menu = (() => {
       fireEvent.click(screen.getByRole('button', { name: 'Library' }))
-      return screen.getByRole('dialog', { name: 'Library' })
+      return screen.getByRole('region', { name: 'Library' })
     })()
     expect(menu).toHaveTextContent('LIBRARY_INDEX_REBUILT')
-    fireEvent.click(within(menu).getByRole('button', { name: 'Close Library menu' }))
+    fireEvent.click(within(menu).getByRole('button', { name: 'Close library' }))
     expect(writes).not.toHaveBeenCalled()
     expect(removals).not.toHaveBeenCalled()
     expect(window.localStorage.getItem('gamut.library.v1')).toBe('corrupted')
   })
 
-  for (const action of ['Save local copy', 'Save', 'New', 'Open'] as const) {
+  for (const action of ['Save local copy', 'Save', 'New', 'Open', 'Open example', 'Add to my library'] as const) {
     it(`keeps the former active document in the library before ${action} replaces it (#212)`, async () => {
       const source = serializeCanonicalDocument(saved)
       window.localStorage.setItem(ACTIVE_DOCUMENT_KEY, source)
       const other = toCanonicalDocument(expressionDocument([{ id: 'item-1', source: 'Other = vector(0, 2)' }], {}, { id: 'other', title: 'Other' }), 'light')
       if (action === 'Open') window.localStorage.setItem('gamut.library.v1.document.other', serializeCanonicalDocument(other))
       await openSharedScene()
-      const menu = () => screen.getByRole('dialog', { name: 'Library' })
+      const menu = () => screen.getByRole('region', { name: 'Library' })
       if (action === 'Save local copy') {
         fireEvent.click(screen.getByRole('button', { name: 'Save local copy' }))
       } else if (action === 'Save') {
         fireEvent.click(screen.getByRole('button', { name: 'Save (unsaved changes)' }))
         fireEvent.click(within(menu()).getByRole('button', { name: 'Save' }))
+      } else if (action === 'Add to my library') {
+        fireEvent.click(screen.getByRole('button', { name: 'Library' }))
+        fireEvent.click(within(menu()).getByRole('button', { name: 'Add to my library' }))
+      } else if (action === 'Open example') {
+        fireEvent.click(screen.getByRole('button', { name: 'Library' }))
+        fireEvent.click(within(menu()).getByRole('tab', { name: 'Examples' }))
+        fireEvent.click(within(menu()).getByRole('button', { name: 'Open example VGA 2D Rotation Example' }))
+        fireEvent.click(within(within(menu()).getByRole('alertdialog')).getByRole('button', { name: /^Discard/ }))
       } else {
         fireEvent.click(screen.getByRole('button', { name: 'Library' }))
         fireEvent.click(within(menu()).getByRole('button', { name: action === 'New' ? '+ New graph' : 'Open Other' }))

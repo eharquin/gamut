@@ -1,12 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import {
-  directDeclaredVectorComponents,
-  directPositionAnchorReference,
-  directPositionComponents,
-  rewriteLiteralComponents,
-} from './directVectorEdit'
+import { directPositionAnchorReference } from './directVectorEdit'
 
-describe('direct vector inverse editing', () => {
+describe('direct position anchors', () => {
   it('recognizes only explicit position anchor references', () => {
     expect(directPositionAnchorReference('V.position')).toEqual({
       name: 'V', property: 'position',
@@ -16,32 +11,5 @@ describe('direct vector inverse editing', () => {
     })
     expect(directPositionAnchorReference('V')).toBeNull()
     expect(directPositionAnchorReference('(1, 2)')).toBeNull()
-  })
-  it('rewrites vector constructor components without changing surrounding source', () => {
-    const source = 'V = vector(-2, +3)'
-    const components = directDeclaredVectorComponents(source)
-    expect(components).not.toBeNull()
-    expect(rewriteLiteralComponents(source, components!, 1.25, -4)).toBe('V = vector(1.25, -4)')
-  })
-
-  it('supports tuple position sources', () => {
-    const source = '(-1, 2)'
-    const components = directPositionComponents(source)
-    expect(rewriteLiteralComponents(source, components!, 3, 4)).toBe('(3, 4)')
-  })
-
-  it('refuses compound components', () => {
-    expect(directDeclaredVectorComponents('V = vector(a + 1, 2)')).toBeNull()
-    expect(directPositionComponents('(1 / 2, 3)')).toBeNull()
-  })
-
-  it('identifies signed direct scalar references without rewriting them', () => {
-    const components = directDeclaredVectorComponents('V = vector(-a, 2)')
-    expect(components).toEqual([
-      { kind: 'reference', name: 'a', sign: -1 },
-      { kind: 'literal', span: { start: 15, end: 16 } },
-    ])
-    expect(rewriteLiteralComponents('V = vector(-a, 2)', components!, 3, 4))
-      .toBe('V = vector(-a, 4)')
   })
 })

@@ -87,7 +87,7 @@ export type LibraryCommandProps = Readonly<{
   onSave(): void
   /** Whether the open graph differs from its last saved revision. */
   unsavedChanges: boolean
-  /** Opens or closes the library menu. */
+  /** Opens or closes the library panel. */
   onLibrary(): void
   libraryOpen: boolean
   saveRef: RefObject<HTMLButtonElement | null>
@@ -120,8 +120,8 @@ export function LibraryCommands({ onSave, unsavedChanges, onLibrary, libraryOpen
         className={`settings-menu-button document-command-button${libraryOpen ? ' is-open' : ''}`}
         aria-label="Library"
         title="Library"
-        aria-haspopup="dialog"
         aria-expanded={libraryOpen}
+        aria-controls={libraryOpen ? 'library-panel' : undefined}
         onClick={onLibrary}
       >
         {/* Three books on a shelf. */}

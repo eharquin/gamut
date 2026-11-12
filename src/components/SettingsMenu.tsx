@@ -12,6 +12,7 @@ export type DisplaySettings = Readonly<{
   graduationsVisible: boolean
   objectScale: number
   showApproximatedResidue: boolean
+  valuesVisible: boolean
 }>
 
 export const MIN_OBJECT_SCALE = 0.25
@@ -182,6 +183,11 @@ export function SettingsMenu({
               onChange={(showApproximatedResidue) =>
                 onDisplayChange({ showApproximatedResidue })
               }
+            />
+            <SwitchRow
+              label="Show multivector values"
+              checked={display.valuesVisible}
+              onChange={(valuesVisible) => onDisplayChange({ valuesVisible })}
             />
             {renderingSettings && <label className="settings-row settings-row-slider">
               <span className="settings-row-label">Object size</span>
