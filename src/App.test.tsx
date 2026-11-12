@@ -4499,6 +4499,76 @@ describe('local library of named graphs (#212)', () => {
     expect(saveButton()).toHaveAccessibleName('Save')
   })
 
+  describe('saving while sliders play (#265)', () => {
+    const addScalar = (index: number, text: string) => {
+      if (index > 1) fireEvent.click(screen.getByRole('button', { name: 'Add expression' }))
+      const field = screen.getByRole<HTMLInputElement>('textbox', { name: `Expression ${index}` })
+      fireEvent.change(field, { target: { value: text } })
+      return { field, row: field.closest('.expression-item') as HTMLElement }
+    }
+    const play = (row: HTMLElement) =>
+      fireEvent.click(within(row).getByRole('button', { name: 'Play scalar animation' }))
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('stops one playing slider, saves its stopped value, and keeps the graph saved', () => {
+      vi.useFakeTimers()
+      render(<App />)
+      const a = addScalar(1, 'a = 1')
+      saveAs('Playing')
+      expect(saveButton()).toHaveAccessibleName('Save')
+
+      play(a.row)
+      act(() => vi.advanceTimersByTime(500))
+      expect(saveButton()).toHaveAccessibleName('Save (unsaved changes)')
+      fireEvent.click(saveButton())
+
+      expect(within(a.row).getByRole('button', { name: 'Play scalar animation' })).toBeInTheDocument()
+      expect(screen.getByText('a animation stopped because the graph was saved.')).toBeInTheDocument()
+      const stoppedValue = a.field.value
+      expect(stoppedValue).not.toBe('a = 1')
+      expect(stored(index()[0].id).items[0].source).toBe(stoppedValue)
+      expect(saveButton()).toHaveAccessibleName('Save')
+      act(() => vi.advanceTimersByTime(1000))
+      expect(a.field).toHaveValue(stoppedValue)
+      expect(saveButton()).toHaveAccessibleName('Save')
+
+      // Playing again is an ordinary change.
+      play(a.row)
+      act(() => vi.advanceTimersByTime(250))
+      expect(saveButton()).toHaveAccessibleName('Save (unsaved changes)')
+    })
+
+    it('stops several playing sliders and undoes as after a manual pause', () => {
+      vi.useFakeTimers()
+      render(<App />)
+      const a = addScalar(1, 'a = 1')
+      const b = addScalar(2, 'b = 2')
+      saveAs('Playing')
+
+      play(a.row)
+      play(b.row)
+      act(() => vi.advanceTimersByTime(500))
+      fireEvent.click(saveButton())
+
+      expect(screen.getByText('a and b animations stopped because the graph was saved.')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Pause scalar animation' })).not.toBeInTheDocument()
+      expect(saveButton()).toHaveAccessibleName('Save')
+      const saved = stored(index()[0].id).items.map((item: { source: string }) => item.source)
+      expect(saved).toEqual([a.field.value, b.field.value])
+      act(() => vi.advanceTimersByTime(1000))
+      expect(saveButton()).toHaveAccessibleName('Save')
+
+      // One undo reverts the whole playback session, like after a manual pause.
+      fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
+      expect(a.field).toHaveValue('a = 1')
+      expect(b.field).toHaveValue('b = 2')
+      expect(saveButton()).toHaveAccessibleName('Save (unsaved changes)')
+    })
+  })
+
   it('groups the header: graph name, Save, and Library; the document file; the display', () => {
     render(<App />)
     const groups = within(document.querySelector('.header-actions') as HTMLElement).getAllByRole('group')

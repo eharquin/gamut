@@ -21,15 +21,14 @@ import { AlgebraMenu } from './components/AlgebraMenu'
 import { DocumentCommands, GraphNameField, LibraryCommands } from './components/DocumentCommands'
 import { ExpressionReference } from './components/ExpressionReference'
 import type { ReferenceExample } from './language/expressionReference'
-import { AppearancePopover } from './components/AppearancePopover'
 import { ClearExpressionsButton } from './components/ClearExpressionsButton'
+import { ExpressionRow, type ExpressionRowActions, type ExpressionRowRefs } from './components/ExpressionRow'
 import { ZoomLevelField } from './components/ZoomLevelField'
 import {
   SettingsMenu,
   type DisplaySettings,
 } from './components/SettingsMenu'
 import { ThemeToggle } from './components/ThemeToggle'
-import { NormalizationPopover } from './components/NormalizationPopover'
 import { resolveItemAppearance } from './components/appearancePalette'
 import { OPAQUE_INTERPRETATION, type InterpretedEntity, type Point2d } from './geometry/interpretation'
 import type { VisualizationPrimitive } from './visualization/primitives'
@@ -38,7 +37,6 @@ import {
   MAX_EXPRESSION_ITEMS,
   showcaseItems,
   vga2FoundationExampleDocument,
-  type ExpressionControl,
   type ExpressionDocument,
   type ExpressionItem,
 } from './document/expressionDocument'
@@ -77,7 +75,7 @@ import {
   type AnchorCandidate,
   type AnchorProximity,
 } from './visualization/anchoring'
-import { collectRenderedPrimitives, layoutIdealArrow, layoutIdealMarker, layoutLineAtInfinity, layoutLineSelection, layoutOrientedArea, layoutOrientedSegment, layoutPointListConnection, layoutUnboundedLine, lineNormalLength, listPrimitiveTypes, pointListVertices, lineOrientationTicks } from './visualization/layout'
+import { collectRenderedPrimitives, layoutIdealArrow, layoutIdealMarker, layoutLineAtInfinity, layoutLineSelection, layoutOrientedArea, layoutOrientedSegment, layoutPointListConnection, layoutUnboundedLine, lineNormalLength, lineOrientationTicks } from './visualization/layout'
 import { requireAvailableAlgebra } from './application/algebraAvailability'
 import {
   DocumentFormatError,
@@ -113,13 +111,8 @@ import {
 import { LibraryMenu } from './components/LibraryMenu'
 import { selectDroppedDocument } from './document/droppedDocument'
 import { createSceneLink, decodeSceneFragment, hasSceneFragment, SHARE_URL_WARNING_LENGTH } from './document/sceneLink'
-import {
-  formatDisplayMultivector,
-  formatDisplayNumber,
-  formatDisplayValue,
-} from './presentation/formatNumber'
+import { formatDisplayNumber } from './presentation/formatNumber'
 import { evaluateScalarControl } from './application/evaluateScalarControl'
-import { hasIdealNorm, isUnitNorm, measuredNorm, normalizeItemValue } from './application/normalization'
 import { DEFAULT_APPEARANCE_SOURCES, evaluateAppearanceSources } from './application/evaluateAppearanceSources'
 import { placeLabels, type LabelObstacle } from './visualization/labels'
 import { DEFAULT_POINT_SIZE, POINT_OUTER_SCALE } from './visualization/stroke'
@@ -133,8 +126,7 @@ import {
 } from './language/constructorLiteralEdit'
 import { primitiveBase } from './visualization/anchoring'
 import { directPositionAnchorReference } from './language/directVectorEdit'
-import { snapToControlBounds } from './application/scalarPlayback'
-import { DEFAULT_SCALAR_ANIMATION, useScalarPlayback } from './hooks/useScalarPlayback'
+import { useScalarPlayback } from './hooks/useScalarPlayback'
 import { declaredName } from './language/declaredName'
 import './App.css'
 
@@ -157,9 +149,6 @@ const MIN_PANEL_WIDTH = 240
 /** Keeps the `.panel-resize` separator reachable at any panel width. */
 const PANEL_RESIZE_WIDTH = 6
 
-/** The row's normalization modes, by stored value; off is no mode (#185). */
-const NORMALIZATION_TEXT = { off: 'off', natural: 'auto', euclidean: 'norm', ideal: 'inorm' } as const
-const NORM_NAME = { euclidean: 'the Euclidean norm', ideal: 'the ideal norm' } as const
 
 type EditorFocus = Readonly<{
   id: string
@@ -180,13 +169,6 @@ const defaultViewport: Viewport2d = {
   centerX: 0,
   centerY: 0,
   pixelsPerUnit: 72,
-}
-const DEFAULT_SCALAR_CONTROL: ExpressionControl = {
-  mode: 'slider',
-  minimumSource: '-10',
-  maximumSource: '10',
-  stepSource: '0.1',
-  animation: DEFAULT_SCALAR_ANIMATION,
 }
 const VIEWPORT_LOCK_STORAGE_KEY = 'multivector.viewportLocked'
 
@@ -2198,6 +2180,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
    */
   const commitLibrarySave = (name: string, asNew = false): boolean => {
     // Save as new graph stores a fresh identity and leaves the bound graph as saved.
+    // The graph is saved with the values the sliders stop on, and stays saved.
+    if (playback.anyPlaying) playback.stopAll('the graph was saved')
     const candidate = ephemeral || asNew ? crypto.randomUUID() : expressionDoc.id
     let id: string
     try {
@@ -2495,6 +2479,37 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       ownerOf(String(glyph.key).replace(/^connection-/, '')) === selectedObjectId
     return [...glyphs.filter((glyph) => !owned(glyph)), ...glyphs.filter(owned)]
   }
+  const expressionRowElementRefs: ExpressionRowRefs = {
+    expressionRowRefs,
+    inputRefs,
+    normalizationToggleRefs,
+    appearanceAnchorRef,
+    normalizationAnchorRef,
+  }
+  const expressionRowActions: ExpressionRowActions = {
+    executeCommand,
+    dispatchHistory,
+    rememberEditorFocus,
+    handleItemKeyDown,
+    insertExpression,
+    removeExpression,
+    beginRowReorder,
+    reorderRowWithKeyboard,
+    focusRow: (itemId) => setRowFocusId(itemId),
+    blurRow: (itemId) => setRowFocusId((current) => current === itemId ? null : current),
+    hoverRow: (itemId) => setRowHoverId(itemId),
+    leaveRow: (itemId) => setRowHoverId((current) => current === itemId ? null : current),
+    toggleAppearance: (itemId) => setAppearanceItemId((current) => current === itemId ? null : itemId),
+    closeAppearance,
+    toggleNormalizationChoice: (itemId) => setNormalizationChoiceId((current) => current === itemId ? null : itemId),
+    closeNormalizationChoice,
+    toggleListExpanded: (itemId) => setExpandedListIds((current) => {
+      const next = new Set(current)
+      if (next.has(itemId)) next.delete(itemId)
+      else next.add(itemId)
+      return next
+    }),
+  }
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -2671,689 +2686,33 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           </div>
 
           <div className="expression-list">
-            {evaluatedItems.map(({
-              item,
-              position,
-              evaluation,
-              positionEvaluation,
-            }, index) => {
-              const annotation = item.kind === 'annotation'
-              const feedbackId = `expression-feedback-${item.id}`
-              const inputId = `expression-source-${item.id}`
-              const invalid = evaluation?.status === 'invalid'
-              const invalidPosition =
-                positionEvaluation?.status === 'invalid'
-              const supportsPosition =
-                evaluation?.status === 'valid' &&
-                evaluation.valueType === 'single' &&
-                interpretation.supportsPosition(evaluation.entity)
-              const supportsNormalization =
-                evaluation?.status === 'valid' &&
-                evaluation.valueType === 'single' &&
-                evaluation.entity.kind !== 'scalar'
-              const normalizationUnavailable =
-                supportsNormalization &&
-                item.normalization !== undefined &&
-                normalizeItemValue(item.normalization, evaluation.value, engine, interpretation).status === 'unavailable'
-              // The badge follows the norm the mode applies (#185).
-              const unitNorm = supportsNormalization
-                ? measuredNorm(item.normalization, evaluation.value, engine, interpretation)
-                : null
-              const hasUnitNorm =
-                supportsNormalization &&
-                isUnitNorm(item.normalization, evaluation.value, engine, interpretation)
-              // VGA has one norm: a forced mode from an imported document reads as auto.
-              const normalizationMode = item.normalization && !hasIdealNorm(engine) ? 'natural' : item.normalization
-              const normalizationText = NORMALIZATION_TEXT[normalizationMode ?? 'off']
-              const normalizationChoiceOpen = supportsNormalization && normalizationChoiceId === item.id
-              const normalizationOptions = (hasIdealNorm(engine)
-                ? ['off', 'natural', 'euclidean', 'ideal'] as const
-                : ['off', 'natural'] as const)
-              const kind = evaluation?.status === 'valid'
-                ? evaluation.valueType === 'list'
-                  ? `List (${evaluation.value.elements.length})`
-                  : interpretation.describe(evaluation.entity)
-                : 'Object'
-              const drawable = evaluation?.status === 'valid' &&
-                (evaluation.valueType === 'list'
-                  ? evaluation.elements.some((element) => element.primitive)
-                  : evaluation.primitive !== null)
-              const {
-                visible,
-                styleId,
-                color,
-                labelVisible,
-                label,
-                displayLabel,
-              } = resolveItemAppearance(
-                expressionDoc.appearance[item.id],
-                kind,
-                declaredName(item.source),
-              )
-              const objectName = displayLabel ?? kind
-              const labelFieldShown = drawable && labelVisible && evaluation?.status === 'valid' &&
-                evaluation.valueType !== 'list'
-              const valid = evaluation?.status === 'valid'
-              const approximated = valid && evaluation.valueType === 'single' &&
-                evaluation.entity.kind !== 'mixed-multivector' &&
-                evaluation.entity.approximated
-              const scalar = valid && evaluation.valueType === 'single' &&
-                evaluation.entity.kind === 'scalar'
-              const scalarEdit = scalar ? directScalarEdit(item.source) : null
-              // A control only acts on a declared numeric literal. On a computed
-              // scalar the stored control stays dormant in the document and
-              // returns with the literal.
-              const effectiveControl = scalarEdit
-                ? item.control ?? DEFAULT_SCALAR_CONTROL
-                : undefined
-              const controlEvaluation = effectiveControl
-                ? scalarControlEvaluations.get(item.id) ?? evaluateScalarControl(
-                    effectiveControl, evaluatedItems, engine,
-                  )
-                : null
-              const scalarControlAvailable = effectiveControl !== undefined
-              const playbackParameters = effectiveControl?.mode === 'slider' &&
-                controlEvaluation?.status === 'valid'
-                ? {
-                    minimum: controlEvaluation.minimum!,
-                    maximum: controlEvaluation.maximum!,
-                    step: controlEvaluation.step!,
-                    animation: effectiveControl.animation ?? DEFAULT_SCALAR_ANIMATION,
-                  }
-                : null
-              const isPlaying = playback.isPlaying(item.id)
-              const empty = item.source.trim() === ''
-              const listExpanded = expandedListIds.has(item.id)
-              const listDetailsId = `list-details-${item.id}`
-
-              const dropBefore = dropTargetIndex === index
-              const dropAfter = dropTargetIndex === evaluatedItems.length &&
-                index === evaluatedItems.length - 1
-
-              return (
-                <article
-                  key={item.id}
-                  ref={(element) => {
-                    if (element) expressionRowRefs.current.set(item.id, element)
-                    else expressionRowRefs.current.delete(item.id)
-                  }}
-                  onFocus={() => setRowFocusId(item.id)}
-                  onBlur={(event) => {
-                    if (!event.currentTarget.contains(event.relatedTarget))
-                      setRowFocusId((current) => current === item.id ? null : current)
-                  }}
-                  onPointerEnter={() => setRowHoverId(item.id)}
-                  onPointerLeave={() => setRowHoverId((current) => current === item.id ? null : current)}
-                  className={`expression-item${visible || noViz ? '' : ' is-hidden'}${
-                    empty ? ' is-empty-expression' : ''
-                  }${dropBefore ? ' drop-before' : ''}${dropAfter ? ' drop-after' : ''} ${
-                    invalid || invalidPosition ? 'has-error' : ''
-                  }`}
-                >
-                  <button
-                    type="button"
-                    className="reorder-handle"
-                    aria-label={`Reorder ${objectName}. Alt plus arrow keys to move.`}
-                    onPointerDown={(event) => beginRowReorder(event, item.id)}
-                    onKeyDown={(event) => reorderRowWithKeyboard(event, item.id)}
-                  >
-                    <span aria-hidden="true">⠿</span>
-                  </button>
-                  <div className="expression-input-row">
-                    <div className="expression-actions">
-                      {drawable && valid && !noViz && (
-                          <button
-                            type="button"
-                            className="visibility-toggle"
-                            aria-label={`${visible ? 'Hide' : 'Show'} ${objectName}`}
-                            aria-pressed={visible}
-                            onClick={() => executeCommand({
-                              kind: 'update-appearance', itemId: item.id,
-                              appearance: { visible: !visible },
-                            })}
-                          >
-                            <svg className="visibility-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-                              <path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8z" />
-                              <circle cx="8" cy="8" r="2" />
-                              {!visible && <path className="visibility-icon-slash" d="M2.5 13.5 13.5 2.5" />}
-                            </svg>
-                          </button>
-                      )}
-                      {valid && (!drawable || noViz) && (
-                        <span className="expression-action-spacer" aria-hidden="true" />
-                      )}
-                      {valid && noViz ? (
-                          // Appearance is kept in the document but dormant
-                          // without a canvas: the swatch only shows the color.
-                          <span className="appearance-swatch is-dormant" aria-hidden="true">
-                            <span className="appearance-swatch-fill" style={{ backgroundColor: color }} />
-                          </span>
-                      ) : valid ? (
-                          <button
-                            type="button"
-                            className="appearance-swatch"
-                            aria-label={`Open ${kind} menu for ${objectName}`}
-                            aria-haspopup="dialog"
-                            aria-expanded={appearanceItemId === item.id}
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              appearanceAnchorRef.current = event.currentTarget
-                              setAppearanceItemId((current) => current === item.id ? null : item.id)
-                            }}
-                          >
-                            <span
-                              className="appearance-swatch-fill"
-                              style={{ backgroundColor: color }}
-                              aria-hidden="true"
-                            />
-                          </button>
-                      ) : (
-                        <span
-                          className={`expression-status-pastille${empty ? ' is-empty' : ' is-error'}`}
-                          aria-hidden="true"
-                        />
-                      )}
-                    </div>
-                    <div className="expression-body">
-                      <div className="expression-editor-row">
-                        <input
-                          ref={(element) => {
-                            if (element) inputRefs.current.set(item.id, element)
-                            else inputRefs.current.delete(item.id)
-                          }}
-                          id={inputId}
-                          className="expression-source"
-                          aria-label={`${annotation ? 'Annotation' : 'Expression'} ${position}`}
-                          value={item.source}
-                          onChange={(event) => {
-                            if (isPlaying) playback.stop(item.id)
-                            playback.forgetPaused(item.id)
-                            executeCommand({
-                              kind: 'update-source', itemId: item.id,
-                              source: event.target.value,
-                            }, `source:${item.id}`)
-                          }}
-                          onBlur={() => dispatchHistory({ type: 'boundary' })}
-                          onFocus={(event) => rememberEditorFocus(event.currentTarget)}
-                          onSelect={(event) => rememberEditorFocus(event.currentTarget)}
-                          onKeyDown={(event) =>
-                            handleItemKeyDown(event, item, index)
-                          }
-                          aria-describedby={evaluation ? feedbackId : undefined}
-                          aria-invalid={invalid}
-                          spellCheck={false}
-                          autoComplete="off"
-                        />
-                        {supportsNormalization && (
-                          <span className="normalize-control">
-                            <button
-                              ref={(element) => {
-                                if (element) normalizationToggleRefs.current.set(item.id, element)
-                                else normalizationToggleRefs.current.delete(item.id)
-                              }}
-                              type="button"
-                              className={`normalize-toggle${item.normalization ? ' active' : ''}`}
-                              aria-label={`Normalization: ${normalizationText}`}
-                              // With one norm (VGA) the button switches off and auto
-                              // directly; with norm and inorm (PGA) it opens the choice.
-                              aria-pressed={hasIdealNorm(engine) ? undefined : Boolean(normalizationMode)}
-                              aria-expanded={hasIdealNorm(engine) ? normalizationChoiceOpen : undefined}
-                              aria-haspopup={hasIdealNorm(engine) ? 'dialog' : undefined}
-                              title={!normalizationMode
-                                ? 'Not normalized'
-                                : normalizationUnavailable
-                                  ? 'Normalization unavailable: the value is unchanged'
-                                  : `Normalized by ${NORM_NAME[unitNorm!]}${normalizationMode === 'natural' ? ' (automatic)' : ''}`}
-                              onClick={(event) => {
-                                if (!hasIdealNorm(engine)) {
-                                  executeCommand({
-                                    kind: 'update-normalization', itemId: item.id,
-                                    normalization: normalizationMode ? undefined : 'natural',
-                                  })
-                                  return
-                                }
-                                normalizationAnchorRef.current = event.currentTarget
-                                setNormalizationChoiceId((current) => current === item.id ? null : item.id)
-                              }}
-                            >{item.normalization ? normalizationText : 'norm'}</button>
-                            <span
-                              className={`unit-norm-indicator${hasUnitNorm ? ' is-unit' : ''}`}
-                              title={hasUnitNorm ? (unitNorm === 'ideal' ? 'Unit ideal norm' : 'Unit norm') : undefined}
-                            >
-                              {hasUnitNorm && (
-                                <span className="visually-hidden">{unitNorm === 'ideal' ? 'Unit ideal norm' : 'Unit norm'}</span>
-                              )}
-                            </span>
-                          </span>
-                        )}
-                      </div>
-                      {/* The mode is chosen in a popover anchored to the norm button, like the appearance menu. */}
-                      {normalizationChoiceOpen && (
-                        <NormalizationPopover
-                          anchorRef={normalizationAnchorRef}
-                          mode={normalizationMode ?? 'off'}
-                          options={normalizationOptions}
-                          onChoose={(option) => {
-                            executeCommand({
-                              kind: 'update-normalization', itemId: item.id,
-                              normalization: option === 'off' ? undefined : option,
-                            })
-                            setNormalizationChoiceId(null)
-                          }}
-                          onClose={closeNormalizationChoice}
-                        />
-                      )}
-                      {/* The label text is edited under the expression while the label is shown (#226). */}
-                      {labelFieldShown && !noViz && (
-                        <label className="expression-label-row">
-                          <span aria-hidden="true">Label</span>
-                          <input
-                            className="expression-label-input"
-                            aria-label={`Label of ${annotation ? 'annotation' : 'expression'} ${position}`}
-                            value={label}
-                            placeholder={declaredName(item.source) ?? ''}
-                            onChange={(event) => executeCommand({
-                              kind: 'update-appearance', itemId: item.id, appearance: { label: event.target.value },
-                            }, `appearance-label:${item.id}`)}
-                            onBlur={() => dispatchHistory({ type: 'boundary' })}
-                            spellCheck={false}
-                            autoComplete="off"
-                          />
-                        </label>
-                      )}
-
-                      {evaluation || positionEvaluation ? (
-                        <div
-                          id={feedbackId}
-                          className="expression-feedback"
-                          role={invalid || invalidPosition ? 'alert' : 'status'}
-                        >
-                          {evaluation?.status === 'valid' ? (
-                            <>
-                              {evaluation.valueType === 'list' ? (
-                                <button
-                                  type="button"
-                                  className="list-inspection-toggle object-kind"
-                                  style={{ color }}
-                                  aria-expanded={listExpanded}
-                                  aria-controls={listDetailsId}
-                                  onClick={() => setExpandedListIds((current) => {
-                                    const next = new Set(current)
-                                    if (next.has(item.id)) next.delete(item.id)
-                                    else next.add(item.id)
-                                    return next
-                                  })}
-                                >
-                                  <span aria-hidden="true">{listExpanded ? '▾' : '▸'}</span>
-                                  {kind}
-                                </button>
-                              ) : (
-                                <span className="object-kind" style={{ color }}>
-                                  {kind}
-                                  {evaluation?.status === 'valid' && evaluation.valueType === 'single' &&
-                                    interpretation.detail(evaluation.entity) && (
-                                    <span className="object-detail"> {interpretation.detail(evaluation.entity)}</span>
-                                  )}
-                                  {approximated && (
-                                    <span
-                                      className="approximated-indicator"
-                                      title="A negligible coefficient was ignored when classifying this object"
-                                    >
-                                      <span aria-hidden="true">≈</span>
-                                      <span className="visually-hidden">
-                                        {' '}(approximated; a negligible coefficient was ignored)
-                                      </span>
-                                    </span>
-                                  )}
-                                </span>
-                              )}
-                              <output>{formatDisplayValue(
-                                evaluation.value,
-                                expressionDoc.view.display.decimalPlaces,
-                                expressionDoc.view.display.showApproximatedResidue,
-                              )}</output>
-                              {normalizationUnavailable && <>
-                                <span className="feedback-label">Normalization unavailable</span>
-                                <span>This multivector has zero {
-                                  item.normalization === 'natural' ? 'natural norm'
-                                    : item.normalization === 'ideal' ? 'ideal norm' : 'Euclidean norm'
-                                } and was left unchanged.</span>
-                              </>}
-                            </>
-                          ) : evaluation?.status === 'invalid' ? (
-                            <>
-                              <span className="feedback-label">
-                                {evaluation.diagnostic.code}
-                              </span>
-                              <span>{evaluation.diagnostic.message}</span>
-                              <span className="source-location">
-                                Source characters{' '}
-                                {evaluation.diagnostic.span.start + 1}–
-                                {Math.max(
-                                  evaluation.diagnostic.span.start + 1,
-                                  evaluation.diagnostic.span.end,
-                                )}
-                              </span>
-                            </>
-                          ) : null}
-                          {positionEvaluation?.status === 'invalid' && (
-                            <>
-                              <span className="feedback-label">
-                                {positionEvaluation.diagnostic.code}
-                              </span>
-                              <span>{positionEvaluation.diagnostic.message}</span>
-                              <span className="source-location">
-                                Position characters{' '}
-                                {positionEvaluation.diagnostic.span.start + 1}–
-                                {Math.max(
-                                  positionEvaluation.diagnostic.span.start + 1,
-                                  positionEvaluation.diagnostic.span.end,
-                                )}
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      ) : null}
-
-                      {scalar && effectiveControl?.mode === 'slider' && controlEvaluation && (
-                        <div className="scalar-slider-row">
-                          {/* Play and pause sit at the start of the slider they drive. */}
-                        <button
-                          type="button"
-                          className={`scalar-play-button${isPlaying ? ' is-playing' : ''}`}
-                          style={{ '--slider-color': color } as CSSProperties}
-                          aria-label={isPlaying ? 'Pause scalar animation' : 'Play scalar animation'}
-                          disabled={!scalarEdit || !playbackParameters}
-                          onClick={() => isPlaying
-                            ? playback.stop(item.id)
-                            : playback.start(item, playbackParameters!, scalarEdit!.value)}
-                        >{isPlaying
-                          ? <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-                              <rect x="1.5" y="1" width="2.5" height="8" />
-                              <rect x="6" y="1" width="2.5" height="8" />
-                            </svg>
-                          : <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-                              <path d="M2.5 1.2 8.5 5 2.5 8.8z" />
-                            </svg>}</button>
-                          <span>{controlEvaluation.minimum == null
-                            ? '—'
-                            : displayedNumber(controlEvaluation.minimum)}</span>
-                          <input
-                            type="range"
-                            aria-label={`Value for ${declaredName(item.source) ?? `Scalar ${position}`}`}
-                            min={controlEvaluation.minimum ?? 0}
-                            max={controlEvaluation.maximum ?? 1}
-                            step={controlEvaluation.step ?? 1}
-                            value={scalarEdit?.value ?? 0}
-                            disabled={controlEvaluation.status === 'invalid' || !scalarEdit ||
-                              scalarEdit.value < controlEvaluation.minimum! ||
-                              scalarEdit.value > controlEvaluation.maximum!}
-                            style={{
-                              '--slider-color': color,
-                              '--slider-scale': objectRenderScale,
-                            } as CSSProperties}
-                            onPointerDown={() => dispatchHistory({ type: 'begin-transaction' })}
-                            onPointerUp={() => dispatchHistory({ type: 'commit-transaction' })}
-                            onPointerCancel={() => dispatchHistory({ type: 'cancel-transaction' })}
-                            onBlur={() => dispatchHistory({ type: 'boundary' })}
-                            onChange={(event) => {
-                              playback.forgetPaused(item.id)
-                              executeCommand({
-                                kind: 'set-scalar-value', itemId: item.id,
-                                value: snapToControlBounds(
-                                  Number(event.target.value),
-                                  controlEvaluation.minimum ?? 0,
-                                  controlEvaluation.maximum ?? 1,
-                                  controlEvaluation.step ?? 1,
-                                ),
-                              }, `scalar-control:${item.id}`)
-                            }}
-                          />
-                          <span>{controlEvaluation.maximum == null
-                            ? '—'
-                            : displayedNumber(controlEvaluation.maximum)}</span>
-                          {scalarEdit && controlEvaluation.status === 'valid' &&
-                            (scalarEdit.value < controlEvaluation.minimum! ||
-                              scalarEdit.value > controlEvaluation.maximum!) &&
-                            <small role="status">Value is outside the configured interval.</small>}
-                        </div>
-                      )}
-
-                      {scalar && effectiveControl?.mode === 'slider' && controlEvaluation && (
-                        <>
-                          <div
-                            className="scalar-interval-row"
-                            role="group"
-                            aria-label={`Interval of ${declaredName(item.source) ?? objectName}`}
-                          >
-                            {(() => {
-                              const intervalField = (
-                                property: 'minimumSource' | 'maximumSource' | 'stepSource',
-                                label: string,
-                              ) => (
-                                <input
-                                  value={effectiveControl[property]}
-                                  aria-label={label}
-                                  aria-invalid={controlEvaluation.fields[
-                                    property === 'minimumSource' ? 'minimum' :
-                                      property === 'maximumSource' ? 'maximum' : 'step'
-                                  ].status === 'invalid'}
-                                  onBlur={() => dispatchHistory({ type: 'boundary' })}
-                                  onChange={(event) => {
-                                    if (isPlaying) playback.stop(item.id)
-                                    playback.forgetPaused(item.id)
-                                    executeCommand({
-                                      kind: 'update-control', itemId: item.id,
-                                      control: { ...effectiveControl, [property]: event.target.value },
-                                    }, `control-${property}:${item.id}`)
-                                  }}
-                                />
-                              )
-                              return (
-                                <>
-                                  {intervalField('minimumSource', 'Minimum source')}
-                                  <span className="scalar-interval-relation" aria-hidden="true">
-                                    ≤ <span className="scalar-interval-name">
-                                      {declaredName(item.source) ?? objectName}
-                                    </span> ≤
-                                  </span>
-                                  {intervalField('maximumSource', 'Maximum source')}
-                                  <span className="scalar-interval-step">
-                                    <span className="scalar-interval-label" aria-hidden="true">step</span>
-                                    {intervalField('stepSource', 'Step source')}
-                                  </span>
-                                </>
-                              )
-                            })()}
-                          </div>
-                          {controlEvaluation.status === 'invalid' && (
-                            <div className="scalar-interval-diagnostic" role="alert">
-                              {Object.values(controlEvaluation.fields).find(
-                                (field) => field.status === 'invalid',
-                              )?.status === 'invalid'
-                                ? Object.values(controlEvaluation.fields).find(
-                                    (field) => field.status === 'invalid',
-                                  )!.diagnostic.message
-                                : controlEvaluation.diagnostic}
-                            </div>
-                          )}
-                        </>
-                      )}
-
-                      {evaluation?.status === 'valid' &&
-                        evaluation.valueType === 'list' &&
-                        listExpanded && (
-                          <ol
-                            id={listDetailsId}
-                            className="list-inspection"
-                            aria-label={`Elements of ${objectName}`}
-                          >
-                            {evaluation.elements.map((element, elementIndex) => (
-                              <li key={element.id} className="list-inspection-item">
-                                <span
-                                  className="list-element-index"
-                                  aria-label={`Element ${elementIndex}`}
-                                >
-                                  {elementIndex}
-                                </span>
-                                <span className="list-element-kind">
-                                  {interpretation.describe(element.entity)}
-                                </span>
-                                {element.entity.kind !== 'mixed-multivector' &&
-                                  element.entity.approximated && (
-                                    <span
-                                      className="approximated-indicator"
-                                      title="A negligible coefficient was ignored when classifying this object"
-                                    >
-                                      <span aria-hidden="true">≈</span>
-                                      <span className="visually-hidden">
-                                        {' '}(approximated; a negligible coefficient was ignored)
-                                      </span>
-                                    </span>
-                                  )}
-                                <code>{formatDisplayMultivector(
-                                  element.value,
-                                  expressionDoc.view.display.decimalPlaces,
-                                  expressionDoc.view.display.showApproximatedResidue,
-                                )}</code>
-                                {element.positionConflict ? (
-                                  <span className="list-element-position is-error">
-                                    position conflict
-                                  </span>
-                                ) : element.position ? (
-                                  <span className="list-element-position">
-                                    position ({formatDisplayNumber(
-                                      element.position.x,
-                                      expressionDoc.view.display.decimalPlaces,
-                                    )}, {formatDisplayNumber(
-                                      element.position.y,
-                                      expressionDoc.view.display.decimalPlaces,
-                                    )})
-                                  </span>
-                                ) : null}
-                              </li>
-                            ))}
-                          </ol>
-                      )}
-
-                      {supportsPosition && !noViz && (
-                        <div className="position-input-row">
-                          <span className="position-prefix" aria-hidden="true">position</span>
-                          <input
-                            id={`position-source-${item.id}`}
-                            className="position-source"
-                            aria-label={`Position ${position}`}
-                            placeholder="(0, 0)"
-                            value={item.positionSource ?? ''}
-                            size={Math.max(1, (item.positionSource || '(0, 0)').length)}
-                            onChange={(event) => executeCommand({
-                              kind: 'update-position', itemId: item.id,
-                              positionSource: event.target.value,
-                            }, `position:${item.id}`)}
-                            onBlur={() => dispatchHistory({ type: 'boundary' })}
-                            onFocus={(event) => rememberEditorFocus(event.currentTarget)}
-                            onSelect={(event) => rememberEditorFocus(event.currentTarget)}
-                            onKeyDown={(event) => {
-                              if (event.key !== 'Enter') return
-                              event.preventDefault()
-                              insertExpression(
-                                item.id,
-                                event.shiftKey ? 'before' : 'after',
-                              )
-                            }}
-                            aria-invalid={invalidPosition}
-                            aria-describedby={
-                              positionEvaluation ? feedbackId : undefined
-                            }
-                            spellCheck={false}
-                            autoComplete="off"
-                          />
-                        </div>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      className="delete-expression"
-                      onClick={() => removeExpression(item.id)}
-                      aria-label={`Delete expression ${position}`}
-                    >
-                      ×
-                    </button>
-                  </div>
-                  {appearanceItemId === item.id && valid && (
-                    <AppearancePopover
-                      kind={kind}
-                      styleId={styleId}
-                      visible={visible}
-                      labelVisible={labelVisible}
-                      borderVisible={expressionDoc.appearance[item.id]?.borderVisible ?? false}
-                      orientationVisible={resolveItemAppearance(expressionDoc.appearance[item.id], kind, null).orientationVisible}
-                      bivectorShape={expressionDoc.appearance[item.id]?.bivectorShape ?? 'from-vectors'}
-                      idealPointDisplay={expressionDoc.appearance[item.id]?.idealPointDisplay ?? 'vector'}
-                      pointListDisplay={expressionDoc.appearance[item.id]?.primitiveStyles?.points?.connection ?? 'none'}
-                      pointMarkersVisible={expressionDoc.appearance[item.id]?.primitiveStyles?.points?.visible ?? true}
-                      pointListDisplayAvailable={evaluation?.status === 'valid' &&
-                        evaluation.valueType === 'list' &&
-                        pointListVertices(evaluation.elements) !== null}
-                      listPrimitives={evaluation?.status === 'valid' && evaluation.valueType === 'list'
-                        ? listPrimitiveTypes(evaluation.elements)
-                        : undefined}
-                      linesVisible={expressionDoc.appearance[item.id]?.primitiveStyles?.lines?.visible ?? true}
-                      appearance={expressionDoc.appearance[item.id]}
-                      linesOrientationVisible={resolveItemAppearance(expressionDoc.appearance[item.id], kind, null).linesOrientationVisible}
-                      sources={appearanceSources.get(item.id) ?? DEFAULT_APPEARANCE_SOURCES}
-                      parallelogramAvailable={evaluation?.status === 'valid' &&
-                        evaluation.valueType === 'single' &&
-                        evaluation.primitive?.kind === 'oriented-area' &&
-                        evaluation.primitive.shape.kind === 'parallelogram'}
-                      colorOnly={!drawable}
-                      control={scalarControlAvailable ? effectiveControl : undefined}
-                      reducedMotion={reducedMotion}
-                      anchorRef={appearanceAnchorRef}
-                      onStyleChange={(style) => executeCommand({
-                        kind: 'update-appearance', itemId: item.id, appearance: { style },
-                      })}
-                      onVisibleChange={(nextVisible) => executeCommand({
-                        kind: 'update-appearance', itemId: item.id, appearance: { visible: nextVisible },
-                      })}
-                      onLabelVisibleChange={(nextVisible) => executeCommand({
-                        kind: 'update-appearance', itemId: item.id, appearance: { labelVisible: nextVisible },
-                      })}
-                      onBorderVisibleChange={(borderVisible) => executeCommand({
-                        kind: 'update-appearance', itemId: item.id, appearance: { borderVisible },
-                      })}
-                      onOrientationVisibleChange={(orientationVisible) => executeCommand({
-                        kind: 'update-appearance', itemId: item.id, appearance: { orientationVisible },
-                      })}
-                      onBivectorShapeChange={(bivectorShape) => executeCommand({
-                        kind: 'update-appearance', itemId: item.id, appearance: { bivectorShape },
-                      })}
-                      onIdealPointDisplayChange={(idealPointDisplay) => executeCommand({
-                        kind: 'update-appearance', itemId: item.id, appearance: { idealPointDisplay },
-                      })}
-                      onPointListDisplayChange={(pointListDisplay) => executeCommand({
-                        kind: 'update-appearance', itemId: item.id, appearance: { primitiveStyles: { points: { connection: pointListDisplay } } },
-                      })}
-                      onPointMarkersVisibleChange={(pointMarkersVisible) => executeCommand({
-                        kind: 'update-appearance', itemId: item.id, appearance: { primitiveStyles: { points: { visible: pointMarkersVisible } } },
-                      })}
-                      onLinesVisibleChange={(linesVisible) => executeCommand({
-                        kind: 'update-appearance', itemId: item.id, appearance: { primitiveStyles: { lines: { visible: linesVisible } } },
-                      })}
-                      onAppearanceChange={(appearance, coalesceKey) => executeCommand({
-                        kind: 'update-appearance', itemId: item.id, appearance,
-                      }, coalesceKey === undefined ? undefined : `appearance-${coalesceKey}:${item.id}`)}
-                      onControlChange={(control) => {
-                        if (isPlaying) playback.stop(item.id)
-                        playback.forgetPaused(item.id)
-                        executeCommand({ kind: 'update-control', itemId: item.id, control })
-                      }}
-                      onClose={closeAppearance}
-                    />
-                  )}
-                </article>
-              )
-            })}
+            {evaluatedItems.map((entry, index) => (
+              <ExpressionRow
+                key={entry.item.id}
+                entry={entry}
+                index={index}
+                evaluatedItems={evaluatedItems}
+                scalarControlEvaluation={scalarControlEvaluations.get(entry.item.id)}
+                appearance={expressionDoc.appearance[entry.item.id]}
+                appearanceSources={appearanceSources.get(entry.item.id) ?? DEFAULT_APPEARANCE_SOURCES}
+                engine={engine}
+                interpretation={interpretation}
+                display={expressionDoc.view.display}
+                objectRenderScale={objectRenderScale}
+                noViz={noViz}
+                reducedMotion={reducedMotion}
+                dropBefore={dropTargetIndex === index}
+                dropAfter={dropTargetIndex === evaluatedItems.length &&
+                  index === evaluatedItems.length - 1}
+                listExpanded={expandedListIds.has(entry.item.id)}
+                appearanceOpen={appearanceItemId === entry.item.id}
+                normalizationChoiceActive={normalizationChoiceId === entry.item.id}
+                isPlaying={playback.isPlaying(entry.item.id)}
+                playback={playback}
+                refs={expressionRowElementRefs}
+                actions={expressionRowActions}
+              />
+            ))}
           </div>
           <div className="expression-list-footer">
             <ClearExpressionsButton
