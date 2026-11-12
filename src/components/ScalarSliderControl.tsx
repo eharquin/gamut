@@ -6,7 +6,7 @@ import type { DocumentCommand } from '../document/documentCommands'
 import type { HistoryAction } from '../document/documentHistory'
 import type { ExpressionControl, ExpressionItem } from '../document/expressionDocument'
 import { declaredName } from '../language/declaredName'
-import type { directScalarEdit } from '../language/directScalarEdit'
+import type { DirectScalarEdit } from '../language/directScalarEdit'
 import { formatDisplayNumber } from '../presentation/formatNumber'
 
 type ScalarSliderControlProps = Readonly<{
@@ -15,7 +15,7 @@ type ScalarSliderControlProps = Readonly<{
   objectName: string
   color: string
   /** The declared numeric literal the slider writes, null when there is none. */
-  scalarEdit: ReturnType<typeof directScalarEdit>
+  scalarEdit: DirectScalarEdit | null
   /** The row's slider control, stored or default. */
   control: ExpressionControl
   controlEvaluation: ScalarControlEvaluation

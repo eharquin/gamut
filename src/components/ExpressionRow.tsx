@@ -694,8 +694,8 @@ export function ExpressionRow({
           onLinesVisibleChange={(linesVisible) => executeCommand({
             kind: 'update-appearance', itemId: item.id, appearance: { primitiveStyles: { lines: { visible: linesVisible } } },
           })}
-          onAppearanceChange={(appearance, coalesceKey) => executeCommand({
-            kind: 'update-appearance', itemId: item.id, appearance,
+          onAppearanceChange={(nextAppearance, coalesceKey) => executeCommand({
+            kind: 'update-appearance', itemId: item.id, appearance: nextAppearance,
           }, coalesceKey === undefined ? undefined : `appearance-${coalesceKey}:${item.id}`)}
           onControlChange={(control) => {
             if (isPlaying) playback.stop(item.id)
