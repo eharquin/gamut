@@ -3788,6 +3788,53 @@ describe('PGA 2D foundation workflow', () => {
     expect(first).toHaveValue('w = 2')
   })
 
+  const enterRows = (...sources: string[]) => sources.forEach((source, index) => {
+    const row = screen.getByRole('textbox', { name: `Expression ${index + 1}` })
+    fireEvent.change(row, { target: { value: source } })
+    if (index < sources.length - 1) fireEvent.keyDown(row, { key: 'Enter' })
+  })
+
+  it('announces where a weighted point is drawn after an arrow key (#181)', () => {
+    selectPga()
+    sizeViewportCanvas(viewportCanvas())
+    enterRows('P = point(0.37, 0.37, 0.37)')
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Move P' }), { key: 'ArrowRight' })
+    // 1.1 · 0.37 = 0.407 is written 0.41, drawn at 0.41 / 0.37 = 1.108…
+    expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('P = point(0.41, 0.37, 0.37)')
+    expect(screen.getByText('Object base moved to 1.11, 1.')).toBeInTheDocument()
+  })
+
+  it('edits a coordinate name through its scalar and keeps a named negative weight (#181)', () => {
+    selectPga()
+    sizeViewportCanvas(viewportCanvas())
+    enterRows('a = 4', 'P = point(a, 2, 2)')
+    dragHandle('Move P', 59, 3, 1)
+    expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('a = 6')
+    expect(screen.getByRole('textbox', { name: 'Expression 2' })).toHaveValue('P = point(a, 2, 2)')
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: 'w = 1' } })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 2' }), { target: { value: 'P = point(4, 2, -w)' } })
+    expect(screen.getByText('Point')).toHaveTextContent('at (-4, -2), weight -1')
+    dragHandle('Move P', 60, 3, 1)
+    expect(screen.getByRole('textbox', { name: 'Expression 2' })).toHaveValue('P = point(-3, -1, -w)')
+    expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('w = 1')
+  })
+
+  it('shows no handle for a weight that a coordinate changes or that is too small to keep (#181)', () => {
+    selectPga()
+    sizeViewportCanvas(viewportCanvas())
+    enterRows('t = 1', 'w = 2*t', 'P = point(t, 1, w)')
+    expect(screen.getByText('Point')).toHaveTextContent('weight 2')
+    expect(screen.queryByRole('button', { name: 'Move P' })).not.toBeInTheDocument()
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 2' }), { target: { value: 'w = 2' } })
+    expect(screen.getByRole('button', { name: 'Move P' })).toBeInTheDocument()
+
+    // At 72 pixels per unit, |w| / 72 needs more than eight decimals.
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 3' }), { target: { value: 'P = point(1e-9, 1e-9, 1e-9)' } })
+    expect(screen.getByText('Point')).toHaveTextContent('at (1, 1)')
+    expect(screen.queryByRole('button', { name: 'Move P' })).not.toBeInTheDocument()
+  })
+
   it('drags point(x, y, 0) and (x, y, 0) like an ideal point, keeping the zero (#181)', () => {
     selectPga()
     const first = screen.getByRole('textbox', { name: 'Expression 1' })

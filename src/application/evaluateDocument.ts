@@ -164,6 +164,40 @@ function addPositionValues(
 }
 
 /**
+ * Whether the declaration `name` is one of `targets` or depends on one of
+ * them, directly or through other declarations, their positions included.
+ * A drag that rewrites `targets` uses it to refuse a kept value, such as a
+ * weight, that the rewrite would change (#181).
+ */
+export function declarationDependsOn(
+  items: readonly ExpressionItem[],
+  name: string,
+  targets: ReadonlySet<string>,
+): boolean {
+  const declarations = new Map<string, ExpressionItem>()
+  for (const item of items) {
+    if (item.kind === 'annotation') continue
+    const parsed = parseDocumentExpression(item.source)
+    if (parsed.ok && parsed.source.declaration) declarations.set(parsed.source.declaration.name, item)
+  }
+  const visited = new Set<string>()
+  const pending = [name]
+  while (pending.length > 0) {
+    const current = pending.pop()!
+    if (targets.has(current)) return true
+    if (visited.has(current)) continue
+    visited.add(current)
+    const item = declarations.get(current)
+    if (!item) continue
+    for (const source of [item.source, item.positionSource ?? '']) {
+      const parsed = parseDocumentExpression(source)
+      if (parsed.ok) pending.push(...collectReferences(parsed.source.expression).map((reference) => reference.name))
+    }
+  }
+  return false
+}
+
+/**
  * Evaluates value and position sources as separate document graph nodes.
  *
  * Position metadata never enters the owned value. Missing and invalid

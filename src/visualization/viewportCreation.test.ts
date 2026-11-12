@@ -5,6 +5,7 @@ import {
   nextObjectName,
   vectorCreationSource,
   viewportCoordinateDecimals,
+  weightedDragSupported,
   weightedViewportCoordinates,
 } from './viewportCreation'
 import { MAX_PIXELS_PER_UNIT, MIN_PIXELS_PER_UNIT } from './viewport'
@@ -88,5 +89,14 @@ describe('weighted point drag coordinates (#181)', () => {
     expect(weightedViewportCoordinates({ x: 1.234, y: 2 }, 0.5, 100))
       .toEqual([Number(formatViewportCoordinate(0.617, 200)), 1])
     expect(weightedViewportCoordinates({ x: 1.2345, y: 2 }, 0.01, 100)).toEqual([0.0123, 0.02])
+  })
+
+  it('refuses a weight whose scaled step needs more than eight decimals', () => {
+    expect(weightedViewportCoordinates({ x: 1.23, y: 0.99 }, 1e-9, 100)).toBeNull()
+    expect(weightedDragSupported(1e-9, 100)).toBe(false)
+    expect(weightedDragSupported(1e-6, 100)).toBe(true)
+    expect(weightedDragSupported(0, 100)).toBe(false)
+    expect(weightedDragSupported(Number.NaN, 100)).toBe(false)
+    expect(weightedViewportCoordinates({ x: 1.23, y: 0.99 }, 1e-6, 100)).toEqual([0.00000123, 0.00000099])
   })
 })

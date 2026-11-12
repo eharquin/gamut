@@ -165,7 +165,10 @@ to milestones that explicitly include the standard PGA interpretation.
   pointer and the weight, including its sign, is kept; `X·w` and `Y·w` are
   rounded with the pointer step scaled by `|w|`. Only `x` and `y` are
   rewritten: a weight written as a name is left untouched and its current
-  value is used. A point with a zero weight is an ideal point: its head drag
+  value is used. A weight that depends, directly or through other
+  declarations, on a rewritten coordinate name, or whose scaled step needs
+  more than the eight decimals of a viewport coordinate, makes the point
+  immovable. A point with a zero weight is an ideal point: its head drag
   rewrites `x` and `y` and keeps the zero. Anchoring to Euclidean points and
   interactive motors are excluded until separately specified.
 - **PGA-VIZ-004:** A Euclidean line shall show a translucent halo while

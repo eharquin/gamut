@@ -120,7 +120,7 @@ export type LiteralEditTarget = Readonly<{
 export function directItemLiteralEdit(
   source: string,
   edit: LiteralEditSpelling,
-  tuple: TupleSpelling = null,
+  tuple: TupleConstructor | null = null,
 ): LiteralEditTarget | null {
   const plain = directItemConstructorComponents(source, edit.constructor, edit.arity, tuple)
   if (plain) return { components: plain, weight: null }

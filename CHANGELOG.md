@@ -42,7 +42,9 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   rewrites `point(X·w, Y·w, w)`, rounded with the pointer step scaled by
   `|w|`, so `P = point(4, 2, 2)` dragged to `(3, 1)` becomes
   `P = point(6, 2, 2)`. A negative weight keeps its sign and a weight written
-  as a name is not touched. `point(x, y, 0)` and `(x, y, 0)` are ideal points
+  as a name is not touched; a weight that depends on a rewritten coordinate,
+  or too small for eight decimals, leaves the point without a handle. Arrow
+  keys announce where the point is drawn. `point(x, y, 0)` and `(x, y, 0)` are ideal points
   and get the head and base handles of `ipoint(x, y)`, keeping the zero.
   PGA-VIZ-003 and decision D10 are extended (#181).
 

@@ -15,7 +15,7 @@ import {
 } from 'react'
 import { showcaseMetadata } from './algebra/algebraDefinition'
 import { createBuiltinAlgebraRegistry } from './algebra/builtinAlgebras'
-import { evaluateDocument } from './application/evaluateDocument'
+import { declarationDependsOn, evaluateDocument } from './application/evaluateDocument'
 import { AlgebraInfoDialog } from './components/AlgebraInfoDialog'
 import { AlgebraMenu } from './components/AlgebraMenu'
 import { DocumentCommands, GraphNameField, LibraryCommands } from './components/DocumentCommands'
@@ -62,6 +62,7 @@ import {
 import {
   creationSource,
   formatViewportCoordinate,
+  weightedDragSupported,
   weightedViewportCoordinates,
   nextObjectName,
 } from './visualization/viewportCreation'
@@ -705,7 +706,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     itemId: string,
     kind: ManipulationKind,
     point: Readonly<{ x: number; y: number }>,
-  ) => {
+  ): Point2d | undefined => {
     const item = expressionDoc.items.find((candidate) => candidate.id === itemId)
     const rendered = renderedPrimitives.find((candidate) => candidate.id === itemId)
     if (!item || !rendered) return
@@ -807,8 +808,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       if (!edit) return
       const { components } = edit
       const weight = edit.weight ? weightValue(item.source, edit.weight) : 1
-      if (weight === null || weight === 0 || !Number.isFinite(weight)) return
-      const values = weightedViewportCoordinates(point, weight, pixelsPerUnit)
+      const values = weight === null ? null : weightedViewportCoordinates(point, weight, pixelsPerUnit)
+      if (weight === null || !values) return
       const rewritten = rewriteConstructorLiterals(item.source, components, values)
       if (rewritten !== item.source) executeCommand({
         kind: 'update-source', itemId, source: rewritten,
@@ -823,7 +824,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           value: values[index] * component.sign,
         })
       })
-      return
+      // Where the point is now drawn, for the keyboard announcement.
+      return { x: values[0] / weight, y: values[1] / weight }
     }
     const literalPosition = interpretation.formatPosition(
       coordinate(target.x), coordinate(target.y),
@@ -933,7 +935,14 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   }
   const literalEditTarget = (item: ExpressionItem, entity: InterpretedEntity) => {
     const edit = interpretation.literalEdit(entity)
-    return edit ? directItemLiteralEdit(item.source, edit, engine.tuple ?? null) : null
+    const target = edit ? directItemLiteralEdit(item.source, edit, engine.tuple ?? null) : null
+    // A weight that depends on a rewritten coordinate would change with it.
+    const rewritten = new Set(target?.components.flatMap((component) =>
+      component.kind === 'reference' ? [component.name] : []))
+    return target?.weight?.kind === 'reference' &&
+      declarationDependsOn(expressionDoc.items, target.weight.name, rewritten)
+      ? null
+      : target
   }
   const literalEditComponents = (item: ExpressionItem, entity: InterpretedEntity) =>
     literalEditTarget(item, entity)?.components ?? null
@@ -958,7 +967,14 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       ? !item.positionSource ||
         directPositionAnchorReference(item.positionSource) !== null ||
         componentsMovable(positionComponents(item.positionSource))
-      : componentsMovable(literalEditComponents(item, entity))
+      : locatedMovable(item, entity)
+  /** A located entity's literal, with a weight this zoom can keep (#181). */
+  const locatedMovable = (item: ExpressionItem, entity: InterpretedEntity): boolean => {
+    const target = literalEditTarget(item, entity)
+    if (!target || !componentsMovable(target.components)) return false
+    const weight = target.weight ? weightValue(item.source, target.weight) : 1
+    return weight !== null && weightedDragSupported(weight, viewport.pixelsPerUnit)
+  }
   const manipulateWithKeyboard = (
     event: KeyboardEvent<SVGElement>,
     itemId: string,
@@ -1060,13 +1076,14 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
           return { x: current.x + normal.x * length + delta.x, y: current.y + normal.y * length + delta.y }
         })()
       : { x: current.x + delta.x, y: current.y + delta.y }
-    updateManipulatedItem(itemId, kind, target)
+    // A weighted point is drawn where its rounded coordinates put it.
+    const moved = updateManipulatedItem(itemId, kind, target) ?? target
     dispatchHistory({ type: 'commit-transaction', origin: keyboardOrigin })
     setViewportAnnouncement(kind === 'normal'
       ? `${gestureLabel(kind)} rotated.`
       : `${gestureLabel(kind)} moved to ${
-          formatViewportCoordinate(current.x + delta.x, viewport.pixelsPerUnit)}, ${
-          formatViewportCoordinate(current.y + delta.y, viewport.pixelsPerUnit)}.`)
+          formatViewportCoordinate(moved.x, viewport.pixelsPerUnit)}, ${
+          formatViewportCoordinate(moved.y, viewport.pixelsPerUnit)}.`)
   }
   const moveViewportPan = (event: ReactPointerEvent<SVGSVGElement>) => {
     const pressed = manipulationDrag.current
