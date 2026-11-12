@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { MAX_SOURCE_LENGTH } from '../document/canonicalDocument'
 import {
   annotationPlainText,
   annotationText,
   isSafeAnnotationHref,
+  MAX_EMPHASIS_DEPTH,
   parseAnnotationMarkdown,
+  safeAnnotationHref,
   type AnnotationSegment,
 } from './annotationText'
 
@@ -91,19 +94,25 @@ describe('annotation Markdown subset', () => {
       { kind: 'link', href: 'https://example.org/a?b=1#c', children: [text('the docs')] },
       text('.'),
     ])
-    expect(parse('[site](HTTP://example.org)')).toEqual([
-      { kind: 'link', href: 'HTTP://example.org', children: [text('site')] },
+    // The destination is the parsed URL, which is also the one shown.
+    expect(parse('[site](HTTP://Example.ORG)')).toEqual([
+      { kind: 'link', href: 'http://example.org/', children: [text('site')] },
+    ])
+    // Balanced parentheses belong to the destination, as in CommonMark.
+    expect(parse('[wiki](https://en.wikipedia.org/wiki/Clifford_algebra_(math)).')).toEqual([
+      { kind: 'link', href: 'https://en.wikipedia.org/wiki/Clifford_algebra_(math)', children: [text('wiki')] },
+      text('.'),
     ])
     expect(parse('[mail](mailto:someone@example.org)')).toEqual([
       { kind: 'link', href: 'mailto:someone@example.org', children: [text('mail')] },
     ])
     expect(parse('[**bold** `code`](https://example.org)')).toEqual([{
       kind: 'link',
-      href: 'https://example.org',
+      href: 'https://example.org/',
       children: [{ kind: 'strong', children: [text('bold')] }, text(' '), { kind: 'code', text: 'code' }],
     }])
     expect(parse('[](https://example.org)')).toEqual([
-      { kind: 'link', href: 'https://example.org', children: [text('https://example.org')] },
+      { kind: 'link', href: 'https://example.org/', children: [text('https://example.org/')] },
     ])
   })
 
@@ -118,6 +127,20 @@ describe('annotation Markdown subset', () => {
     '[click](relative.html)',
     '[click](https://)',
     '[click](&#106;avascript:alert(1))',
+    '[click](JaVaScRiPt:alert(1))',
+    '[click](javascript%3Aalert(1))',
+    '[click](http:evil.com)',
+    '[click](http:/evil.com)',
+    '[click](https:)',
+    '[click](mailto:)',
+    '[click](ftp://example.org)',
+    '[click](blob:https://example.org/1)',
+    '[click](https://good.example@evil.example)',
+    '[click](https://user:pass@example.org)',
+    '[click](https://\\evil.example)',
+    '[click](https://\u202eelpmaxe.org)',
+    '[click](https://exa\u200bmple.org)',
+    '[click](https://\u3000example.org)',
   ])('shows a link with any other destination as plain text: %s', (source) => {
     const segments = parse(source)
     expect(segments.every((segment) => segment.kind === 'text')).toBe(true)
@@ -128,7 +151,7 @@ describe('annotation Markdown subset', () => {
     expect(parse('[text] (https://a.b)')).toEqual([text('[text] (https://a.b)')])
     expect(parse('[text](https://a.b c)')).toEqual([text('[text](https://a.b c)')])
     expect(parse('[a [b](https://a.b)](https://c.d)')).toEqual([
-      text('[a '), { kind: 'link', href: 'https://a.b', children: [text('b')] }, text('](https://c.d)'),
+      text('[a '), { kind: 'link', href: 'https://a.b/', children: [text('b')] }, text('](https://c.d)'),
     ])
     expect(parse('![alt](https://example.org/a.png)')).toEqual([text('![alt](https://example.org/a.png)')])
   })
@@ -145,14 +168,68 @@ describe('annotation Markdown subset', () => {
     expect(parse(source)).toEqual([text(source)])
   })
 
-  it('refuses destinations with control characters', () => {
-    expect(isSafeAnnotationHref('https://example.org')).toBe(true)
-    expect(isSafeAnnotationHref('https://exa\u0000mple.org')).toBe(false)
-    expect(isSafeAnnotationHref('java\nscript:alert(1)')).toBe(false)
+  it.each([
+    'javascript:alert(1)', 'JaVaScRiPt:alert(1)', 'java\tscript:alert(1)', 'java\nscript:x', ' javascript:x',
+    '\u0000javascript:x', '\u200bjavascript:x', 'javascript%3Aalert(1)', '%6Aavascript:x', '//evil.example',
+    '/relative', 'relative', '?q', '#frag', 'http:', 'https:', 'http://', 'https://', 'http:evil.com',
+    'http:/evil.com', 'data:text/html,x', 'file:///etc/passwd', 'vbscript:x', 'mailto:', 'mailto\t:x',
+    'https\u0000://x', 'https://x\u0001y', 'https://x\u007fy', 'http://\u00a0', 'https://\u2028x',
+    'https://\\evil.example', 'https://good.example@evil.example', 'https://user:pass@x.example',
+    'https://\u202eexample.org', 'https://x\u200by', 'http://\u3000x',
+  ])('refuses the destination %j', (href) => {
+    expect(isSafeAnnotationHref(href)).toBe(false)
+  })
+
+  it.each([
+    ['https://example.org', 'https://example.org/'],
+    ['HTTPS://EXAMPLE.ORG/A?b=c#d', 'https://example.org/A?b=c#d'],
+    ['mailto:a@b.example', 'mailto:a@b.example'],
+    ['MailTo:a@b.example', 'mailto:a@b.example'],
+    ['http://localhost:8080/x', 'http://localhost:8080/x'],
+    ['https://a.example/c%20d', 'https://a.example/c%20d'],
+    ['https://exämple.org', 'https://xn--exmple-cua.org/'],
+  ])('accepts %j as the parsed URL it follows', (href, parsed) => {
+    expect(safeAnnotationHref(href)).toBe(parsed)
   })
 
   it('reads without delimiters', () => {
     expect(annotationPlainText(parse('Titre **gras**, *x*, `code` et [lien](https://a.b)')))
       .toBe('Titre gras, x, code et lien')
+  })
+
+  it('limits emphasis nesting', () => {
+    const deep = '*a '.repeat(MAX_EMPHASIS_DEPTH + 8) + 'b' + '*'.repeat(1)
+    let depth = 0
+    let segments: readonly AnnotationSegment[] = parse(deep)
+    for (;;) {
+      const nested = segments.find((segment) => segment.kind === 'emphasis' || segment.kind === 'strong')
+      if (!nested || !('children' in nested)) break
+      depth += 1
+      segments = nested.children
+    }
+    expect(depth).toBeLessThanOrEqual(MAX_EMPHASIS_DEPTH)
+    expect(annotationPlainText(parse(deep)).length).toBeGreaterThan(0)
+  })
+})
+
+describe('annotation parsing time', () => {
+  // Sources at the document limit must not stall the interface: the parser
+  // is linear, so each of these takes milliseconds; the bound is generous.
+  const n = MAX_SOURCE_LENGTH
+  it.each([
+    ['openers and brackets', '*['.repeat(n / 2)],
+    ['nested openers then closers', '*a '.repeat(Math.floor(n / 6)) + 'b* '.repeat(Math.floor(n / 6))],
+    ['closers', 'a* '.repeat(Math.floor(n / 3))],
+    ['openers', ' *a'.repeat(Math.floor(n / 3))],
+    ['unclosed links', '[a](x'.repeat(Math.floor(n / 5))],
+    ['unclosed parentheses', '[a](https://x.example/' + '('.repeat(n - 30)],
+    ['backtick runs', Array.from({ length: 300 }, (_, index) => '`'.repeat(index + 1) + 'a').join('').slice(0, n)],
+    ['unclosed bracket', '[' + 'a'.repeat(n - 1)],
+    ['backslashes', '\\'.repeat(n)],
+  ])('parses %s quickly', (_, source) => {
+    expect(source.length).toBeLessThanOrEqual(n)
+    const start = performance.now()
+    parse(source)
+    expect(performance.now() - start).toBeLessThan(1000)
   })
 })

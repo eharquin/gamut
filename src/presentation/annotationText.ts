@@ -8,11 +8,14 @@
  * - `**bold**` and `*italic*`, with flanking delimiters so that `a*b*c`,
  *   `2*3`, and `x_1` stay literal; `_` is never a delimiter;
  * - inline code between backtick runs of the same length;
- * - links `[text](url)` whose scheme is `http`, `https`, or `mailto`; any other
- *   destination leaves the whole link source as plain text;
+ * - links `[text](url)` whose destination is an absolute `http` or `https`
+ *   URL or a `mailto` URL; any other destination leaves the whole link source
+ *   as plain text;
  * - backslash escapes before `*`, `` ` ``, `[`, `]`, and `\`.
  *
  * Everything else, including raw HTML, images, headings, and lists, is text.
+ * Parsing takes time linear in the text length, so a source at the document
+ * source limit cannot stall the interface.
  */
 export type AnnotationSegment =
   | Readonly<{ kind: 'text'; text: string }>
@@ -24,15 +27,45 @@ export type AnnotationSegment =
 /** The characters a backslash makes literal. */
 const ESCAPABLE = new Set(['*', '`', '[', ']', '\\'])
 
-/** Link destinations that become active links; anything else stays text. */
-const SAFE_DESTINATION = /^(?:https?:\/\/[^\s/?#]+[^\s]*|mailto:[^\s]+)$/i
+/** Deepest emphasis nesting; further openers stay literal stars. */
+export const MAX_EMPHASIS_DEPTH = 32
+/** Longest link destination, in UTF-16 code units; longer ones stay text. */
+export const MAX_LINK_DESTINATION_LENGTH = 2048
+/** Deepest parenthesis nesting inside a link destination, as in CommonMark. */
+const MAX_DESTINATION_PARENTHESES = 32
 
-/** Whether `href` is a destination an annotation may link to. */
-export function isSafeAnnotationHref(href: string): boolean {
-  // Control characters are refused before the allow-list, so that no
-  // destination can smuggle one past the scheme check.
-  const control = [...href].some((character) => character.charCodeAt(0) < 0x20 || character === '\u007f')
-  return !control && SAFE_DESTINATION.test(href)
+/**
+ * Characters refused anywhere in a destination: controls, format characters
+ * such as bidirectional overrides and zero-width spaces, separators, and
+ * whitespace, which could make the shown destination differ from the one
+ * followed; and the backslash, which URL parsing reads as a slash.
+ */
+const SPOOFING_CHARACTER = /[\p{Cc}\p{Cf}\p{Z}\s\\]/u
+
+/**
+ * The destination an annotation link follows, or `null` when the raw
+ * destination is not allowed. Only absolute `http:` and `https:` URLs with a
+ * host and no user information, and non-empty `mailto:` URLs, are allowed.
+ * The result is the parsed URL, so the destination shown in the tooltip and
+ * the accessible description is exactly the one followed.
+ */
+export function safeAnnotationHref(raw: string): string | null {
+  if (SPOOFING_CHARACTER.test(raw) || !/^(?:https?:\/\/|mailto:)/i.test(raw)) return null
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    return null
+  }
+  if (url.protocol === 'mailto:') return url.pathname === '' ? null : url.href
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
+  if (url.hostname === '' || url.username !== '' || url.password !== '') return null
+  return url.href
+}
+
+/** Whether `raw` is a destination an annotation may link to. */
+export function isSafeAnnotationHref(raw: string): boolean {
+  return safeAnnotationHref(raw) !== null
 }
 
 /**
@@ -73,17 +106,51 @@ function runLength(text: string, start: number, character: string): number {
 }
 
 /**
+ * The backtick runs of a text by length, each list in increasing position,
+ * so that finding the run closing a code span is a binary search.
+ */
+function backtickRuns(text: string): Map<number, number[]> {
+  const runs = new Map<number, number[]>()
+  for (let index = 0; index < text.length;) {
+    if (text[index] !== '`') {
+      index += 1
+      continue
+    }
+    const length = runLength(text, index, '`')
+    const starts = runs.get(length)
+    if (starts) starts.push(index)
+    else runs.set(length, [index])
+    index += length
+  }
+  return runs
+}
+
+/** The start of the first backtick run of exactly `length` at or after `from`, or -1. */
+function closingBackticks(runs: Map<number, number[]>, from: number, length: number): number {
+  const starts = runs.get(length)
+  if (!starts) return -1
+  let low = 0
+  let high = starts.length
+  while (low < high) {
+    const middle = (low + high) >> 1
+    if (starts[middle] < from) low = middle + 1
+    else high = middle
+  }
+  return low < starts.length ? starts[low] : -1
+}
+
+/**
  * The index of the `]` closing the link text that starts after `open`, or -1.
  * Escaped brackets and code spans are skipped; a nested unescaped `[` means
  * the outer bracket is not a link.
  */
-function closingBracket(text: string, open: number): number {
+function closingBracket(text: string, open: number, runs: Map<number, number[]>): number {
   for (let index = open + 1; index < text.length; index += 1) {
     const character = text[index]
     if (character === '\\' && ESCAPABLE.has(text[index + 1] ?? '')) index += 1
     else if (character === '`') {
       const length = runLength(text, index, '`')
-      const close = closingBackticks(text, index + length, length)
+      const close = closingBackticks(runs, index + length, length)
       index = close < 0 ? index + length - 1 : close + length - 1
     } else if (character === '[') return -1
     else if (character === ']') return index
@@ -91,22 +158,31 @@ function closingBracket(text: string, open: number): number {
   return -1
 }
 
-/** The start of the backtick run of exactly `length` closing a code span, or -1. */
-function closingBackticks(text: string, from: number, length: number): number {
-  for (let index = from; index < text.length;) {
-    if (text[index] !== '`') {
-      index += 1
-      continue
+/**
+ * The index of the `)` ending a link destination that starts at `start`, or
+ * -1. Balanced parentheses belong to the destination, as in CommonMark;
+ * whitespace ends the search, and so do the length and nesting limits.
+ */
+function destinationEnd(text: string, start: number): number {
+  let depth = 0
+  const limit = Math.min(text.length, start + MAX_LINK_DESTINATION_LENGTH + 1)
+  for (let index = start; index < limit; index += 1) {
+    const character = text[index]
+    if (isWhitespace(character)) return -1
+    if (character === '(') {
+      depth += 1
+      if (depth > MAX_DESTINATION_PARENTHESES) return -1
+    } else if (character === ')') {
+      if (depth === 0) return index === start ? -1 : index
+      depth -= 1
     }
-    const run = runLength(text, index, '`')
-    if (run === length) return index
-    index += run
   }
   return -1
 }
 
 /** Splits text into literal text, code, links, and unresolved `*` runs. */
 function scan(text: string, allowLinks: boolean): Node[] {
+  const runs = backtickRuns(text)
   const nodes: Node[] = []
   let index = 0
   while (index < text.length) {
@@ -118,7 +194,7 @@ function scan(text: string, allowLinks: boolean): Node[] {
     }
     if (character === '`') {
       const length = runLength(text, index, '`')
-      const close = closingBackticks(text, index + length, length)
+      const close = closingBackticks(runs, index + length, length)
       if (close < 0) {
         pushText(nodes, '`'.repeat(length))
       } else {
@@ -129,21 +205,19 @@ function scan(text: string, allowLinks: boolean): Node[] {
       continue
     }
     if (character === '[' && allowLinks && text[index - 1] !== '!') {
-      const close = closingBracket(text, index)
-      if (close >= 0 && text[close + 1] === '(') {
-        const end = text.indexOf(')', close + 2)
-        const href = end < 0 ? '' : text.slice(close + 2, end)
-        if (end >= 0 && href !== '' && !/\s/u.test(href)) {
-          if (isSafeAnnotationHref(href)) {
-            const children = parseAnnotationMarkdown(text.slice(index + 1, close), false)
-            nodes.push({ kind: 'link', href, children: children.length > 0 ? children : [{ kind: 'text', text: href }] })
-          } else {
-            // An unsafe destination is shown, unrendered, exactly as written.
-            pushText(nodes, text.slice(index, end + 1))
-          }
-          index = end + 1
-          continue
+      const close = closingBracket(text, index, runs)
+      const end = close >= 0 && text[close + 1] === '(' ? destinationEnd(text, close + 2) : -1
+      if (end >= 0) {
+        const href = safeAnnotationHref(text.slice(close + 2, end))
+        if (href !== null) {
+          const children = parseAnnotationMarkdown(text.slice(index + 1, close), false)
+          nodes.push({ kind: 'link', href, children: children.length > 0 ? children : [{ kind: 'text', text: href }] })
+        } else {
+          // A refused destination is shown, unrendered, exactly as written.
+          pushText(nodes, text.slice(index, end + 1))
         }
+        index = end + 1
+        continue
       }
     }
     if (character === '*') {
@@ -181,46 +255,40 @@ function settle(nodes: readonly Node[]): AnnotationSegment[] {
 }
 
 /**
- * Pairs `*` runs into emphasis, closer by closer from the left, each with the
- * nearest opener before it; two-star runs on both sides make bold.
+ * Pairs `*` runs into emphasis in one pass: each closer pairs with the nearest
+ * open opener before it, kept on a stack; two-star runs on both sides make
+ * bold. Every node is moved into a wrapper at most once, so the pass is
+ * linear. Openers beyond the depth limit stay literal.
  */
 function resolveEmphasis(input: readonly Node[]): AnnotationSegment[] {
-  let nodes: Node[] = [...input]
-  let closerIndex = 0
-  while (closerIndex < nodes.length) {
-    const closer = nodes[closerIndex]
-    if (closer.kind !== 'delimiter' || !closer.canClose || closer.count === 0) {
-      closerIndex += 1
+  const output: Node[] = []
+  const openers: { index: number; delimiter: Delimiter }[] = []
+  for (const node of input) {
+    if (node.kind !== 'delimiter') {
+      output.push(node)
       continue
     }
-    let openerIndex = closerIndex - 1
-    while (openerIndex >= 0) {
-      const candidate = nodes[openerIndex]
-      if (candidate.kind === 'delimiter' && candidate.canOpen && candidate.count > 0) break
-      openerIndex -= 1
+    const delimiter: Delimiter = { ...node }
+    if (delimiter.canClose) {
+      while (delimiter.count > 0 && openers.length > 0) {
+        const opener = openers[openers.length - 1]
+        const used = opener.delimiter.count >= 2 && delimiter.count >= 2 ? 2 : 1
+        const children = settle(output.splice(opener.index + 1))
+        opener.delimiter.count -= used
+        delimiter.count -= used
+        if (opener.delimiter.count === 0) {
+          output.pop()
+          openers.pop()
+        }
+        output.push({ kind: used === 2 ? 'strong' : 'emphasis', children })
+      }
     }
-    if (openerIndex < 0) {
-      closerIndex += 1
-      continue
-    }
-    const opener = nodes[openerIndex] as Delimiter
-    const used = opener.count >= 2 && closer.count >= 2 ? 2 : 1
-    const wrapped: AnnotationSegment = {
-      kind: used === 2 ? 'strong' : 'emphasis',
-      children: settle(nodes.slice(openerIndex + 1, closerIndex)),
-    }
-    const remainingOpener: Node[] = opener.count > used ? [{ ...opener, count: opener.count - used }] : []
-    const remainingCloser: Node[] = closer.count > used ? [{ ...closer, count: closer.count - used }] : []
-    nodes = [
-      ...nodes.slice(0, openerIndex),
-      ...remainingOpener,
-      wrapped,
-      ...remainingCloser,
-      ...nodes.slice(closerIndex + 1),
-    ]
-    closerIndex = openerIndex + remainingOpener.length + 1
+    if (delimiter.count === 0) continue
+    output.push(delimiter)
+    if (delimiter.canOpen && openers.length < MAX_EMPHASIS_DEPTH)
+      openers.push({ index: output.length - 1, delimiter })
   }
-  return settle(nodes)
+  return settle(output)
 }
 
 /**
