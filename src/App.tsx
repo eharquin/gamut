@@ -747,6 +747,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       components.forEach((component, index) => {
         if (component.kind !== 'reference') return
         const scalarItem = expressionDoc.items.find((candidate) =>
+          candidate.kind !== 'annotation' &&
           declaredName(candidate.source) === component.name &&
           directScalarEdit(candidate.source) !== null)
         if (scalarItem) executeCommand({
@@ -770,6 +771,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       components.forEach((component, index) => {
         if (component.kind !== 'reference') return
         const target = expressionDoc.items.find((candidate) =>
+          candidate.kind !== 'annotation' &&
           declaredName(candidate.source) === component.name &&
           directScalarEdit(candidate.source) !== null)
         if (target) executeCommand({
@@ -792,6 +794,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       components.forEach((component, index) => {
         if (component.kind !== 'reference') return
         const scalarItem = expressionDoc.items.find((candidate) =>
+          candidate.kind !== 'annotation' &&
           declaredName(candidate.source) === component.name &&
           directScalarEdit(candidate.source) !== null)
         if (scalarItem) executeCommand({
@@ -820,6 +823,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     components.forEach((component, index) => {
       if (component.kind !== 'reference') return
       const targetItem = expressionDoc.items.find((candidate) =>
+        candidate.kind !== 'annotation' &&
         declaredName(candidate.source) === component.name &&
         directScalarEdit(candidate.source) !== null)
       if (targetItem) executeCommand({
@@ -904,6 +908,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     if (new Set(references.map((component) => component.name)).size !== references.length)
       return false
     return references.every((component) => expressionDoc.items.filter((candidate) =>
+      candidate.kind !== 'annotation' &&
       declaredName(candidate.source) === component.name &&
       directScalarEdit(candidate.source) !== null).length === 1)
   }

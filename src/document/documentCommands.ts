@@ -104,7 +104,8 @@ export function executeDocumentCommand(
       status: 'applied',
       document: {
         ...document,
-        items: [...document.items.slice(0, index), { ...command.item }, ...document.items.slice(index)],
+        // An inserted source gets its kind like an edited one (#187).
+        items: [...document.items.slice(0, index), withSource(command.item, command.item.source), ...document.items.slice(index)],
       },
     }
   }
@@ -176,6 +177,8 @@ export function executeDocumentCommand(
     return { status: 'unsupported', document, reason: 'Annotations do not own algebraic controls.' }
 
   if (command.kind === 'set-scalar-value') {
+    if (item.kind === 'annotation')
+      return { status: 'unsupported', document, reason: 'Annotations do not own algebraic controls.' }
     if (!Number.isFinite(command.value))
       return invalid(document, 'A controlled scalar value must be finite.')
     const edit = directScalarEdit(item.source)

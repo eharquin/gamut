@@ -638,7 +638,7 @@ export function ExpressionRow({
           type="button"
           className="delete-expression"
           onClick={() => removeExpression(item.id)}
-          aria-label={`Delete expression ${position}`}
+          aria-label={`Delete ${annotation ? 'annotation' : 'expression'} ${position}`}
         >
           ×
         </button>

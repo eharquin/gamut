@@ -182,7 +182,7 @@ export const COMMENT_REFERENCE: readonly ReferenceTopic[] = [
   topic('Comment', '# text', 'a row starting with # is shown as text, never evaluated'),
   topic('Emphasis', '**bold**, *italic*', 'a*b*c, 2*3 and x_1 stay literal'),
   topic('Code', '`code`'),
-  topic('Link', '[text](https://…)', 'http, https or mailto, opened in a new tab'),
+  topic('Link', '[text](https://…)', 'http, https or mailto, with the destination shown'),
   topic('Escape', '\\*, \\`, \\[, \\], \\\\', 'a literal character'),
 ]
 

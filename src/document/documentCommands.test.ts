@@ -139,6 +139,14 @@ describe('semantic document commands', () => {
       .document.items).toEqual([{ id: 'note', source: 'prose!' }])
     expect(executeDocumentCommand(legacy, { kind: 'update-source', itemId: 'note', source: '# prose' })
       .document.items).toEqual([{ id: 'note', kind: 'annotation', source: '# prose' }])
+    // An inserted source gets its kind the same way.
+    expect(executeDocumentCommand(legacy, { kind: 'insert-item', item: { id: 'c', source: ' # note' } })
+      .document.items[1]).toEqual({ id: 'c', kind: 'annotation', source: ' # note' })
+    // A stored annotation reading like a scalar declaration has no slider value.
+    const scalarNote = expressionDocument([{ id: 'n', kind: 'annotation', source: 'a = 1' }])
+    expect(executeDocumentCommand(scalarNote, { kind: 'set-scalar-value', itemId: 'n', value: 5 })).toEqual({
+      status: 'unsupported', document: scalarNote, reason: 'Annotations do not own algebraic controls.',
+    })
     expect(sourceKind('a # b')).toBe('expression')
     expect(sourceKind('\t#')).toBe('annotation')
   })

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { serializeCanonicalDocument, toCanonicalDocument } from './document/canonicalDocument'
@@ -7,6 +7,7 @@ import { expressionDocument, type ExpressionItem } from './document/expressionDo
 
 afterEach(() => {
   cleanup()
+  vi.useRealTimers()
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
   window.localStorage.clear()
@@ -142,5 +143,38 @@ describe('comment rows (#187)', () => {
     expect(within(row('Annotation 1')).queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: 'Expression 2' })).toBeInTheDocument()
     expect(screen.getByText('2e1 + e2')).toBeInTheDocument()
+  })
+
+  it('comments out a slider row, stopping its playback, and restores the slider with one undo', () => {
+    vi.useFakeTimers()
+    const control = { mode: 'slider', minimumSource: '0', maximumSource: '10', stepSource: '1', animation: null } as const
+    openStored([{ id: 'a', source: 'a = 2', control }])
+    const input = screen.getByRole<HTMLInputElement>('textbox', { name: 'Expression 1' })
+    expect(screen.getByRole('slider', { name: 'Value for a' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Play scalar animation' }))
+    act(() => vi.advanceTimersByTime(500))
+    const playing = input.value
+
+    fireEvent.change(input, { target: { value: '# ' + playing } })
+    act(() => vi.advanceTimersByTime(1000))
+    expect(input).toHaveValue('# ' + playing)
+    expect(screen.queryByRole('slider', { name: 'Value for a' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Play scalar animation' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Delete annotation 1' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
+    expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue(playing)
+    expect(screen.getByRole('slider', { name: 'Value for a' })).toHaveAttribute('max', '10')
+  })
+
+  it('moves a head through the scalar expression, never through an annotation of the same name', () => {
+    openStored([
+      { id: 'note', kind: 'annotation', source: 's = 2' },
+      { id: 's', source: 's = 3' },
+      { id: 'v', source: 'V1 = vector(s, 1)' },
+    ])
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Move head of V1' }), { key: 'ArrowRight' })
+    expect(screen.getByRole('textbox', { name: 'Annotation 1' })).toHaveValue('s = 2')
+    expect(screen.getByRole('textbox', { name: 'Expression 2' })).toHaveValue('s = 3.1')
   })
 })
