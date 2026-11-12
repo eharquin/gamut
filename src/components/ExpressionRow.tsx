@@ -16,12 +16,14 @@ import type {
 import type { AnyInterpretation } from '../geometry/interpretation'
 import { declaredName } from '../language/declaredName'
 import { directScalarEdit } from '../language/directScalarEdit'
+import { annotationText } from '../presentation/annotationText'
 import {
   formatDisplayMultivector,
   formatDisplayNumber,
   formatDisplayValue,
 } from '../presentation/formatNumber'
 import { listPrimitiveTypes, pointListVertices } from '../visualization/layout'
+import { AnnotationText } from './AnnotationText'
 import { AppearancePopover } from './AppearancePopover'
 import { resolveItemAppearance } from './appearancePalette'
 import { NormalizationPopover } from './NormalizationPopover'
@@ -212,7 +214,11 @@ export function ExpressionRow({
     kind,
     declaredName(item.source),
   )
-  const objectName = displayLabel ?? kind
+  const objectName = annotation ? `Annotation ${position}` : displayLabel ?? kind
+  // An annotation shows its text, without the # marker, in the Markdown
+  // subset of language §3; it is never evaluated or drawn (#187).
+  const noteText = annotation ? annotationText(item.source) : ''
+  const noteTextId = `annotation-text-${item.id}`
   const labelFieldShown = drawable && labelVisible && evaluation?.status === 'valid' &&
     evaluation.valueType !== 'list'
   const valid = evaluation?.status === 'valid'
@@ -250,9 +256,9 @@ export function ExpressionRow({
       }}
       onPointerEnter={() => hoverRow(item.id)}
       onPointerLeave={() => leaveRow(item.id)}
-      className={`expression-item${visible || noViz ? '' : ' is-hidden'}${
+      className={`expression-item${visible || noViz || annotation ? '' : ' is-hidden'}${
         empty ? ' is-empty-expression' : ''
-      }${dropBefore ? ' drop-before' : ''}${dropAfter ? ' drop-after' : ''} ${
+      }${annotation ? ' is-annotation' : ''}${dropBefore ? ' drop-before' : ''}${dropAfter ? ' drop-after' : ''} ${
         invalid || invalidPosition ? 'has-error' : ''
       }`}
     >
@@ -315,7 +321,9 @@ export function ExpressionRow({
               </button>
           ) : (
             <span
-              className={`expression-status-pastille${empty ? ' is-empty' : ' is-error'}`}
+              className={`expression-status-pastille${
+                annotation ? ' is-annotation' : empty ? ' is-empty' : ' is-error'
+              }`}
               aria-hidden="true"
             />
           )}
@@ -345,7 +353,7 @@ export function ExpressionRow({
               onKeyDown={(event) =>
                 handleItemKeyDown(event, item, index)
               }
-              aria-describedby={evaluation ? feedbackId : undefined}
+              aria-describedby={evaluation ? feedbackId : noteText ? noteTextId : undefined}
               aria-invalid={invalid}
               spellCheck={false}
               autoComplete="off"
@@ -393,6 +401,7 @@ export function ExpressionRow({
               </span>
             )}
           </div>
+          {noteText && <AnnotationText id={noteTextId} text={noteText} />}
           {/* The mode is chosen in a popover anchored to the norm button, like the appearance menu. */}
           {normalizationChoiceOpen && (
             <NormalizationPopover

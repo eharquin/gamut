@@ -1300,7 +1300,9 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       viewport,
       screenPoint(event.clientX, event.clientY),
     )
-    const name = nextObjectName(expressionDoc.items.map(({ source }) => source))
+    // An annotation has no name and takes no letter (#187).
+    const name = nextObjectName(expressionDoc.items
+      .filter((item) => item.kind !== 'annotation').map(({ source }) => source))
     const source = creationSource(interpretation.creation.constructor, name, point, viewport.pixelsPerUnit)
     viewportCreatedItemIds.current.add(id)
     pendingFocus.current = id
