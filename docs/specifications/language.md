@@ -116,25 +116,36 @@ implementation builds interface elements from it and never parses or injects
 HTML.
 
 - **Emphasis.** `**text**` is bold and `*text*` italic. A run of `*` opens
-  emphasis only after the start of the text, whitespace, or punctuation, and
-  before a non-whitespace character; it closes only after a non-whitespace
-  character, and before whitespace, punctuation, or the end of the text. Each
-  closer pairs with the nearest opener before it; two-star runs on both sides
-  make bold, otherwise italic, and unpaired stars stay literal. `_` is never a
-  delimiter. So `a*b*c`, `2*3`, `2 * 3`, `A**2`, `x_1 and y_1`, and
-  `_text_` stay literal.
+  emphasis only after the start of the text, whitespace, or a punctuation
+  character, and before a non-whitespace character; it closes only after a
+  non-whitespace character, and before whitespace, a punctuation character,
+  or the end of the text. Here whitespace is a character matched by the
+  ECMAScript `\s` class (Unicode `White_Space` characters and U+FEFF), and a
+  punctuation character is any Unicode punctuation (`P*`) or symbol (`S*`)
+  character, so `+`, `=`, `^`, and `|` count. Each closer pairs with the
+  nearest unmatched opener before it; two-star runs on both sides make bold,
+  otherwise italic, and unpaired stars stay literal. Emphasis nests at most 32
+  levels deep; further openers stay literal. `_` is never a delimiter. So
+  `a*b*c`, `2*3`, `2 * 3`, `A**2`, `x_1 and y_1`, and `_text_` stay
+  literal.
 - **Inline code.** A run of backticks opens a code span closed by the next
   run of the same length; its content is literal, without escapes or
   emphasis. An unclosed run is literal.
-- **Links.** `[text](destination)` is a link when the destination has no
-  whitespace and starts with `http://` or `https://` followed by a host, or
-  with `mailto:`, case-insensitively. The destination ends at the first `)`.
-  Link text may contain emphasis and code but no link. A link with any other
-  destination, including `javascript:`, `data:`, `file:`, protocol-relative
-  and relative URLs, or one containing a control character, is displayed as
-  the plain source text that wrote it. Links open in a new browsing context
-  with `rel="noopener noreferrer"`; their destination is shown in a tooltip
-  and in the accessible description.
+- **Links.** `[text](destination)` is a link when the destination is allowed.
+  The destination has no whitespace, is at most 2,048 characters long, and
+  ends at the first `)` that closes no `(` inside it, so balanced parentheses
+  such as `…/Clifford_algebra_(math)` belong to it. It is allowed when it
+  starts with `http://`, `https://`, or `mailto:`, case-insensitively,
+  contains no control, format (such as bidirectional overrides and zero-width
+  spaces), or separator character and no backslash, and parses as a WHATWG URL
+  whose scheme is `http` or `https` with a host and no user name or password,
+  or `mailto` with a non-empty address. The link follows the parsed URL, which
+  is also the destination shown in its tooltip and accessible description, so
+  the text cannot hide where it leads. Link text may contain emphasis and code
+  but no link. A link with any other destination, including `javascript:`,
+  `data:`, `file:`, protocol-relative and relative URLs, is displayed as the
+  plain source text that wrote it. `http` and `https` links open in a new
+  browsing context; every link has `rel="noopener noreferrer"`.
 - **Escapes.** A backslash before `*`, `` ` ``, `[`, `]`, or `\` makes that
   character literal; before any other character the backslash is literal.
 - **Everything else is text.** Raw HTML, character references, images

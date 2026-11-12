@@ -15,7 +15,7 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   position, normalization, and slider are cleared, and undo restores them.
   The text supports `**bold**`, `*italic*`, inline `` `code` ``, backslash
   escapes, and `[links](https://…)` limited to `http`, `https`, and `mailto`,
-  opened in a new tab with their destination shown; `a*b*c`, `2*3`, and
+  with their parsed destination shown (web links open in a new tab); `a*b*c`, `2*3`, and
   `x_1` stay literal, and raw HTML is shown as text. The expression
   reference lists the syntax under **Comments** (#187).
 
