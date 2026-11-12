@@ -58,6 +58,7 @@ describe('local library (#212)', () => {
 
     expect(readLibrary(storage, { now: NOW })).toEqual({
       entries: [{ id: 'active', name: 'Course scene', algebraId: active.algebra.algebraId, createdAt: NOW, updatedAt: NOW }],
+      folders: [],
       diagnostic: null,
     })
     expect(state.writes).toBe(0)

@@ -5,6 +5,17 @@ import {
   type CanonicalDocument,
 } from './canonicalDocument'
 import { ACTIVE_DOCUMENT_KEY } from './documentStorage'
+import {
+  folderKey,
+  isFolderPath,
+  isWithin,
+  MAX_LIBRARY_FOLDERS,
+  newFolderProblem,
+  parentPath,
+  replacePrefix,
+  withAncestors,
+  type FolderPath,
+} from './folderModel'
 
 /**
  * A local library of named graphs (#212). A versioned index lists the
@@ -21,6 +32,11 @@ export const LIBRARY_DOCUMENT_PREFIX = 'gamut.library.v1.document.'
 /** The library graph the autosaved active document belongs to, if any. */
 export const LIBRARY_OPEN_KEY = 'gamut.library.v1.open'
 export const libraryDocumentKey = (id: string): string => LIBRARY_DOCUMENT_PREFIX + id
+/**
+ * The folders that no entry names, as `{ version: 1, folders: [[name, …], …] }`
+ * (STORE-016). Earlier versions ignore this key; the index keeps version 1.
+ */
+export const LIBRARY_FOLDERS_KEY = 'gamut.library.v1.folders'
 
 export type LibraryEntry = Readonly<{
   id: string
@@ -30,7 +46,34 @@ export type LibraryEntry = Readonly<{
   /** ISO 8601 instants. */
   createdAt: string
   updatedAt: string
+  /**
+   * The folder of the graph, as folder names from the root (STORE-016);
+   * absent at the root. A value that is not a list of folder names is kept as
+   * stored and listed at the root.
+   */
+  folder?: FolderPath
 }>
+
+/** The folder an entry is listed in: its `folder` when it is a valid list of names, the root otherwise. */
+export function entryFolder(entry: LibraryEntry): FolderPath {
+  return isFolderPath(entry.folder) ? entry.folder : []
+}
+
+/** The stored empty folders; an unreadable key reads as none. */
+function storedFolders(storage: LibraryStorage): FolderPath[] {
+  try {
+    const parsed = JSON.parse(storage.getItem(LIBRARY_FOLDERS_KEY) ?? 'null') as { version?: unknown; folders?: unknown } | null
+    if (parsed?.version !== 1 || !Array.isArray(parsed.folders)) return []
+    return parsed.folders.filter((path): path is FolderPath => isFolderPath(path) && path.length > 0)
+  } catch {
+    return []
+  }
+}
+
+/** Every folder of the library: those entries name, the stored empty ones, and their ancestors. */
+export function libraryFolders(entries: readonly LibraryEntry[], empty: readonly FolderPath[]): FolderPath[] {
+  return withAncestors([...entries.map(entryFolder).filter((path) => path.length > 0), ...empty])
+}
 
 /** The subset of `Storage` the library uses; any member may throw. */
 export type LibraryStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem' | 'key' | 'length'>
@@ -110,6 +153,8 @@ type Migration = Readonly<{ document: CanonicalDocument; entry: LibraryEntry }> 
 
 type Snapshot = Readonly<{
   entries: readonly LibraryEntry[]
+  /** Every folder, empty ones included. */
+  folders: readonly FolderPath[]
   diagnostic: string | null
   migration: Migration
   /** No index is stored yet: the first write stores one, which ends the migration. */
@@ -145,34 +190,39 @@ function snapshot(storage: LibraryStorage, options: LibraryOptions): Snapshot {
   for (const id of storedIds(storage)) {
     if (!seen.has(id)) entries.push(recoveredEntry(storage, id, now))
   }
-  return { entries, diagnostic, migration: null, indexMissing: false }
+  const folders = libraryFolders(entries, storedFolders(storage))
+  return { entries, folders, diagnostic, migration: null, indexMissing: false }
 }
 
 function migrationSnapshot(storage: LibraryStorage, options: LibraryOptions, now: string): Snapshot {
   const entries = storedIds(storage).map((id) => recoveredEntry(storage, id, now))
+  const folders = libraryFolders([], storedFolders(storage))
   const active = options.migrationSource === undefined ? storage.getItem(ACTIVE_DOCUMENT_KEY) : options.migrationSource
-  if (active === null) return { entries, diagnostic: null, migration: null, indexMissing: true }
+  if (active === null) return { entries, folders, diagnostic: null, migration: null, indexMissing: true }
   let document: CanonicalDocument
   try {
     document = parseCanonicalDocument(active)
   } catch {
     return {
       entries,
+      folders,
       diagnostic: 'LIBRARY_MIGRATION_SKIPPED: The previously saved document could not be added to the library; it is still open as before.',
       migration: null,
       indexMissing: true,
     }
   }
   const existing = entries.find((entry) => entry.id === document.id)
-  if (existing) return { entries, diagnostic: null, migration: null, indexMissing: true }
+  if (existing) return { entries, folders, diagnostic: null, migration: null, indexMissing: true }
   const entry: LibraryEntry = {
     id: document.id, name: untitled(document), algebraId: document.algebra.algebraId, createdAt: now, updatedAt: now,
   }
-  return { entries: [entry, ...entries], diagnostic: null, migration: { document, entry }, indexMissing: true }
+  return { entries: [entry, ...entries], folders, diagnostic: null, migration: { document, entry }, indexMissing: true }
 }
 
 export type LibraryRead = Readonly<{
   entries: readonly LibraryEntry[]
+  /** Every folder of My library, empty ones included (STORE-016). */
+  folders: readonly FolderPath[]
   /** Set when the library could not be read in full; the entries are what could. */
   diagnostic: string | null
 }>
@@ -184,12 +234,12 @@ export type LibraryRead = Readonly<{
  * graphs. Unavailable storage yields an empty library with a diagnostic.
  */
 export function readLibrary(storage: LibraryStorage | null, options: LibraryOptions = {}): LibraryRead {
-  if (!storage) return { entries: [], diagnostic: UNAVAILABLE.diagnostic }
+  if (!storage) return { entries: [], folders: [], diagnostic: UNAVAILABLE.diagnostic }
   try {
-    const { entries, diagnostic } = snapshot(storage, options)
-    return { entries, diagnostic }
+    const { entries, folders, diagnostic } = snapshot(storage, options)
+    return { entries, folders, diagnostic }
   } catch {
-    return { entries: [], diagnostic: UNAVAILABLE.diagnostic }
+    return { entries: [], folders: [], diagnostic: UNAVAILABLE.diagnostic }
   }
 }
 
@@ -229,10 +279,21 @@ function commit(
   storage: LibraryStorage,
   graphs: readonly Readonly<{ id: string; source: string }>[],
   entries: readonly LibraryEntry[],
+  /** Every folder after the write; the empty ones are stored under their own key. */
+  folders?: readonly FolderPath[],
 ): void {
   const previous: { id: string; source: string | null }[] = []
+  let previousFolders: string | null | undefined
   const rollBack = () => {
     let restored = true
+    if (previousFolders !== undefined) {
+      try {
+        if (previousFolders === null) storage.removeItem(LIBRARY_FOLDERS_KEY)
+        else storage.setItem(LIBRARY_FOLDERS_KEY, previousFolders)
+      } catch {
+        restored = false
+      }
+    }
     for (const { id, source } of previous.reverse()) {
       try {
         if (source === null) storage.removeItem(libraryDocumentKey(id))
@@ -247,6 +308,17 @@ function commit(
     for (const { id, source } of graphs) {
       previous.push({ id, source: storage.getItem(libraryDocumentKey(id)) })
       storage.setItem(libraryDocumentKey(id), source)
+    }
+    if (folders) {
+      const named = new Set(libraryFolders(entries, []).map(folderKey))
+      const empty = folders.filter((path) => !named.has(folderKey(path)))
+      const current = storage.getItem(LIBRARY_FOLDERS_KEY)
+      const next = empty.length === 0 ? null : JSON.stringify({ version: 1, folders: empty })
+      if (next !== current) {
+        previousFolders = current
+        if (next === null) storage.removeItem(LIBRARY_FOLDERS_KEY)
+        else storage.setItem(LIBRARY_FOLDERS_KEY, next)
+      }
     }
     writeIndex(storage, entries)
   } catch (error) {
@@ -278,7 +350,7 @@ export function prepareLibrary(storage: LibraryStorage | null, options: LibraryO
   const current = beginWrite(target, options)
   if (!current.indexMissing) return current.entries
   try {
-    commit(target, migrationGraphs(current.migration), current.entries)
+    commit(target, migrationGraphs(current.migration), current.entries, current.folders)
   } catch (error) {
     throw writeFailure(error, new LibraryError(
       'LIBRARY_WRITE_FAILED',
@@ -304,7 +376,12 @@ export function saveToLibrary(
   storage: LibraryStorage | null,
   document: CanonicalDocument,
   name: string,
-  options: LibraryOptions & Readonly<{ boundId: string | null; createId?: () => string }>,
+  options: LibraryOptions & Readonly<{
+    boundId: string | null
+    createId?: () => string
+    /** The folder of a new graph; an existing graph keeps its own (STORE-016). */
+    folder?: FolderPath
+  }>,
 ): LibrarySave {
   const target = required(storage)
   const now = options.now ?? new Date().toISOString()
@@ -323,6 +400,14 @@ export function saveToLibrary(
     algebraId: document.algebra.algebraId,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
+    ...(existing
+      ? existing.folder === undefined ? {} : { folder: existing.folder }
+      : options.folder && options.folder.length > 0 ? { folder: [...options.folder] } : {}),
+  }
+  if (!existing && options.folder && options.folder.length > 0) {
+    const added = libraryFolders([entry], []).filter((path) => !current.folders.some((known) => folderKey(known) === folderKey(path)))
+    if (current.folders.length + added.length > MAX_LIBRARY_FOLDERS)
+      throw new LibraryError('LIMIT_FOLDER_COUNT', `The library may contain at most ${MAX_LIBRARY_FOLDERS} folders.`)
   }
   const entries = existing
     ? current.entries.map((candidate) => candidate.id === id ? entry : candidate)
@@ -331,7 +416,7 @@ export function saveToLibrary(
     commit(target, [
       ...migrationGraphs(current.migration).filter((graph) => graph.id !== id),
       { id, source: serializeCanonicalDocument({ ...document, id, metadata: { ...document.metadata, title: name } }) },
-    ], entries)
+    ], entries, current.folders)
   } catch (error) {
     throw writeFailure(error, new LibraryError(
       'LIBRARY_WRITE_FAILED',
@@ -381,7 +466,7 @@ export function renameInLibrary(
     commit(target, [
       ...migrationGraphs(current.migration).filter((graph) => graph.id !== id),
       { id, source: serializeCanonicalDocument({ ...document, metadata: { ...document.metadata, title: name } }) },
-    ], entries)
+    ], entries, current.folders)
   } catch (error) {
     throw writeFailure(error, new LibraryError(
       'LIBRARY_WRITE_FAILED',
@@ -422,13 +507,17 @@ export function duplicateInLibrary(
     return candidate
   }
   const copy = resolveCanonicalImport(source.id, source, 'duplicate', fresh)
-  const entry: LibraryEntry = { id: copy.id, name, algebraId: copy.algebra.algebraId, createdAt: now, updatedAt: now }
+  const entry: LibraryEntry = {
+    id: copy.id, name, algebraId: copy.algebra.algebraId, createdAt: now, updatedAt: now,
+    // The copy is listed next to the original.
+    ...(original?.folder === undefined ? {} : { folder: original.folder }),
+  }
   const entries = [...current.entries, entry]
   try {
     commit(target, [
       ...migrationGraphs(current.migration),
       { id: copy.id, source: serializeCanonicalDocument({ ...copy, metadata: { ...copy.metadata, title: name } }) },
-    ], entries)
+    ], entries, current.folders)
   } catch (error) {
     throw writeFailure(error, new LibraryError(
       'LIBRARY_WRITE_FAILED',
@@ -449,7 +538,7 @@ export function removeFromLibrary(
   const entries = current.entries.filter((entry) => entry.id !== id)
   try {
     // A migrated graph that is deleted at once never needs to be written.
-    commit(target, migrationGraphs(current.migration).filter((graph) => graph.id !== id), entries)
+    commit(target, migrationGraphs(current.migration).filter((graph) => graph.id !== id), entries, current.folders)
   } catch (error) {
     throw writeFailure(error, new LibraryError('LIBRARY_WRITE_FAILED', 'The graph could not be deleted.'))
   }
@@ -469,7 +558,11 @@ export function removeFromLibrary(
 export function addCopyToLibrary(
   storage: LibraryStorage | null,
   document: CanonicalDocument,
-  options: LibraryOptions & Readonly<{ createId?: () => string }> = {},
+  options: LibraryOptions & Readonly<{
+    createId?: () => string
+    /** The folder to store the copy in, created with its ancestors when missing (STORE-015). */
+    folder?: FolderPath
+  }> = {},
 ): LibrarySave & Readonly<{ name: string }> {
   const title = untitled(document)
   const names = readLibrary(storage, options).entries.map((entry) => entry.name)
@@ -477,6 +570,123 @@ export function addCopyToLibrary(
   const createId = options.createId ?? (() => crypto.randomUUID())
   const saved = saveToLibrary(storage, { ...document, id: createId() }, name, { ...options, boundId: null, createId })
   return { ...saved, name }
+}
+
+export type LibraryFolderWrite = Readonly<{
+  entries: readonly LibraryEntry[]
+  folders: readonly FolderPath[]
+}>
+
+/** Creates an empty folder in My library, inside an existing parent (STORE-016). */
+export function createLibraryFolder(
+  storage: LibraryStorage | null,
+  path: FolderPath,
+  options: LibraryOptions = {},
+): LibraryFolderWrite {
+  const target = required(storage)
+  const current = beginWrite(target, options)
+  const parent = parentPath(path)
+  if (path.length === 0 || (parent.length > 0 && !current.folders.some((known) => folderKey(known) === folderKey(parent))))
+    throw new LibraryError('LIBRARY_FOLDER_MISSING', 'The parent folder no longer exists.')
+  const problem = newFolderProblem(current.folders, parent, path[path.length - 1], { maxCount: MAX_LIBRARY_FOLDERS })
+  if (problem) throw new LibraryError(problem.code, problem.message)
+  const folders = [...current.folders, [...path]]
+  try {
+    commit(target, migrationGraphs(current.migration), current.entries, folders)
+  } catch (error) {
+    throw writeFailure(error, new LibraryError('LIBRARY_WRITE_FAILED', 'The folder could not be created because browser storage is full.'))
+  }
+  return { entries: current.entries, folders }
+}
+
+/** Renames a folder; its graphs and subfolders follow it. */
+export function renameLibraryFolder(
+  storage: LibraryStorage | null,
+  path: FolderPath,
+  name: string,
+  options: LibraryOptions = {},
+): LibraryFolderWrite {
+  const target = required(storage)
+  const current = beginWrite(target, options)
+  if (!current.folders.some((known) => folderKey(known) === folderKey(path)))
+    throw new LibraryError('LIBRARY_FOLDER_MISSING', 'This folder no longer exists.')
+  const parent = parentPath(path)
+  const problem = newFolderProblem(current.folders, parent, name, { maxCount: MAX_LIBRARY_FOLDERS }, path)
+  if (problem) throw new LibraryError(problem.code, problem.message)
+  const renamed = [...parent, name]
+  const folders = current.folders.map((known) => replacePrefix(known, path, renamed))
+  const entries = current.entries.map((entry) => isWithin(entryFolder(entry), path) && entryFolder(entry).length > 0
+    ? { ...entry, folder: replacePrefix(entryFolder(entry), path, renamed) }
+    : entry)
+  try {
+    commit(target, migrationGraphs(current.migration), entries, folders)
+  } catch (error) {
+    throw writeFailure(error, new LibraryError('LIBRARY_WRITE_FAILED', 'The folder could not be renamed; its previous name was kept.'))
+  }
+  return { entries, folders }
+}
+
+/** The graphs a folder and its subfolders hold, which deleting it deletes. */
+export function libraryFolderEntries(entries: readonly LibraryEntry[], path: FolderPath): LibraryEntry[] {
+  return entries.filter((entry) => isWithin(entryFolder(entry), path))
+}
+
+/**
+ * Deletes a folder with its subfolders and every graph they hold: the index
+ * first, then the stored graphs, as for one graph. The interface asks for
+ * confirmation, stating the number of graphs, before calling it.
+ */
+export function deleteLibraryFolder(
+  storage: LibraryStorage | null,
+  path: FolderPath,
+  options: LibraryOptions = {},
+): LibraryFolderWrite & Readonly<{ deletedIds: readonly string[] }> {
+  const target = required(storage)
+  const current = beginWrite(target, options)
+  if (path.length === 0) throw new LibraryError('LIBRARY_FOLDER_MISSING', 'This folder no longer exists.')
+  const deletedIds = libraryFolderEntries(current.entries, path).map((entry) => entry.id)
+  const deleted = new Set(deletedIds)
+  const entries = current.entries.filter((entry) => !deleted.has(entry.id))
+  const folders = current.folders.filter((known) => !isWithin(known, path))
+  try {
+    commit(target, migrationGraphs(current.migration).filter((graph) => !deleted.has(graph.id)), entries, folders)
+  } catch (error) {
+    throw writeFailure(error, new LibraryError('LIBRARY_WRITE_FAILED', 'The folder could not be deleted.'))
+  }
+  for (const id of deletedIds) {
+    try {
+      target.removeItem(libraryDocumentKey(id))
+    } catch {
+      // Listed again on the next read; nothing is lost.
+    }
+  }
+  return { entries, folders, deletedIds }
+}
+
+/** Moves a graph into a folder, or to the root for the empty path. */
+export function moveInLibrary(
+  storage: LibraryStorage | null,
+  id: string,
+  folder: FolderPath,
+  options: LibraryOptions = {},
+): LibraryFolderWrite {
+  const target = required(storage)
+  const current = beginWrite(target, options)
+  if (!current.entries.some((entry) => entry.id === id))
+    throw new LibraryError('LIBRARY_ENTRY_MISSING', 'This graph is no longer stored in the library.')
+  if (folder.length > 0 && !current.folders.some((known) => folderKey(known) === folderKey(folder)))
+    throw new LibraryError('LIBRARY_FOLDER_MISSING', 'This folder no longer exists.')
+  const entries = current.entries.map((entry) => {
+    if (entry.id !== id) return entry
+    const { folder: _previous, ...rest } = entry
+    return folder.length > 0 ? { ...rest, folder: [...folder] } : rest
+  })
+  try {
+    commit(target, migrationGraphs(current.migration), entries, current.folders)
+  } catch (error) {
+    throw writeFailure(error, new LibraryError('LIBRARY_WRITE_FAILED', 'The graph could not be moved.'))
+  }
+  return { entries, folders: current.folders }
 }
 
 /**
