@@ -571,6 +571,20 @@ unchanged.
   **Import library** is unavailable in a temporary session, with a message
   explaining why.
 
+STORE-019 has **Milestone** commitment and applies to milestones that
+explicitly include embed mode ([#215](https://github.com/eharquin/gamut/issues/215)).
+
+- **STORE-019:** A scene opened inside an iframe, or with `embed=1` in its
+  fragment, shall open in embed mode unless the fragment contains `embed=0`.
+  Embed mode shows only the viewport, filling the frame and following its
+  size, with an **Open in GAMUT** link to the same scene in the full
+  application and a **Fullscreen** control when the host allows it; both are
+  keyboard-operable and named (A11Y-001, A11Y-003). Free objects remain
+  draggable and the viewport navigable. Embed mode never reads or writes
+  browser storage, works when storage is unavailable, and never falls back on
+  the active document. The activation, fragment options, and behavior are
+  specified in [scene links](specifications/scene-links.md#embed-mode).
+
 ## 12. Diagnostics, limits, and security
 
 Diagnostics shall contain a stable code, severity, affected item or property,
