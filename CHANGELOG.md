@@ -48,6 +48,18 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and get the head and base handles of `ipoint(x, y)`, keeping the zero.
   PGA-VIZ-003 and decision D10 are extended (#181).
 
+### Added
+
+- A **Show multivector values** setting in the display menu, on by default,
+  hides the values under the expressions and the list elements while keeping
+  their descriptions, diagnostics, controls, and the drawing, so a value can be
+  worked out by hand before it is revealed. A hidden value is announced as
+  hidden to assistive technologies. The setting is stored in the document, as
+  `ViewState.display.valuesVisible` in canonical format version 8, so it is
+  saved, exported, and carried by scene links and library graphs; earlier
+  documents open with their values shown. Release 0.2.0 cannot open a version
+  8 document (#191).
+
 ### Fixed
 
 - Saving a graph while a slider animation plays now stops the animation and

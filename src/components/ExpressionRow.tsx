@@ -468,11 +468,16 @@ export function ExpressionRow({
                       )}
                     </span>
                   )}
-                  <output>{formatDisplayValue(
-                    evaluation.value,
-                    display.decimalPlaces,
-                    display.showApproximatedResidue,
-                  )}</output>
+                  {display.valuesVisible ? (
+                    <output>{formatDisplayValue(
+                      evaluation.value,
+                      display.decimalPlaces,
+                      display.showApproximatedResidue,
+                    )}</output>
+                  ) : (
+                    // A hidden value is announced as hidden, never read out (#191).
+                    <span className="visually-hidden">Value hidden</span>
+                  )}
                   {normalizationUnavailable && <>
                     <span className="feedback-label">Normalization unavailable</span>
                     <span>This multivector has zero {
@@ -565,11 +570,15 @@ export function ExpressionRow({
                           </span>
                         </span>
                       )}
-                    <code>{formatDisplayMultivector(
-                      element.value,
-                      display.decimalPlaces,
-                      display.showApproximatedResidue,
-                    )}</code>
+                    {display.valuesVisible ? (
+                      <code>{formatDisplayMultivector(
+                        element.value,
+                        display.decimalPlaces,
+                        display.showApproximatedResidue,
+                      )}</code>
+                    ) : (
+                      <span className="visually-hidden">Value hidden</span>
+                    )}
                     {element.positionConflict ? (
                       <span className="list-element-position is-error">
                         position conflict

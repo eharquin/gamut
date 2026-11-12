@@ -208,7 +208,7 @@ unknown field as an implicit extension.
 | Field | Type | Rule |
 | --- | --- | --- |
 | `id` | string | Non-empty opaque immutable document identity. |
-| `formatVersion` | positive integer | Exactly the current version (`7`) after migration; `8` once expression folders and `valuesVisible` land (section 4.1). |
+| `formatVersion` | positive integer | Exactly the current version (`8`) after migration; expression folders join version 8 before 0.3.0 is published (section 4.1). |
 | `languageVersion` | positive integer | Selects source syntax and semantics. |
 | `algebra` | `AlgebraReference` | Selects one validated algebra configuration. |
 | `interpretation` | `InterpretationReference \| null` | At most one active interpretation. |
@@ -399,9 +399,16 @@ visibility fields are booleans, and `theme` is `light`, `dark`, or `system`.
 `false`, a printed value omits the coefficients that the classification
 tolerance treats as residue; it never changes a computed value.
 `valuesVisible` is a boolean, `true` for new documents: when it is `false`,
-the multivector value under each expression is hidden as specified by DOC-014
-and announced as hidden (A11Y-013); descriptions, diagnostics, controls, and
-the drawing are unchanged.
+the multivector value under each expression, and under each element of an
+expanded list, is hidden as specified by DOC-014
+([#191](https://github.com/eharquin/gamut/issues/191)). Each affected row
+announces its value as hidden (A11Y-013) and never exposes the hidden
+coefficients through its accessible name, description, or live announcements.
+Descriptions, diagnostics, controls, and the drawing are unchanged, and
+turning the setting back on reveals every value at once. Like the other
+display settings, it is saved, exported, and carried by scene links and
+library graphs; it is a teaching aid, not a protection: the values remain in
+the document.
 Later format versions may add viewport variants through migration.
 
 ### 2.4 Expression folders
@@ -500,7 +507,7 @@ previous one; the implementation records the migrations in
 | 5 | `Appearance.idealPointDisplay` (`vector`, `ideal`, `both`): how an ideal PGA point is drawn; earlier documents default to `vector`. |
 | 6 | `Appearance.pointListDisplay` (`none`, `open-polyline`, `closed-loop`) and `Appearance.pointMarkersVisible`: how the elements of a list of finite and ideal points are connected, and whether a connected one keeps its point markers; earlier documents default to `none` with markers. |
 | 7 | Appearance sources (`strokeWidthSource`, `pointSizeSource`, `opacitySource`, `labelAngleSource`, `labelSizeSource`, `labelDistanceSource`), `strokeStyle`, `pointStyle`, `labelAnchor`, and `primitiveStyles`; `Item.normalization` adds `euclidean` and `ideal`; the style registry adds `orange`, `teal`, `purple`, and `pink`. The migration fills empty sources, `solid`, `dot`, and `labelAnchor: top-right` (the fixed position of earlier versions), and moves `pointListDisplay` to `primitiveStyles.points.connection` and `pointMarkersVisible` to `primitiveStyles.points.visible`, kept `true` for an unconnected list, which always drew its markers; `primitiveStyles.lines.orientationVisible` copies the item's orientation. Normalization is unchanged. |
-| 8 | **Planned for 0.3.0; may change until 0.3.0 is published.** Expression folders: each item's folder name list, and the collapsed state of folders stored separately (section 2.4, [#83](https://github.com/eharquin/gamut/issues/83)); `ViewState.display.valuesVisible` ([#191](https://github.com/eharquin/gamut/issues/191)). The migration places every item at the top level in its current order, with no folders, and sets `valuesVisible: true`. Introduced by whichever of #83 and #191 lands first. |
+| 8 | **Planned for 0.3.0; may change until 0.3.0 is published.** `ViewState.display.valuesVisible` ([#191](https://github.com/eharquin/gamut/issues/191)); earlier documents always showed their values, so the migration sets `valuesVisible: true`. Expression folders join this version before 0.3.0 is published: each item's folder name list, and the collapsed state of folders stored separately (section 2.4, [#83](https://github.com/eharquin/gamut/issues/83)); their migration places every item at the top level in its current order, with no folders. |
 
 A release can open only the format versions it knows. Release 0.2.0 cannot
 open a version 8 document; protecting an older release against a document
