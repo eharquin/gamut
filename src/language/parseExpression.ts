@@ -12,6 +12,7 @@ export type {
   ScalarLiteralNode,
   SurfaceExpressionNode,
   ReferenceNode,
+  TupleNode,
   VectorConstructorNode,
 } from './ast'
 
@@ -73,6 +74,7 @@ function isScalarExpression(expression: SurfaceExpressionNode): boolean {
       )
     case 'basis-blade':
     case 'vector-constructor':
+    case 'tuple':
     case 'pseudoscalar':
       return false
     case 'call-expression':
@@ -481,48 +483,8 @@ class Parser {
       const first = this.parseAdditive()
       if (!first.ok) return first
 
-      if (this.consume('comma')) {
-        if (!isScalarExpression(first.node)) {
-          return {
-            ok: false,
-            diagnostic: syntaxDiagnostic(
-              'Vector components must be scalar expressions.',
-              first.node.span,
-            ),
-          }
-        }
-        const second = this.parseAdditive()
-        if (!second.ok) return second
-        if (!isScalarExpression(second.node)) {
-          return {
-            ok: false,
-            diagnostic: syntaxDiagnostic(
-              'Vector components must be scalar expressions.',
-              second.node.span,
-            ),
-          }
-        }
-        const rightParenthesis = this.consume('right-parenthesis')
-        if (!rightParenthesis) {
-          return {
-            ok: false,
-            diagnostic: syntaxDiagnostic(
-              'Expected “)” after vector components.',
-              insertionAt(this.current()),
-            ),
-          }
-        }
-        return {
-          ok: true,
-          node: {
-            kind: 'vector-constructor',
-            components: [first.node, second.node],
-            span: {
-              start: leftParenthesis.span.start,
-              end: rightParenthesis.span.end,
-            },
-          },
-        }
+      if (this.current().kind === 'comma') {
+        return this.parseTuple(leftParenthesis, first.node)
       }
 
       const rightParenthesis = this.consume('right-parenthesis')
@@ -664,6 +626,54 @@ class Parser {
         kind: 'call-expression', callee: callee.text,
         arguments: argumentNodes,
         span: { start: callee.span.start, end: rightParenthesis.span.end },
+      },
+    }
+  }
+
+  /**
+   * A coordinate tuple after its first component: `(a,)` or `(a, b, …)`.
+   * Every arity parses; the active algebra checks it at evaluation.
+   */
+  private parseTuple(
+    leftParenthesis: Token,
+    first: SurfaceExpressionNode,
+  ): NodeResult {
+    const components: SurfaceExpressionNode[] = [first]
+    const scalarComponent = (node: SurfaceExpressionNode): Diagnostic | null =>
+      isScalarExpression(node)
+        ? null
+        : syntaxDiagnostic('Tuple components must be scalar expressions.', node.span)
+    const firstInvalid = scalarComponent(first)
+    if (firstInvalid) return { ok: false, diagnostic: firstInvalid }
+    this.consume('comma')
+    // A trailing comma after a single component makes it a one-component
+    // tuple, so `(1,)` differs from the parenthesized scalar `(1)`.
+    if (this.current().kind !== 'right-parenthesis') {
+      for (;;) {
+        const component = this.parseAdditive()
+        if (!component.ok) return component
+        const invalid = scalarComponent(component.node)
+        if (invalid) return { ok: false, diagnostic: invalid }
+        components.push(component.node)
+        if (!this.consume('comma')) break
+      }
+    }
+    const rightParenthesis = this.consume('right-parenthesis')
+    if (!rightParenthesis) {
+      return {
+        ok: false,
+        diagnostic: syntaxDiagnostic(
+          'Expected “)” after tuple components.',
+          insertionAt(this.current()),
+        ),
+      }
+    }
+    return {
+      ok: true,
+      node: {
+        kind: 'tuple',
+        components,
+        span: { start: leftParenthesis.span.start, end: rightParenthesis.span.end },
       },
     }
   }

@@ -976,11 +976,16 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
   }
   const literalEditComponents = (item: ExpressionItem, entity: InterpretedEntity) => {
     const edit = interpretation.literalEdit(entity)
-    return edit ? directItemConstructorComponents(item.source, edit.constructor, edit.arity) : null
+    return edit
+      ? directItemConstructorComponents(item.source, edit.constructor, edit.arity, engine.tuple ?? null)
+      : null
   }
-  /** A position source is a two-argument literal of the interpretation's creation constructor. */
+  /**
+   * A position source is a two-argument literal of the interpretation's
+   * creation constructor, or a tuple the active algebra reads as one.
+   */
   const positionComponents = (positionSource: string) =>
-    directConstructorComponents(positionSource, interpretation.creation.constructor, 2)
+    directConstructorComponents(positionSource, interpretation.creation.constructor, 2, engine.tuple ?? null)
   const headMovable = (item: ExpressionItem, entity: InterpretedEntity): boolean =>
     interpretation.supportsHead(entity) && componentsMovable(literalEditComponents(item, entity))
   const objectBaseMovable = (item: ExpressionItem, entity: InterpretedEntity): boolean =>

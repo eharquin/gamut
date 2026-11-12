@@ -7,6 +7,25 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Scientific capabilities
+
+- A coordinate tuple is resolved by the active algebra instead of a hidden
+  `vector` call (#180). In PGA(2), `(x, y)` is `point(x, y)` and `(x, y, w)`
+  the homogeneous `point(x, y, w)`, so `(x, y, 0)` is the ideal point in
+  direction `(x, y)`; a triple is never a line. In VGA(2), `(x, y)` stays
+  `vector(x, y)` with exactly two components. Any other number of components,
+  such as `(1,)` or `(1, 2, 3)` in VGA(2), gives an arity diagnostic at the
+  tuple that does not mention `vector`. Language section 7, VEC-001, the new
+  PGA-015 and the PGA convention state the rule; the language version does
+  not change.
+
+### Interface and accessibility
+
+- Dragging a point or vector written as a tuple rewrites the tuple in place,
+  so `P = (2, 1)` becomes `P = (2.5, 1)`, not `point(2.5, 1)`. PGA position
+  fields accept the tuple `(x, y)` and keep it when the base is dragged; the
+  position diagnostic that pointed tuples to `point(1, 2)` is gone (#180).
+
 ## 0.2.0 - 2026-11-10
 
 Release notes: [docs/releases/0.2.0.md](docs/releases/0.2.0.md); tag

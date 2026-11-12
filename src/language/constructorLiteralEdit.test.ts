@@ -5,6 +5,9 @@ import {
   rewriteConstructorLiterals,
 } from './constructorLiteralEdit'
 
+const VGA_TUPLE = { constructor: 'vector', arities: [2] }
+const PGA_TUPLE = { constructor: 'point', arities: [2, 3] }
+
 describe('constructor literal editing', () => {
   it('edits any registered constructor call by name and arity', () => {
     const source = 'P = point(1, -2, 1)'
@@ -17,9 +20,26 @@ describe('constructor literal editing', () => {
     expect(rewriteConstructorLiterals(source, components!, [3.5, 4, 1])).toBe('P = point(3.5, 4, 1)')
   })
 
-  it('accepts the vector tuple syntax only for the vector constructor', () => {
-    expect(directConstructorComponents('(1, 2)', 'vector', 2)).toHaveLength(2)
-    expect(directConstructorComponents('(1, 2)', 'point', 2)).toBeNull()
+  it('reads a tuple as the constructor the active algebra gives it (#180)', () => {
+    expect(directConstructorComponents('(1, 2)', 'vector', 2, VGA_TUPLE)).toHaveLength(2)
+    expect(directConstructorComponents('(1, 2)', 'point', 2, VGA_TUPLE)).toBeNull()
+    expect(directConstructorComponents('(1, 2)', 'point', 2, PGA_TUPLE)).toHaveLength(2)
+    expect(directConstructorComponents('(1, 2)', 'vector', 2, PGA_TUPLE)).toBeNull()
+    expect(directItemConstructorComponents('P = (1, 2, 2)', 'point', 3, PGA_TUPLE)).toHaveLength(3)
+    // An arity the algebra does not accept is not that constructor.
+    expect(directConstructorComponents('(1, 2, 3)', 'vector', 3, VGA_TUPLE)).toBeNull()
+    expect(directConstructorComponents('(1, 2, 3, 4)', 'point', 4, PGA_TUPLE)).toBeNull()
+    // Without a tuple constructor, no tuple is editable.
+    expect(directConstructorComponents('(1, 2)', 'vector', 2)).toBeNull()
+  })
+
+  it('rewrites a tuple in place, keeping its spelling', () => {
+    const source = 'P = (2, 1)'
+    const components = directItemConstructorComponents(source, 'point', 2, PGA_TUPLE)
+    expect(rewriteConstructorLiterals(source, components!, [2.5, 1])).toBe('P = (2.5, 1)')
+    const position = '( -1 ,2 )'
+    expect(rewriteConstructorLiterals(position, directConstructorComponents(position, 'point', 2, PGA_TUPLE)!, [3, 4]))
+      .toBe('( 3 ,4 )')
   })
 
   it('refuses a different constructor, arity, or compound argument', () => {
@@ -44,4 +64,5 @@ describe('constructor literal editing', () => {
     ])
     expect(rewriteConstructorLiterals(source, components!, [9, 7.25, 9])).toBe('P = point(-a, 7.25, w)')
   })
+
 })

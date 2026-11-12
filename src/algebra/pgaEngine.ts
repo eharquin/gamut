@@ -226,6 +226,9 @@ export function createPga2Engine(): AlgebraEngine {
       ['norm', [1]],
       ['inorm', [1]],
     ]),
+    // `(x, y)` is `point(x, y)` and `(x, y, w)` the homogeneous
+    // `point(x, y, w)`; a triple is never a line (#180).
+    tuple: { constructor: 'point', arities: [2, 3] },
     call(name, args) {
       const number = (index: number, label: string) => scalarOf(args[index], label)
       switch (name) {

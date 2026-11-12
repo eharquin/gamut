@@ -3737,6 +3737,44 @@ describe('PGA 2D foundation workflow', () => {
     fireEvent.pointerUp(canvas, { pointerId: 33 })
     expect(first).toHaveValue('L = line(0.955, 0.296, 0)')
   })
+  // 72 pixels per unit, origin at (320, 240).
+  const at = (x: number, y: number) => ({ clientX: 320 + x * 72, clientY: 240 - y * 72 })
+  const dragHandle = (name: string, pointerId: number, x: number, y: number) => {
+    const canvas = viewportCanvas()
+    fireEvent.pointerDown(screen.getByRole('button', { name }), { button: 0, pointerId })
+    fireEvent.pointerMove(canvas, { pointerId, ...at(x, y) })
+    fireEvent.pointerUp(canvas, { pointerId })
+  }
+
+  it('draws and drags a PGA tuple like the point it denotes, keeping the tuple (#180)', () => {
+    selectPga()
+    const first = screen.getByRole('textbox', { name: 'Expression 1' })
+    sizeViewportCanvas(viewportCanvas())
+    fireEvent.change(first, { target: { value: 'P = (1, 2)' } })
+    expect(screen.getByText('Point')).toHaveTextContent('at (1, 2)')
+    expect(screen.getByLabelText('P')).toHaveClass('point-marker')
+    dragHandle('Move P', 55, 2.5, 1)
+    expect(first).toHaveValue('P = (2.5, 1)')
+
+    // An arity PGA(2) does not accept is diagnosed without naming vector.
+    fireEvent.change(first, { target: { value: 'P = (1, 2, 3, 4)' } })
+    expect(screen.getByText('A coordinate tuple takes 2 or 3 components in this algebra, received 4.')).toBeInTheDocument()
+    expect(screen.queryByText(/vector/)).not.toBeInTheDocument()
+  })
+
+  it('accepts and keeps a tuple in a PGA position field (#180)', () => {
+    selectPga()
+    const first = screen.getByRole('textbox', { name: 'Expression 1' })
+    fireEvent.change(first, { target: { value: 'D = ipoint(1, 0)' } })
+    sizeViewportCanvas(viewportCanvas())
+    dragHandle('Move base of D', 57, 1, 1)
+    const position = screen.getByRole('textbox', { name: 'Position 1' })
+    expect(position).toHaveValue('point(1, 1)')
+    fireEvent.change(position, { target: { value: '(1, 1)' } })
+    expect(screen.queryByText(/coordinate tuples are not supported/)).not.toBeInTheDocument()
+    dragHandle('Move base of D', 58, 2, 1)
+    expect(screen.getByRole('textbox', { name: 'Position 1' })).toHaveValue('(2, 1)')
+  })
 })
 
 describe('stroke width and opacity from the appearance menu (#221)', () => {

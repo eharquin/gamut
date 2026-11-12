@@ -83,6 +83,10 @@ function firstReference(
         firstReference(expression.components[0]) ??
         firstReference(expression.components[1])
       )
+    case 'tuple':
+      return expression.components
+        .map(firstReference)
+        .find((reference) => reference !== null) ?? null
     case 'call-expression':
       return expression.arguments
         .map(firstReference)

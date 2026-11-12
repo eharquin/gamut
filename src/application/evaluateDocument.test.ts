@@ -712,15 +712,31 @@ describe('position diagnostics name what the algebra expects (#236)', () => {
     return position.diagnostic
   }
 
-  it('asks PGA(2) for a point instead of a tuple', () => {
-    const diagnostic = positionMessage(evaluateDocument(expressionDocument([
+  it('accepts a PGA(2) tuple position as the point it denotes (#180)', () => {
+    const [tuple] = evaluateDocument(expressionDocument([
       { id: 'i', source: 'I = ipoint(1, 0)', positionSource: '(1, 2)' },
+    ]), pgaContext)
+    const [call] = evaluateDocument(expressionDocument([
+      { id: 'i', source: 'I = ipoint(1, 0)', positionSource: 'point(1, 2)' },
+    ]), pgaContext)
+    expect(tuple.positionEvaluation).toMatchObject({ status: 'valid', inspection: '2e01 - e02 + e12' })
+    expect(tuple.positionEvaluation).toEqual(call.positionEvaluation)
+    const [weighted] = evaluateDocument(expressionDocument([
+      { id: 'i', source: 'I = ipoint(1, 0)', positionSource: '(2, 4, 2)' },
+    ]), pgaContext)
+    expect(weighted.positionEvaluation).toMatchObject({ status: 'valid' })
+  })
+
+  it('rejects an ideal or over-long PGA(2) tuple position without naming vector', () => {
+    const ideal = positionMessage(evaluateDocument(expressionDocument([
+      { id: 'i', source: 'I = ipoint(1, 0)', positionSource: '(1, 2, 0)' },
     ]), pgaContext))
-    expect(diagnostic).toMatchObject({
-      code: 'GEOM_INVALID_POSITION',
-      message: 'A position must evaluate to a Euclidean point, such as point(1, 2); coordinate tuples are not supported by the active algebra.',
-    })
-    expect(diagnostic.message).not.toMatch(/vector|VGA/)
+    expect(ideal).toMatchObject({ code: 'GEOM_INVALID_POSITION', message: 'A position must evaluate to a Euclidean point.' })
+    const long = positionMessage(evaluateDocument(expressionDocument([
+      { id: 'i', source: 'I = ipoint(1, 0)', positionSource: '(1, 2, 3, 4)' },
+    ]), pgaContext))
+    expect(long).toMatchObject({ code: 'LANG_ARITY', span: { start: 0, end: 12 } })
+    expect(long.message).not.toMatch(/vector/)
   })
 
   it('asks PGA(2) for a Euclidean point when the position is a line', () => {
@@ -796,5 +812,74 @@ describe('PGA(2) list positions', () => {
       throw new Error('Expected a valid list of positions')
     expect(position.elements.map((element) => PGA_2D_INTERPRETATION.positionOf(element.value)))
       .toEqual([{ x: 1, y: 2 }, { x: -3, y: 0 }])
+  })
+})
+
+describe('coordinate tuples resolved by the active algebra (#180)', () => {
+  const pgaContext = { engine: createPga2Engine(), interpretation: PGA_2D_INTERPRETATION }
+  const evaluatePga = (...sources: string[]) => evaluateDocument(
+    expressionDocument(sources.map((source, index) => ({ id: `item-${index + 1}`, source }))),
+    pgaContext,
+  )
+  const invalid = (state: ReturnType<typeof evaluate>[number]['evaluation']) => {
+    if (state?.status !== 'invalid') throw new Error('Expected an invalid evaluation')
+    return state.diagnostic
+  }
+
+  it('reads a VGA(2) pair as vector(x, y)', () => {
+    const [tuple, call] = evaluate('V = (2, 1)', 'W = vector(2, 1)')
+    expect(tuple.evaluation).toMatchObject({ status: 'valid', inspection: '2e1 + e2', entity: { kind: 'vector-2d' } })
+    expect(call.evaluation).toMatchObject({ status: 'valid', inspection: '2e1 + e2' })
+  })
+
+  it('rejects every other VGA(2) arity at the tuple span, without naming vector', () => {
+    for (const [source, received] of [['V = (1,)', 1], ['V = (1, 2, 3)', 3], ['V = (1, 2, 3, 4)', 4]] as const) {
+      const diagnostic = invalid(evaluate(source)[0].evaluation)
+      expect(diagnostic).toEqual({
+        code: 'LANG_ARITY',
+        severity: 'error',
+        message: `A coordinate tuple takes 2 components in this algebra, received ${received}.`,
+        span: { start: 4, end: source.length },
+      })
+      expect(diagnostic.message).not.toMatch(/vector/)
+    }
+  })
+
+  it('reads a PGA(2) pair as point(x, y) and a triple as point(x, y, w)', () => {
+    const [pair, pairCall, triple, tripleCall] = evaluatePga(
+      'P = (2, 1)', 'Q = point(2, 1)', 'R = (4, 2, 2)', 'S = point(4, 2, 2)')
+    expect(pair.evaluation).toMatchObject({ status: 'valid', entity: { kind: 'euclidean-point', x: 2, y: 1, weight: 1 } })
+    expect(pair.evaluation).toMatchObject({ inspection: (pairCall.evaluation as { inspection: string }).inspection })
+    expect(triple.evaluation).toMatchObject({ status: 'valid', entity: { kind: 'euclidean-point', x: 4, y: 2, weight: 2 } })
+    expect(triple.evaluation).toMatchObject({ inspection: (tripleCall.evaluation as { inspection: string }).inspection })
+  })
+
+  it('reads a PGA(2) triple with a zero weight as the ideal point, never a line', () => {
+    const [ideal, ipoint] = evaluatePga('D = (1, 2, 0)', 'E = ipoint(1, 2)')
+    expect(ideal.evaluation).toMatchObject({ status: 'valid', entity: { kind: 'ideal-point', x: 1, y: 2 } })
+    expect(ideal.evaluation).toMatchObject({ inspection: (ipoint.evaluation as { inspection: string }).inspection })
+  })
+
+  it('follows scalar names and broadcasts lists like the constructor', () => {
+    const [, , named] = evaluatePga('t = 3', 'w = 2', 'P = (t, 1, w)')
+    expect(named.evaluation).toMatchObject({ status: 'valid', entity: { kind: 'euclidean-point', x: 3, y: 1, weight: 2 } })
+    const [, list] = evaluatePga('X = [0, 1]', 'L = (X, 2)')
+    expect(list.evaluation).toMatchObject({ status: 'valid', inspection: '[2e01 + e12, 2e01 - e02 + e12]' })
+  })
+
+  it('rejects other PGA(2) arities at the tuple span, without naming vector', () => {
+    for (const [source, received] of [['P = (1,)', 1], ['P = (1, 2, 3, 4)', 4]] as const) {
+      const diagnostic = invalid(evaluatePga(source)[0].evaluation)
+      expect(diagnostic).toEqual({
+        code: 'LANG_ARITY',
+        severity: 'error',
+        message: `A coordinate tuple takes 2 or 3 components in this algebra, received ${received}.`,
+        span: { start: 4, end: source.length },
+      })
+    }
+  })
+
+  it('keeps vector(x, y) a VGA constructor that PGA does not register', () => {
+    expect(invalid(evaluatePga('V = vector(1, 2)')[0].evaluation)).toMatchObject({ code: 'LANG_UNSUPPORTED_FUNCTION' })
   })
 })

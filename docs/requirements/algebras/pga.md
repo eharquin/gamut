@@ -67,6 +67,15 @@ milestone:
   parameters, definition and convention versions, and the interpretation and
   visualizer identifiers using the existing document format; no PGA-specific
   schema fork is permitted.
+- **PGA-015:** The PGA definition shall declare `point` as the constructor a
+  coordinate tuple denotes ([language section 7](../../specifications/language.md#7-vectors-and-tuples)):
+  in PGA(2), `(x, y)` shall evaluate exactly as `point(x, y)` and `(x, y, w)`
+  as the homogeneous `point(x, y, w)`, so `(x, y, 0)` is the ideal point in
+  direction `(x, y)`. A triple shall never denote a line, and no short alias
+  such as `p(…)` or `l(…)` is registered. Any other number of components shall
+  receive the tuple arity diagnostic at the tuple's span, which shall not
+  mention `vector`. A tuple is accepted wherever its point is, including
+  position fields, and a drag keeps the tuple spelling (PGA-VIZ-003).
 - **PGA-013:** `log` shall return the principal logarithm of a unit motor
   defined by [convention section 8.1](../../specifications/pga-conventions.md#81-logarithm-and-square-root-of-a-motor),
   under the capability `org.multivector.capability.motor-logarithm`. A
@@ -118,13 +127,14 @@ to milestones that explicitly include the standard PGA interpretation.
 - **PGA-INT-008:** Euclidean points and lines have intrinsic locations; the
   interpretation shall not advertise position support for them. An ideal
   point has no location and shall accept a rendering position, which is a
-  Euclidean point written with the `point` constructor; its `head` is the
+  Euclidean point written with the `point` constructor or as a coordinate
+  tuple (PGA-015); its `head` is the
   Euclidean point `position + value`, the end of its arrow. An empty position
   is the origin point `e12`, so `position` and `head` evaluate to what is drawn.
   The line at infinity accepts no position. A position diagnostic shall say that a
-  position must evaluate to a Euclidean point, and for a coordinate tuple
-  give the `point(1, 2)` form; it shall not mention VGA vectors. The expected
-  kind is worded by the interpretation, not by the evaluator.
+  position must evaluate to a Euclidean point; it shall not mention VGA
+  vectors. The expected kind is worded by the interpretation, not by the
+  evaluator.
 
 ## 4. Visualization
 
@@ -144,8 +154,10 @@ to milestones that explicitly include the standard PGA interpretation.
   base of an ideal point whose source is a literal `ipoint(x, y)`, and to a
   line whose source is a literal `line(a, b, c)` as specified by PGA-VIZ-004,
   rewriting those literals with the deterministic precision rules of EDIT and
-  INTERACT2D; anchoring to Euclidean points and interactive motors are
-  excluded until separately specified.
+  INTERACT2D; a coordinate tuple `(x, y)` is manipulated as the
+  `point(x, y)` it denotes (PGA-015) and keeps its tuple spelling. Anchoring
+  to Euclidean points and interactive motors are excluded until separately
+  specified.
 - **PGA-VIZ-004:** A Euclidean line shall show a translucent halo while
   hovered or selected, and may show discreet orientation ticks on its
   positive side, toggled by the item's `orientationVisible` appearance.

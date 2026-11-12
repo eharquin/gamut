@@ -14,6 +14,12 @@ export type AlgebraEngine = Readonly<{
   basis: AlgebraBasis
   /** Registered function and constructor names with their accepted arities (ALG-028). */
   functions: ReadonlyMap<string, readonly number[]>
+  /**
+   * The registered constructor a coordinate tuple denotes and the tuple
+   * arities it accepts (language section 7); an algebra without one rejects
+   * every tuple. Each accepted arity is an arity of that constructor.
+   */
+  tuple?: TupleConstructor
   /** Applies a registered function; the caller has checked name and arity. */
   call(name: string, args: readonly OwnedMultivector[]): OwnedMultivector
   scalar(value: number): OwnedMultivector
@@ -46,6 +52,12 @@ export type AlgebraEngine = Readonly<{
   exp(value: OwnedMultivector): OwnedMultivector
   /** A built-in scalar function of language section 10 on scalar arguments. */
   scalarFunction(name: ScalarFunctionName, args: readonly OwnedMultivector[]): OwnedMultivector
+}>
+
+/** What a coordinate tuple `(a, b, …)` means in an algebra. */
+export type TupleConstructor = Readonly<{
+  constructor: string
+  arities: readonly number[]
 }>
 
 /** The Euclidean norm `norm` or the ideal norm `inorm`. */

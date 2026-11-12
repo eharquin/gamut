@@ -32,7 +32,8 @@ function references(expression: SurfaceExpressionNode): readonly Readonly<{
     case 'unary-expression': return references(expression.operand)
     case 'binary-expression': return [...references(expression.left), ...references(expression.right)]
     case 'property-expression': return references(expression.object)
-    case 'vector-constructor': return expression.components.flatMap(references)
+    case 'vector-constructor':
+    case 'tuple': return expression.components.flatMap(references)
     case 'call-expression': return expression.arguments.flatMap(references)
     case 'list-expression': return expression.elements.flatMap(references)
     case 'range-expression': return [expression.start, ...(expression.next ? [expression.next] : []), expression.end].flatMap(references)

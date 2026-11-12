@@ -94,6 +94,7 @@ function collectReferences(expression: SurfaceExpressionNode): Reference[] {
     case 'property-expression':
       return collectReferences(expression.object)
     case 'vector-constructor':
+    case 'tuple':
       return expression.components.flatMap(collectReferences)
     case 'call-expression':
       return expression.arguments.flatMap(collectReferences)
@@ -115,13 +116,6 @@ function isPositionValue(interpretation: AnyInterpretation, value: LanguageValue
   return value.kind === 'multivector'
     ? interpretation.isPositionValue(value)
     : value.elements.every((element) => interpretation.isPositionValue(element.value))
-}
-
-/** Whether evaluation failed on a `(x, y)` tuple the active algebra cannot build. */
-function isUnsupportedTuple(error: ExpressionEvaluationError, source: string): boolean {
-  return error.code === 'LANG_UNSUPPORTED_FUNCTION' &&
-    error.origin !== undefined &&
-    source.slice(error.origin.start).startsWith('(')
 }
 
 function supportsEvaluationPosition(
@@ -520,16 +514,7 @@ export function evaluateDocument(
       )
     } catch (error) {
       if (!(error instanceof ExpressionEvaluationError)) throw error
-      const invalid = node.property === 'position' && isUnsupportedTuple(error, node.item.positionSource ?? '')
-        // A coordinate tuple is VGA syntax; in an algebra without it, say
-        // what a position is instead of naming the `vector` function (#236).
-        ? diagnostic(
-            'GEOM_INVALID_POSITION',
-            `A position must evaluate to ${interpretation.positionDescription}, such as ${
-              interpretation.formatPosition('1', '2')}; coordinate tuples are not supported by the active algebra.`,
-            error.origin,
-          )
-        : diagnostic(error.code, error.message, error.origin)
+      const invalid = diagnostic(error.code, error.message, error.origin)
       results.set(node.key, invalid)
       return invalid
     }

@@ -91,11 +91,11 @@ describe('minimal expression parser', () => {
     })
   })
 
-  it('parses a two-component tuple as concise vector syntax', () => {
+  it('parses a two-component tuple as an algebra-neutral tuple', () => {
     expect(parseExpression(' (2, -1.5e+1) ')).toEqual({
       ok: true,
       expression: {
-        kind: 'vector-constructor',
+        kind: 'tuple',
         components: [
           { kind: 'scalar-literal', value: 2, span: { start: 2, end: 3 } },
           {
@@ -111,6 +111,57 @@ describe('minimal expression parser', () => {
         ],
         span: { start: 1, end: 13 },
       },
+    })
+  })
+
+  it('parses tuples of every arity; the active algebra checks the arity (#180)', () => {
+    expect(parseExpression('(1,)')).toEqual({
+      ok: true,
+      expression: {
+        kind: 'tuple',
+        components: [{ kind: 'scalar-literal', value: 1, span: { start: 1, end: 2 } }],
+        span: { start: 0, end: 4 },
+      },
+    })
+    expect(parseExpression('(x, y, 0)')).toMatchObject({
+      ok: true,
+      expression: {
+        kind: 'tuple',
+        components: [{ kind: 'reference', name: 'x' }, { kind: 'reference', name: 'y' }, { value: 0 }],
+        span: { start: 0, end: 9 },
+      },
+    })
+    expect(parseExpression('(1, 2, 3, 4)')).toMatchObject({
+      ok: true, expression: { kind: 'tuple', components: [{}, {}, {}, {}] },
+    })
+    expect(parseExpression('[(1, 2), (3, 4, 1)]')).toMatchObject({
+      ok: true,
+      expression: { kind: 'list-expression', elements: [{ kind: 'tuple' }, { kind: 'tuple' }] },
+    })
+  })
+
+  it('names the tuple, not vector, in tuple syntax diagnostics', () => {
+    expect(parseExpression('(e1, 2, 3)')).toEqual({
+      ok: false,
+      diagnostic: {
+        code: 'LANG_SYNTAX',
+        severity: 'error',
+        message: 'Tuple components must be scalar expressions.',
+        span: { start: 1, end: 3 },
+      },
+    })
+    expect(parseExpression('(1, 2, e12)')).toMatchObject({
+      ok: false, diagnostic: { message: 'Tuple components must be scalar expressions.', span: { start: 7, end: 10 } },
+    })
+    expect(parseExpression('(1, 2 3')).toMatchObject({
+      ok: false, diagnostic: { code: 'LANG_SYNTAX' },
+    })
+    expect(parseExpression('(1, 2')).toMatchObject({
+      ok: false, diagnostic: { message: 'Expected “)” after tuple components.' },
+    })
+    // Only a single component takes a trailing comma.
+    expect(parseExpression('(1, 2,)')).toMatchObject({
+      ok: false, diagnostic: { message: 'Expected an expression.' },
     })
   })
 

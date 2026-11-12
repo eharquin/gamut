@@ -3,6 +3,7 @@ import {
   directItemConstructorComponents,
   rewriteConstructorLiterals,
   type ConstructorComponentEdit,
+  type TupleSpelling,
 } from './constructorLiteralEdit'
 import { parseExpression } from './parseExpression'
 
@@ -13,6 +14,9 @@ import { parseExpression } from './parseExpression'
 
 export type DirectVectorComponentEdit = ConstructorComponentEdit
 
+/** The VGA(2) tuple: exactly two components, read as `vector(x, y)`. */
+const VGA_TUPLE: TupleSpelling = { constructor: 'vector', arities: [2] }
+
 const pair = (
   components: readonly ConstructorComponentEdit[] | null,
 ): readonly [ConstructorComponentEdit, ConstructorComponentEdit] | null =>
@@ -21,13 +25,13 @@ const pair = (
 export function directDeclaredVectorComponents(
   source: string,
 ): readonly [DirectVectorComponentEdit, DirectVectorComponentEdit] | null {
-  return pair(directItemConstructorComponents(source, 'vector', 2))
+  return pair(directItemConstructorComponents(source, 'vector', 2, VGA_TUPLE))
 }
 
 export function directPositionComponents(
   source: string,
 ): readonly [DirectVectorComponentEdit, DirectVectorComponentEdit] | null {
-  return pair(directConstructorComponents(source, 'vector', 2))
+  return pair(directConstructorComponents(source, 'vector', 2, VGA_TUPLE))
 }
 
 export function directPositionAnchorReference(
