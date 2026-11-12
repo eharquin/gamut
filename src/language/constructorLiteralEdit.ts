@@ -98,6 +98,70 @@ export function directConstructorComponents(
 }
 
 /**
+ * The spellings a drag may rewrite for one entity: `constructor` with
+ * `arity` arguments, and, with `weightedConstructor`, the same call with one
+ * more trailing weight argument, such as `point(x, y, w)`.
+ */
+export type LiteralEditSpelling = Readonly<{
+  constructor: string
+  arity: number
+  weightedConstructor?: string
+}>
+
+/**
+ * What a drag rewrites in an item source: the leading `components`, and for
+ * a weighted spelling its `weight`, which the drag never rewrites.
+ */
+export type LiteralEditTarget = Readonly<{
+  components: readonly ConstructorComponentEdit[]
+  weight: ConstructorComponentEdit | null
+}>
+
+/**
+ * The direct-edit target of an item source under `edit`, trying the plain
+ * spelling first, then the weighted one (PGA-VIZ-003). A weight written as a
+ * name that is also an edited component is refused: rewriting that component
+ * would change the weight.
+ */
+export function directItemLiteralEdit(
+  source: string,
+  edit: LiteralEditSpelling,
+  tuple: TupleSpelling = null,
+): LiteralEditTarget | null {
+  const plain = directItemConstructorComponents(source, edit.constructor, edit.arity, tuple)
+  if (plain) return { components: plain, weight: null }
+  if (!edit.weightedConstructor) return null
+  const weighted = directItemConstructorComponents(
+    source, edit.weightedConstructor, edit.arity + 1, tuple)
+  if (!weighted) return null
+  const components = weighted.slice(0, edit.arity)
+  const weight = weighted[edit.arity]
+  if (weight.kind === 'reference' && components.some((component) =>
+    component.kind === 'reference' && component.name === weight.name)) return null
+  return { components, weight }
+}
+
+/**
+ * The value of a literal component, such as a weight, read from its source
+ * span; `null` for a name.
+ */
+export function literalComponentValue(
+  source: string,
+  component: ConstructorComponentEdit,
+): number | null {
+  if (component.kind !== 'literal') return null
+  const parsed = parseExpression(source.slice(component.span.start, component.span.end))
+  if (!parsed.ok) return null
+  let node = parsed.expression
+  let sign = 1
+  while (node.kind === 'unary-expression' && (node.operator === '+' || node.operator === '-')) {
+    if (node.operator === '-') sign = -sign
+    node = node.operand
+  }
+  return node.kind === 'scalar-literal' ? sign * node.value : null
+}
+
+/**
  * Rewrites the literal components in place with the deterministic scalar
  * source format; referenced names are left for their own scalar edits.
  */

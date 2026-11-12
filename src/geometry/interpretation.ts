@@ -40,8 +40,17 @@ export type ViewportCreation = Readonly<{
   objectName: string
 }>
 
-/** Which declared constructor literal a drag rewrites for an entity, when its source is that literal. */
-export type LiteralEdit = Readonly<{ constructor: string; arity: number }>
+/**
+ * Which declared constructor literal a drag rewrites for an entity, when its
+ * source is that literal. With `weightedConstructor`, the entity may also be
+ * written with one more trailing weight argument, such as `point(x, y, w)`:
+ * the drag rewrites the leading `arity` arguments and keeps the weight.
+ */
+export type LiteralEdit = Readonly<{
+  constructor: string
+  arity: number
+  weightedConstructor?: string
+}>
 
 export type Interpretation<E extends InterpretedEntity = InterpretedEntity> = Readonly<{
   interpretationId: string

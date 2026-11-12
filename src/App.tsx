@@ -62,6 +62,7 @@ import {
 import {
   creationSource,
   formatViewportCoordinate,
+  weightedViewportCoordinates,
   nextObjectName,
 } from './visualization/viewportCreation'
 import { describeViewport } from './visualization/viewportDescription'
@@ -124,7 +125,8 @@ import { DEFAULT_POINT_SIZE, POINT_OUTER_SCALE } from './visualization/stroke'
 import { directScalarEdit } from './language/directScalarEdit'
 import {
   directConstructorComponents,
-  directItemConstructorComponents,
+  directItemLiteralEdit,
+  literalComponentValue,
   rewriteConstructorLiterals,
   type ConstructorComponentEdit,
 } from './language/constructorLiteralEdit'
@@ -848,10 +850,14 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
     }
     if (!interpretation.supportsPosition(rendered.entity)) {
       // The entity carries its own location: rewrite its constructor literal
-      // (PGA-VIZ-003) with the pointer's grid-rounded coordinates.
-      const components = literalEditComponents(item, rendered.entity)
-      if (!components) return
-      const values = [target.x, target.y]
+      // (PGA-VIZ-003) with the pointer's grid-rounded coordinates, scaled by
+      // the kept weight of a weighted point (#181).
+      const edit = literalEditTarget(item, rendered.entity)
+      if (!edit) return
+      const { components } = edit
+      const weight = edit.weight ? weightValue(item.source, edit.weight) : 1
+      if (weight === null || weight === 0 || !Number.isFinite(weight)) return
+      const values = weightedViewportCoordinates(point, weight, pixelsPerUnit)
       const rewritten = rewriteConstructorLiterals(item.source, components, values)
       if (rewritten !== item.source) executeCommand({
         kind: 'update-source', itemId, source: rewritten,
@@ -974,11 +980,19 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
       declaredName(candidate.source) === component.name &&
       directScalarEdit(candidate.source) !== null).length === 1)
   }
-  const literalEditComponents = (item: ExpressionItem, entity: InterpretedEntity) => {
+  const literalEditTarget = (item: ExpressionItem, entity: InterpretedEntity) => {
     const edit = interpretation.literalEdit(entity)
-    return edit
-      ? directItemConstructorComponents(item.source, edit.constructor, edit.arity, engine.tuple ?? null)
-      : null
+    return edit ? directItemLiteralEdit(item.source, edit, engine.tuple ?? null) : null
+  }
+  const literalEditComponents = (item: ExpressionItem, entity: InterpretedEntity) =>
+    literalEditTarget(item, entity)?.components ?? null
+  /** The current value of a kept weight: its literal, or the scalar its name declares. */
+  const weightValue = (source: string, weight: ConstructorComponentEdit): number | null => {
+    if (weight.kind === 'literal') return literalComponentValue(source, weight)
+    const evaluation = evaluatedItems.find(({ item }) => declaredName(item.source) === weight.name)?.evaluation
+    if (evaluation?.status !== 'valid' || evaluation.valueType !== 'single' ||
+        evaluation.value.coefficients.some((coefficient, index) => index > 0 && coefficient !== 0)) return null
+    return evaluation.value.coefficients[0] * weight.sign
   }
   /**
    * A position source is a two-argument literal of the interpretation's

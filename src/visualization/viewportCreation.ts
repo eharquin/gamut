@@ -45,6 +45,24 @@ export function formatViewportCoordinate(
   return formatRoundTripNumber(Number(value.toFixed(viewportCoordinateDecimals(pixelsPerUnit))))
 }
 
+/**
+ * The literal coordinates that draw a weighted point `point(x, y, w)` at a
+ * viewport point `(X, Y)`: `(X·w, Y·w)`, each rounded with the pointer step
+ * scaled by `|w|`, so the drawn point keeps the precision of an unweighted
+ * drag. A weight of 1 gives the coordinates of an unweighted drag (#181).
+ */
+export function weightedViewportCoordinates(
+  point: Readonly<{ x: number; y: number }>,
+  weight: number,
+  pixelsPerUnit: number,
+): readonly [number, number] {
+  const scale = pixelsPerUnit / Math.abs(weight)
+  return [
+    Number(formatViewportCoordinate(point.x * weight, scale)),
+    Number(formatViewportCoordinate(point.y * weight, scale)),
+  ]
+}
+
 /** The declaration created for a located object at a viewport point (INTERACT2D-001). */
 export function creationSource(
   constructor: string,

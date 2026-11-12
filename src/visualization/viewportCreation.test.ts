@@ -5,6 +5,7 @@ import {
   nextObjectName,
   vectorCreationSource,
   viewportCoordinateDecimals,
+  weightedViewportCoordinates,
 } from './viewportCreation'
 import { MAX_PIXELS_PER_UNIT, MIN_PIXELS_PER_UNIT } from './viewport'
 
@@ -65,5 +66,27 @@ describe('viewport vector creation', () => {
   it('builds documented VGA vector source', () => {
     expect(vectorCreationSource('V4', { x: 1.25, y: -2.5 }, 72))
       .toBe('V4 = vector(1.25, -2.5)')
+  })
+})
+
+describe('weighted point drag coordinates (#181)', () => {
+  it('multiplies the pointer by the weight, with the step scaled by |w|', () => {
+    // At 100 pixels per unit, a pointer at (3, 1) over point(x, y, 2).
+    expect(weightedViewportCoordinates({ x: 3, y: 1 }, 2, 100)).toEqual([6, 2])
+    // X·w is formatted at the scale 100 / |w| = 50 pixels per unit, the
+    // creation rule for a step of |w| / 100.
+    expect(weightedViewportCoordinates({ x: 1.234, y: -0.456 }, 2, 100))
+      .toEqual([Number(formatViewportCoordinate(2.468, 50)), Number(formatViewportCoordinate(-0.912, 50))])
+    expect(weightedViewportCoordinates({ x: 1.234, y: -0.456 }, 20, 100)).toEqual([24.7, -9.1])
+    expect(weightedViewportCoordinates({ x: 1.234, y: -0.456 }, 1, 100)).toEqual([1.23, -0.46])
+    expect(weightedViewportCoordinates({ x: 1.234, y: -0.456 }, 1, 100))
+      .toEqual([Number(formatViewportCoordinate(1.234, 100)), Number(formatViewportCoordinate(-0.456, 100))])
+  })
+
+  it('keeps the sign of a negative weight and refines a fractional one', () => {
+    expect(weightedViewportCoordinates({ x: 3, y: 1 }, -1, 100)).toEqual([-3, -1])
+    expect(weightedViewportCoordinates({ x: 1.234, y: 2 }, 0.5, 100))
+      .toEqual([Number(formatViewportCoordinate(0.617, 200)), 1])
+    expect(weightedViewportCoordinates({ x: 1.2345, y: 2 }, 0.01, 100)).toEqual([0.0123, 0.02])
   })
 })

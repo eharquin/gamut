@@ -25,6 +25,14 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   so `P = (2, 1)` becomes `P = (2.5, 1)`, not `point(2.5, 1)`. PGA position
   fields accept the tuple `(x, y)` and keep it when the base is dragged; the
   position diagnostic that pointed tuples to `point(1, 2)` is gone (#180).
+- A weighted point `point(x, y, w)`, or the tuple `(x, y, w)`, can be dragged
+  and moved with the arrow keys, keeping its weight: dragging it to `(X, Y)`
+  rewrites `point(X·w, Y·w, w)`, rounded with the pointer step scaled by
+  `|w|`, so `P = point(4, 2, 2)` dragged to `(3, 1)` becomes
+  `P = point(6, 2, 2)`. A negative weight keeps its sign and a weight written
+  as a name is not touched. `point(x, y, 0)` and `(x, y, 0)` are ideal points
+  and get the head and base handles of `ipoint(x, y)`, keeping the zero.
+  PGA-VIZ-003 and decision D10 are extended (#181).
 
 ## 0.2.0 - 2026-11-10
 

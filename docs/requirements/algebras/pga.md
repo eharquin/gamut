@@ -149,15 +149,21 @@ to milestones that explicitly include the standard PGA interpretation.
   its direction, or both; the arrow carries the head and base handles of a
   positioned object. Versors and mixed multivectors shall be reported
   textually and shall not be drawn.
-- **PGA-VIZ-003:** Direct manipulation in the first milestone shall be limited
-  to moving a point whose source is a literal `point(x, y)`, to the head and
-  base of an ideal point whose source is a literal `ipoint(x, y)`, and to a
-  line whose source is a literal `line(a, b, c)` as specified by PGA-VIZ-004,
-  rewriting those literals with the deterministic precision rules of EDIT and
-  INTERACT2D; a coordinate tuple `(x, y)` is manipulated as the
-  `point(x, y)` it denotes (PGA-015) and keeps its tuple spelling. Anchoring
-  to Euclidean points and interactive motors are excluded until separately
-  specified.
+- **PGA-VIZ-003:** Direct manipulation shall be limited to moving a point
+  whose source is a literal `point(x, y)` or `point(x, y, w)`, to the head and
+  base of an ideal point whose source is a literal `ipoint(x, y)` or
+  `point(x, y, 0)`, and to a line whose source is a literal `line(a, b, c)` as
+  specified by PGA-VIZ-004, rewriting those literals with the deterministic
+  precision rules of EDIT and INTERACT2D; a coordinate tuple `(x, y)` or
+  `(x, y, w)` is manipulated as the point it denotes (PGA-015) and keeps its
+  tuple spelling. Dragging a weighted point to `(X, Y)` shall rewrite
+  `point(x, y, w)` as `point(X·w, Y·w, w)`, so the drawn point lands under the
+  pointer and the weight, including its sign, is kept; `X·w` and `Y·w` are
+  rounded with the pointer step scaled by `|w|`. Only `x` and `y` are
+  rewritten: a weight written as a name is left untouched and its current
+  value is used. A point with a zero weight is an ideal point: its head drag
+  rewrites `x` and `y` and keeps the zero. Anchoring to Euclidean points and
+  interactive motors are excluded until separately specified.
 - **PGA-VIZ-004:** A Euclidean line shall show a translucent halo while
   hovered or selected, and may show discreet orientation ticks on its
   positive side, toggled by the item's `orientationVisible` appearance.
