@@ -131,7 +131,7 @@ import {
 import { primitiveBase } from './visualization/anchoring'
 import { directPositionAnchorReference } from './language/directVectorEdit'
 import { snapToControlBounds } from './application/scalarPlayback'
-import { DEFAULT_SCALAR_ANIMATION, useScalarPlayback } from './application/useScalarPlayback'
+import { DEFAULT_SCALAR_ANIMATION, useScalarPlayback } from './hooks/useScalarPlayback'
 import { declaredName } from './language/declaredName'
 import './App.css'
 
