@@ -7,6 +7,12 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Fixed
+
+- Saving a graph while a slider animation plays now stops the animation and
+  saves the values it stopped on, so the unsaved-changes dot disappears and
+  stays hidden until the next change (#265).
+
 ## 0.2.0 - 2026-11-10
 
 Release notes: [docs/releases/0.2.0.md](docs/releases/0.2.0.md); tag

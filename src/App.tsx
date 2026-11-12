@@ -2162,6 +2162,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false }: {
    */
   const commitLibrarySave = (name: string, asNew = false): boolean => {
     // Save as new graph stores a fresh identity and leaves the bound graph as saved.
+    // The graph is saved with the values the sliders stop on, and stays saved.
+    if (playback.anyPlaying) playback.stopAll('the graph was saved')
     const candidate = ephemeral || asNew ? crypto.randomUUID() : expressionDoc.id
     let id: string
     try {
