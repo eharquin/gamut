@@ -3463,6 +3463,7 @@ line.manipulation-focus-ring {
 }
 
 .library-new,
+.library-new-folder,
 .library-save-as {
   align-self: flex-start;
   padding: 4px 8px;
@@ -3475,6 +3476,7 @@ line.manipulation-focus-ring {
 }
 
 .library-new:hover,
+.library-new-folder:hover,
 .library-save-as:hover {
   background: var(--accent-soft);
   border-color: var(--accent-border);
@@ -3858,4 +3860,41 @@ html.is-embedded body {
 .folder-error {
   color: var(--error);
   font-size: 0.72rem;
+}
+
+/* Library folder trees (STORE-016). */
+.library-tree > li {
+  margin-inline-start: calc(var(--folder-depth, 0) * 14px);
+}
+
+.library-tree > li[hidden] {
+  display: none;
+}
+
+.library-tree > li.library-folder > .folder-row {
+  border-radius: 4px;
+}
+
+.library-tree.is-drop-target {
+  outline: 2px dashed var(--accent-border);
+  outline-offset: 2px;
+}
+
+.library-tree > li[draggable='true'] {
+  cursor: grab;
+}
+
+.library-move {
+  max-width: 9rem;
+  padding: 2px 4px;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font: 0.68rem var(--font-mono);
+}
+
+.library-move:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }

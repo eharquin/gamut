@@ -112,6 +112,24 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - In a temporary shared-scene session, **My library** states that browser
   storage is not used, and its **Add to my library** copies the scene into
   the library, opens the copy, and ends the session (#266).
+- **My library** and **Examples** are organized in folders (#267). In My
+  library, **+ New folder** and the **+** of a folder create nested folders,
+  named in place; a folder can be renamed (F2 or ✎) and removed. Removing a
+  folder that holds graphs deletes its graphs and subfolders after a
+  confirmation in the panel that says how many graphs are deleted. A graph
+  moves into or out of a folder with its **Move to folder** menu or by
+  dragging it onto a folder, onto another graph, or onto the list for the top
+  level; the move is announced and focus stays on the graph. Folders are
+  listed by name before the graphs; the All / VGA / PGA filter stays and
+  shows only the folders that hold a graph of that algebra. Examples are in a
+  fixed, read-only tree (`VGA(2)`, `PGA(2)`), and **Add to my library** stores
+  the copy under the example's folder path, creating the folders that are
+  missing. Collapsed folders are remembered per browser
+  (`gamut.libraryCollapsedFolders`), except in a temporary shared-scene
+  session, which writes nothing. The index keeps version 1: an entry gains an
+  optional `folder`, the folder names from the root, and empty folders are
+  stored under `gamut.library.v1.folders`; release 0.2.0 keeps every graph,
+  and a graph it saves again moves to the top level.
 - A scene opened from a link no longer shows the “Temporary session. Changes
   are not saved automatically.” banner or its **Save local copy** button
   (#287). **Save**, with the dot that shows unsaved changes, does the same: it

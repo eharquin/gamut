@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
-import { filterLibraryEntries, type LibraryEntry } from '../document/documentLibrary'
+import { entryFolder, filterLibraryEntries, libraryFolderEntries, type LibraryEntry } from '../document/documentLibrary'
+import { ancestorPaths, describeFolder, folderKey, samePath, withAncestors, type FolderPath } from '../document/folderModel'
+import type { LibraryFolderActions } from '../hooks/useLibraryFolderActions'
+import { useLibraryFolderCollapse } from '../hooks/useLibraryFolderCollapse'
+import { LibraryTree } from './LibraryTree'
 import type { AlgebraDefinition } from '../algebra/algebraDefinition'
 import { readExamples, type LibraryExample } from '../examples'
 import { useMediaQuery } from '../hooks/useMediaQuery'
@@ -21,6 +25,7 @@ type Pending =
     | { kind: 'discard'; then: 'example'; example: LibraryExample }
   >
   | Readonly<{ kind: 'rename'; entry: LibraryEntry; draft: string }>
+  | Readonly<{ kind: 'delete-folder'; path: FolderPath; count: number }>
 
 export type LibraryPanelProps = Readonly<{
   /** The button focus returns to on close: Library, or Save when Save asked for a name. */
@@ -32,6 +37,9 @@ export type LibraryPanelProps = Readonly<{
    */
   overlayHost: HTMLElement | null
   entries: readonly LibraryEntry[]
+  /** Every folder of My library, empty ones included (STORE-016). */
+  folders: readonly FolderPath[]
+  folderActions: LibraryFolderActions
   /** The registered algebras, in filter order; the filter shows their family, such as `VGA`. */
   algebras: readonly Pick<AlgebraDefinition, 'algebraId' | 'badge'>[]
   /** Identity of the open graph, marked in the list when it is stored. */
@@ -96,7 +104,7 @@ const SECTIONS: readonly Readonly<{ id: Section; label: string }>[] = [
  * panel; Escape answers a confirmation before it closes the panel.
  */
 export function LibraryPanel({
-  returnFocusRef, overlayHost, entries, algebras, openId, naming, diagnostic,
+  returnFocusRef, overlayHost, entries, folders, folderActions, algebras, openId, naming, diagnostic,
   unsavedChanges, temporarySession, currentName,
   onSaveAs, onSaveAsNew, onNew, onOpen, onRename, onDuplicate, onDelete,
   onOpenExample, onAddExample, onAddScene, onClose,
@@ -115,6 +123,9 @@ export function LibraryPanel({
   // Save as new graph asks for the copy's name in the same form as a first save.
   const [savingAsNew, setSavingAsNew] = useState(false)
   const showNaming = naming !== null || savingAsNew
+  const collapse = useLibraryFolderCollapse(temporarySession)
+  const [renamingFolder, setRenamingFolder] = useState<string | null>(null)
+  const [announcement, setAnnouncement] = useState('')
 
   // Focus moves into the panel on open and returns to the button that opened it.
   useEffect(() => {
@@ -223,8 +234,12 @@ export function LibraryPanel({
     }
     const question = pending.kind === 'delete'
       ? `Delete “${pending.entry.name}” from the library? This cannot be undone.`
-      : 'The open graph has changes that are not saved in the library. Discard them?'
-    const confirm = pending.kind === 'delete' ? 'Delete' : pending.then === 'new' ? 'Discard and create' : 'Discard and open'
+      : pending.kind === 'delete-folder'
+        ? `Delete the folder “${describeFolder(pending.path)}” with its subfolders and the ${pending.count === 1 ? 'graph' : `${pending.count} graphs`} it contains? This cannot be undone.`
+        : 'The open graph has changes that are not saved in the library. Discard them?'
+    const confirm = pending.kind === 'delete' ? 'Delete'
+      : pending.kind === 'delete-folder' ? `Delete folder and ${pending.count === 1 ? 'graph' : `${pending.count} graphs`}`
+        : pending.then === 'new' ? 'Discard and create' : 'Discard and open'
     return (
       <div className="library-confirm" role="alertdialog" aria-label="Confirm" aria-describedby="library-confirm-question">
         <p id="library-confirm-question">{question}</p>
@@ -235,6 +250,7 @@ export function LibraryPanel({
             onClick={() => {
               setPending(null)
               if (pending.kind === 'delete') onDelete(pending.entry)
+              else if (pending.kind === 'delete-folder') deleteFolder(pending.path)
               else if (pending.then === 'new') onNew()
               else if (pending.then === 'open') onOpen(pending.entry)
               else onOpenExample(pending.example)
@@ -248,6 +264,47 @@ export function LibraryPanel({
 
   const shownEntries = filterLibraryEntries(entries, algebraId)
   const shownExamples = examples.filter((example) => algebraId === null || example.algebraId === algebraId)
+  // A filtered list shows the folders that hold a graph of that algebra, and
+  // those that hold no graph at all, so that a new folder is not hidden.
+  const shownFolders = algebraId === null ? folders : withAncestors([
+    ...folders.filter((path) => libraryFolderEntries(entries, path).length === 0),
+    ...shownEntries.map(entryFolder),
+  ])
+  const createFolder = (parent: FolderPath) => {
+    const path = folderActions.createFolder(parent)
+    if (!path) return
+    if (parent.length > 0 && collapse.isCollapsed('mine', parent)) collapse.toggle('mine', parent)
+    setRenamingFolder(folderKey(path))
+    setAnnouncement(`Folder ${path[path.length - 1]} created in ${describeFolder(parent)}.`)
+  }
+  const deleteFolder = (path: FolderPath) => {
+    if (!folderActions.deleteFolder(path)) return
+    collapse.remove('mine', path)
+    setAnnouncement(`Folder ${describeFolder(path)} deleted.`)
+  }
+  const requestDeleteFolder = (path: FolderPath) => {
+    const count = libraryFolderEntries(entries, path).length
+    if (count > 0) setPending({ kind: 'delete-folder', path, count })
+    else deleteFolder(path)
+  }
+  const renameFolder = (path: FolderPath, name: string) => {
+    const problem = folderActions.renameFolder(path, name)
+    const renamed = [...path.slice(0, -1), name.trim()]
+    if (problem === null && !samePath(path, renamed)) collapse.rename('mine', path, renamed)
+    return problem
+  }
+  const moveGraph = (entry: LibraryEntry, folder: FolderPath) => {
+    if (samePath(entryFolder(entry), folder) || !folderActions.moveGraph(entry, folder)) return
+    // Every folder above the graph opens, so that its row stays visible.
+    for (const ancestor of ancestorPaths(folder))
+      if (collapse.isCollapsed('mine', ancestor)) collapse.toggle('mine', ancestor)
+    setAnnouncement(`Moved ${entry.name} to ${folder.length === 0 ? 'the top level' : `folder ${describeFolder(folder)}`}.`)
+    // Focus returns to the row's control once the list has reordered.
+    requestAnimationFrame(() => document.getElementById(`library-move-${entry.id}`)?.focus())
+  }
+  const folderOptions = [{ key: folderKey([]), path: [] as FolderPath, label: 'Top level' },
+    ...[...folders].sort((left, right) => describeFolder(left).localeCompare(describeFolder(right)))
+      .map((path) => ({ key: folderKey(path), path, label: describeFolder(path) }))]
 
   const panel = (
     <section
@@ -319,6 +376,7 @@ export function LibraryPanel({
           {diagnostic && <p className="library-diagnostic" role="alert">{diagnostic}</p>}
           <div className="library-commands">
             <button type="button" className="library-new" onClick={requestNew}>+ New graph</button>
+            <button type="button" className="library-new-folder" onClick={() => createFolder([])}>+ New folder</button>
             {!naming && !savingAsNew && (
               <button
                 type="button"
@@ -327,38 +385,77 @@ export function LibraryPanel({
               >Save as new graph…</button>
             )}
           </div>
-          {shownEntries.length === 0 ? (
+          {shownEntries.length === 0 && shownFolders.length === 0 ? (
             <p className="library-empty">{entries.length === 0
               ? 'No saved graphs yet. Save keeps the open graph here.'
               : 'No saved graphs in this algebra.'}</p>
           ) : (
-            <ul className="library-list" aria-label="Saved graphs">
-              {shownEntries.map((entry) => (
-                <li key={entry.id} className={entry.id === openId ? 'is-open' : undefined}>
-                  <button
-                    type="button"
-                    className="library-open"
-                    aria-current={entry.id === openId ? 'true' : undefined}
-                    aria-label={`Open ${entry.name}`}
-                    onClick={() => requestOpen(entry)}
-                  >
-                    <span className="library-name">{entry.name}</span>
+            <LibraryTree
+              label="Saved graphs"
+              entries={shownEntries}
+              entryId={(entry) => entry.id}
+              entryFolder={entryFolder}
+              folders={shownFolders}
+              isCollapsed={(path) => collapse.isCollapsed('mine', path)}
+              onToggle={(path) => collapse.toggle('mine', path)}
+              entryClassName={(entry) => entry.id === openId ? 'is-open' : undefined}
+              onMoveEntry={(id, folder) => {
+                const entry = entries.find((candidate) => candidate.id === id)
+                if (entry) moveGraph(entry, folder)
+              }}
+              folderControls={(path) => ({
+                renaming: renamingFolder === folderKey(path),
+                onRenamingChange: (renaming) => setRenamingFolder(renaming ? folderKey(path) : null),
+                onRename: (name) => renameFolder(path, name),
+                onDelete: () => requestDeleteFolder(path),
+                actions: (
+                  <button type="button" className="folder-action" aria-label={`New folder in ${path[path.length - 1]}`}
+                    title="New folder inside" onClick={() => createFolder(path)}>
+                    <span aria-hidden="true">+</span>
                   </button>
-                  <div className="library-meta">
-                    <span className="library-algebra">{label(entry.algebraId)}</span>
-                    <time dateTime={entry.updatedAt}>{formatDate(entry.updatedAt)}</time>
-                    <div className="library-actions">
-                      <button type="button" aria-label={`Rename ${entry.name}`} title="Rename"
-                        onClick={() => setPending({ kind: 'rename', entry, draft: entry.name })}>Rename</button>
-                      <button type="button" aria-label={`Duplicate ${entry.name}`} title="Duplicate"
-                        onClick={() => onDuplicate(entry)}>Duplicate</button>
-                      <button type="button" aria-label={`Delete ${entry.name}`} title="Delete"
-                        onClick={() => setPending({ kind: 'delete', entry })}>Delete</button>
-                    </div>
+                ),
+              })}
+              renderEntry={(entry) => <>
+                <button
+                  type="button"
+                  className="library-open"
+                  aria-current={entry.id === openId ? 'true' : undefined}
+                  aria-label={`Open ${entry.name}`}
+                  onClick={() => requestOpen(entry)}
+                >
+                  <span className="library-name">{entry.name}</span>
+                </button>
+                <div className="library-meta">
+                  <span className="library-algebra">{label(entry.algebraId)}</span>
+                  <time dateTime={entry.updatedAt}>{formatDate(entry.updatedAt)}</time>
+                  <div className="library-actions">
+                    <button type="button" aria-label={`Rename ${entry.name}`} title="Rename"
+                      onClick={() => setPending({ kind: 'rename', entry, draft: entry.name })}>Rename</button>
+                    <button type="button" aria-label={`Duplicate ${entry.name}`} title="Duplicate"
+                      onClick={() => onDuplicate(entry)}>Duplicate</button>
+                    <button type="button" aria-label={`Delete ${entry.name}`} title="Delete"
+                      onClick={() => setPending({ kind: 'delete', entry })}>Delete</button>
+                    {folders.length > 0 && (
+                      <select
+                        id={`library-move-${entry.id}`}
+                        className="library-move"
+                        aria-label={`Move ${entry.name} to folder`}
+                        title="Move to folder"
+                        value={folderKey(entryFolder(entry))}
+                        onChange={(event) => {
+                          const option = folderOptions.find((candidate) => candidate.key === event.target.value)
+                          if (option) moveGraph(entry, option.path)
+                        }}
+                      >
+                        {folderOptions.map((option) => (
+                          <option key={option.key} value={option.key}>{option.label}</option>
+                        ))}
+                      </select>
+                    )}
                   </div>
-                </li>
-              ))}
-            </ul>
+                </div>
+              </>}
+            />
           )}
         </div>
         <div className="library-section" id="library-section-examples" role="tabpanel" aria-labelledby="library-tab-examples"
@@ -369,30 +466,38 @@ export function LibraryPanel({
           {shownExamples.length === 0 ? (
             <p className="library-empty">No examples in this algebra.</p>
           ) : (
-            <ul className="library-list" aria-label="Examples">
-              {shownExamples.map((example) => (
-                <li key={example.id}>
-                  <button
-                    type="button"
-                    className="library-open"
-                    aria-label={`Open example ${example.name}`}
-                    onClick={() => requestExample(example)}
-                  >
-                    <span className="library-name">{example.name}</span>
-                    {example.description && <span className="library-description">{example.description}</span>}
-                  </button>
-                  <div className="library-meta">
-                    <span className="library-algebra">{label(example.algebraId)}</span>
-                    <div className="library-actions">
-                      <button type="button" aria-label={`Add ${example.name} to my library`} title="Add to my library"
-                        onClick={() => onAddExample(example)}>Add to my library</button>
-                    </div>
+            <LibraryTree
+              label="Examples"
+              entries={shownExamples}
+              entryId={(example) => example.id}
+              entryFolder={(example) => example.folder}
+              folders={[]}
+              // The examples keep the order of their index.
+              order="entries"
+              isCollapsed={(path) => collapse.isCollapsed('examples', path)}
+              onToggle={(path) => collapse.toggle('examples', path)}
+              renderEntry={(example) => <>
+                <button
+                  type="button"
+                  className="library-open"
+                  aria-label={`Open example ${example.name}`}
+                  onClick={() => requestExample(example)}
+                >
+                  <span className="library-name">{example.name}</span>
+                  {example.description && <span className="library-description">{example.description}</span>}
+                </button>
+                <div className="library-meta">
+                  <span className="library-algebra">{label(example.algebraId)}</span>
+                  <div className="library-actions">
+                    <button type="button" aria-label={`Add ${example.name} to my library`} title="Add to my library"
+                      onClick={() => onAddExample(example)}>Add to my library</button>
                   </div>
-                </li>
-              ))}
-            </ul>
+                </div>
+              </>}
+            />
           )}
         </div>
+        <output className="visually-hidden" aria-live="polite">{announcement}</output>
       </div>
     </section>
   )

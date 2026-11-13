@@ -98,6 +98,7 @@ import {
   comparableSource,
   duplicateInLibrary,
   LIBRARY_DOCUMENT_PREFIX,
+  LIBRARY_FOLDERS_KEY,
   LIBRARY_INDEX_KEY,
   LIBRARY_OPEN_KEY,
   libraryDocumentKey,
@@ -112,6 +113,7 @@ import {
   type LibraryRead,
 } from './document/documentLibrary'
 import { LibraryPanel } from './components/LibraryPanel'
+import { useLibraryFolderActions } from './hooks/useLibraryFolderActions'
 import type { LibraryExample } from './examples'
 import { selectDroppedDocument } from './document/droppedDocument'
 import { createSceneLink, decodeSceneFragment, hasSceneFragment, SHARE_URL_WARNING_LENGTH } from './document/sceneLink'
@@ -2030,7 +2032,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
   const storageListener = useRef<(event: StorageEvent) => void>(() => {})
   useEffect(() => {
     storageListener.current = (event: StorageEvent) => {
-      if (event.key !== null && event.key !== LIBRARY_INDEX_KEY && !event.key.startsWith(LIBRARY_DOCUMENT_PREFIX)) return
+      if (event.key !== null && event.key !== LIBRARY_INDEX_KEY && event.key !== LIBRARY_FOLDERS_KEY
+        && !event.key.startsWith(LIBRARY_DOCUMENT_PREFIX)) return
       if (library === null && !libraryOpen) return
       setLibrary(readLibrary(browserLibraryStorage(), libraryOptions()))
       if (boundId !== null && (event.key === null || event.key === libraryDocumentKey(boundId))) {
@@ -2054,14 +2057,27 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
     setLibrary(read)
     return read
   }
+  /** Shows the library after a write; its folders are read again with it. */
   const reportLibrary = (entries: readonly LibraryEntry[], diagnostic: string | null) =>
-    setLibrary({ entries, diagnostic })
+    setLibrary({ entries, folders: readLibrary(browserLibraryStorage(), libraryOptions()).folders, diagnostic })
   const reportLibraryFailure = (error: unknown, fallback: string) => {
     setLibrary({
-      entries: readLibrary(browserLibraryStorage(), libraryOptions()).entries,
+      ...readLibrary(browserLibraryStorage(), libraryOptions()),
       diagnostic: error instanceof LibraryError ? error.diagnostic : fallback,
     })
   }
+  const libraryFolderActions = useLibraryFolderActions({
+    library,
+    libraryOptions,
+    setLibrary,
+    reportLibraryFailure,
+    // The open graph stays open, as a graph that is no longer saved.
+    onGraphsDeleted: (ids) => {
+      if (boundId === null || !ids.includes(boundId)) return
+      setBoundId(null)
+      setSavedRevision(null)
+    },
+  })
   const closeLibrary = useCallback(() => {
     setLibraryOpen(false)
     setLibraryNaming(null)
@@ -2264,7 +2280,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
   }
   const addExampleToLibrary = (example: LibraryExample) => {
     try {
-      const added = addCopyToLibrary(browserLibraryStorage(), example.document, libraryOptions())
+      // The copy keeps the example's folder path, created when missing (STORE-015).
+      const added = addCopyToLibrary(browserLibraryStorage(), example.document, { ...libraryOptions(), folder: example.folder })
       reportLibrary(added.entries, null)
       setCopyNotice({ message: `Added “${added.name}” to my library.`, durationMs: 2500 })
     } catch (error) {
@@ -3023,6 +3040,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
           returnFocusRef={libraryReturnFocusRef}
           overlayHost={viewportHost}
           entries={library?.entries ?? []}
+          folders={library?.folders ?? []}
+          folderActions={libraryFolderActions}
           algebras={algebraRegistry.definitions()}
           openId={ephemeral ? '' : boundId ?? ''}
           naming={libraryNaming}
