@@ -16,8 +16,8 @@ export type LibraryFolderActions = Readonly<{
   createFolder(parent: FolderPath): FolderPath | null
   /** Returns why the name is refused, or null once renamed. */
   renameFolder(path: FolderPath, name: string): string | null
-  /** Deletes a folder with its subfolders and graphs, already confirmed by the panel. */
-  deleteFolder(path: FolderPath): void
+  /** Deletes a folder with its subfolders and graphs, already confirmed by the panel; false when the write failed. */
+  deleteFolder(path: FolderPath): boolean
   /** Moves a graph into a folder, or to the root; false when the write failed. */
   moveGraph(entry: LibraryEntry, folder: FolderPath): boolean
 }>
@@ -71,8 +71,10 @@ export function useLibraryFolderActions({
         const deleted = deleteLibraryFolder(browserLibraryStorage(), path, libraryOptions())
         show(deleted)
         onGraphsDeleted(deleted.deletedIds)
+        return true
       } catch (error) {
         reportLibraryFailure(error, 'LIBRARY_WRITE_FAILED: The folder could not be deleted.')
+        return false
       }
     },
     moveGraph(entry, folder) {

@@ -98,6 +98,7 @@ import {
   comparableSource,
   duplicateInLibrary,
   LIBRARY_DOCUMENT_PREFIX,
+  LIBRARY_FOLDERS_KEY,
   LIBRARY_INDEX_KEY,
   LIBRARY_OPEN_KEY,
   libraryDocumentKey,
@@ -2031,7 +2032,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
   const storageListener = useRef<(event: StorageEvent) => void>(() => {})
   useEffect(() => {
     storageListener.current = (event: StorageEvent) => {
-      if (event.key !== null && event.key !== LIBRARY_INDEX_KEY && !event.key.startsWith(LIBRARY_DOCUMENT_PREFIX)) return
+      if (event.key !== null && event.key !== LIBRARY_INDEX_KEY && event.key !== LIBRARY_FOLDERS_KEY
+        && !event.key.startsWith(LIBRARY_DOCUMENT_PREFIX)) return
       if (library === null && !libraryOpen) return
       setLibrary(readLibrary(browserLibraryStorage(), libraryOptions()))
       if (boundId !== null && (event.key === null || event.key === libraryDocumentKey(boundId))) {

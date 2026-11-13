@@ -82,6 +82,54 @@ describe('library folders (STORE-016, A11Y-011)', () => {
     expect(folderButton('Talks')).toHaveAttribute('aria-expanded', 'false')
   })
 
+  it('keeps focus on a renamed folder, with its collapsed state, and forgets it once deleted', async () => {
+    render(<App />)
+    openLibrary()
+    createFolder('Talks')
+    await waitFor(() => expect(folderButton('Talks')).toHaveFocus())
+    fireEvent.click(folderButton('Talks'))
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Rename folder Talks' }))
+    const field = within(panel()).getByRole('textbox', { name: 'Name of folder Talks' })
+    fireEvent.change(field, { target: { value: 'Lectures' } })
+    fireEvent.keyDown(field, { key: 'Enter' })
+    expect(folderButton('Lectures')).toHaveAttribute('aria-expanded', 'false')
+    expect(JSON.parse(window.localStorage.getItem(LIBRARY_COLLAPSED_FOLDERS_KEY)!).mine).toEqual([JSON.stringify(['Lectures'])])
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Remove folder Lectures' }))
+    expect(within(panel()).getByText('Folder Lectures deleted.')).toBeInTheDocument()
+    expect(JSON.parse(window.localStorage.getItem(LIBRARY_COLLAPSED_FOLDERS_KEY)!).mine).toEqual([])
+  })
+
+  it('shows a new folder while an algebra filter is active', () => {
+    render(<App />)
+    saveAs('Rotation talk')
+    openLibrary()
+    const filters = within(within(panel()).getByRole('group', { name: 'Filter by algebra' })).getAllByRole('button')
+    fireEvent.click(filters[filters.length - 1])
+    createFolder('Talks')
+    expect(folderButton('Talks')).toBeInTheDocument()
+  })
+
+  it('opens every collapsed folder above a graph moved into a subfolder', () => {
+    render(<App />)
+    saveAs('Rotation talk')
+    openLibrary()
+    createFolder('Talks')
+    createFolder('2026', 'Talks')
+    fireEvent.click(folderButton('Talks'))
+    fireEvent.change(within(panel()).getByRole('combobox', { name: 'Move Rotation talk to folder' }),
+      { target: { value: JSON.stringify(['Talks', '2026']) } })
+    expect(folderButton('Talks')).toHaveAttribute('aria-expanded', 'true')
+    expect(within(panel()).getByRole('button', { name: 'Open Rotation talk' })).toBeVisible()
+  })
+
+  it('follows a folder created in another tab', () => {
+    render(<App />)
+    openLibrary()
+    window.localStorage.setItem(LIBRARY_FOLDERS_KEY, JSON.stringify({ version: 1, folders: [['Elsewhere']] }))
+    fireEvent(window, new StorageEvent('storage', { key: LIBRARY_FOLDERS_KEY }))
+    expect(folderButton('Elsewhere')).toBeInTheDocument()
+  })
+
   it('deletes a non-empty folder after a confirmation that states how many graphs', () => {
     render(<App />)
     saveAs('One')

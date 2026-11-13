@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { entryFolder, filterLibraryEntries, libraryFolderEntries, type LibraryEntry } from '../document/documentLibrary'
-import { describeFolder, folderKey, samePath, withAncestors, type FolderPath } from '../document/folderModel'
+import { ancestorPaths, describeFolder, folderKey, samePath, withAncestors, type FolderPath } from '../document/folderModel'
 import type { LibraryFolderActions } from '../hooks/useLibraryFolderActions'
 import { useLibraryFolderCollapse } from '../hooks/useLibraryFolderCollapse'
 import { LibraryTree } from './LibraryTree'
@@ -250,10 +250,8 @@ export function LibraryPanel({
             onClick={() => {
               setPending(null)
               if (pending.kind === 'delete') onDelete(pending.entry)
-              else if (pending.kind === 'delete-folder') {
-                folderActions.deleteFolder(pending.path)
-                setAnnouncement(`Folder ${describeFolder(pending.path)} deleted.`)
-              } else if (pending.then === 'new') onNew()
+              else if (pending.kind === 'delete-folder') deleteFolder(pending.path)
+              else if (pending.then === 'new') onNew()
               else if (pending.then === 'open') onOpen(pending.entry)
               else onOpenExample(pending.example)
             }}
@@ -266,8 +264,12 @@ export function LibraryPanel({
 
   const shownEntries = filterLibraryEntries(entries, algebraId)
   const shownExamples = examples.filter((example) => algebraId === null || example.algebraId === algebraId)
-  // A filtered list shows only the folders that hold a graph of that algebra.
-  const shownFolders = algebraId === null ? folders : withAncestors(shownEntries.map(entryFolder))
+  // A filtered list shows the folders that hold a graph of that algebra, and
+  // those that hold no graph at all, so that a new folder is not hidden.
+  const shownFolders = algebraId === null ? folders : withAncestors([
+    ...folders.filter((path) => libraryFolderEntries(entries, path).length === 0),
+    ...shownEntries.map(entryFolder),
+  ])
   const createFolder = (parent: FolderPath) => {
     const path = folderActions.createFolder(parent)
     if (!path) return
@@ -275,17 +277,27 @@ export function LibraryPanel({
     setRenamingFolder(folderKey(path))
     setAnnouncement(`Folder ${path[path.length - 1]} created in ${describeFolder(parent)}.`)
   }
+  const deleteFolder = (path: FolderPath) => {
+    if (!folderActions.deleteFolder(path)) return
+    collapse.remove('mine', path)
+    setAnnouncement(`Folder ${describeFolder(path)} deleted.`)
+  }
   const requestDeleteFolder = (path: FolderPath) => {
     const count = libraryFolderEntries(entries, path).length
     if (count > 0) setPending({ kind: 'delete-folder', path, count })
-    else {
-      folderActions.deleteFolder(path)
-      setAnnouncement(`Folder ${describeFolder(path)} deleted.`)
-    }
+    else deleteFolder(path)
+  }
+  const renameFolder = (path: FolderPath, name: string) => {
+    const problem = folderActions.renameFolder(path, name)
+    const renamed = [...path.slice(0, -1), name.trim()]
+    if (problem === null && !samePath(path, renamed)) collapse.rename('mine', path, renamed)
+    return problem
   }
   const moveGraph = (entry: LibraryEntry, folder: FolderPath) => {
     if (samePath(entryFolder(entry), folder) || !folderActions.moveGraph(entry, folder)) return
-    if (folder.length > 0 && collapse.isCollapsed('mine', folder)) collapse.toggle('mine', folder)
+    // Every folder above the graph opens, so that its row stays visible.
+    for (const ancestor of ancestorPaths(folder))
+      if (collapse.isCollapsed('mine', ancestor)) collapse.toggle('mine', ancestor)
     setAnnouncement(`Moved ${entry.name} to ${folder.length === 0 ? 'the top level' : `folder ${describeFolder(folder)}`}.`)
     // Focus returns to the row's control once the list has reordered.
     requestAnimationFrame(() => document.getElementById(`library-move-${entry.id}`)?.focus())
@@ -394,7 +406,7 @@ export function LibraryPanel({
               folderControls={(path) => ({
                 renaming: renamingFolder === folderKey(path),
                 onRenamingChange: (renaming) => setRenamingFolder(renaming ? folderKey(path) : null),
-                onRename: (name) => folderActions.renameFolder(path, name),
+                onRename: (name) => renameFolder(path, name),
                 onDelete: () => requestDeleteFolder(path),
                 actions: (
                   <button type="button" className="folder-action" aria-label={`New folder in ${path[path.length - 1]}`}

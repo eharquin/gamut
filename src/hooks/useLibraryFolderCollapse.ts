@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { folderKey, type FolderPath } from '../document/folderModel'
+import { folderKey, isFolderPath, isWithin, replacePrefix, type FolderPath } from '../document/folderModel'
 
 /** Per-browser preference: the collapsed folders of each library section (STORE-016). */
 export const LIBRARY_COLLAPSED_FOLDERS_KEY = 'gamut.libraryCollapsedFolders'
@@ -18,6 +18,15 @@ function readCollapsed(): Collapsed {
   }
 }
 
+function keyPath(key: string): FolderPath | null {
+  try {
+    const path: unknown = JSON.parse(key)
+    return isFolderPath(path) ? path : null
+  } catch {
+    return null
+  }
+}
+
 /**
  * The collapsed state of library folders, a per-browser preference and not
  * document content (STORE-016). It tolerates unavailable storage, and a
@@ -30,13 +39,9 @@ export function useLibraryFolderCollapse(temporarySession: boolean) {
     (section: LibrarySection, path: FolderPath) => collapsed[section].includes(folderKey(path)),
     [collapsed],
   )
-  const toggle = useCallback((section: LibrarySection, path: FolderPath) => {
+  const update = useCallback((section: LibrarySection, change: (keys: readonly string[]) => readonly string[]) => {
     setCollapsed((current) => {
-      const key = folderKey(path)
-      const keys = current[section].includes(key)
-        ? current[section].filter((candidate) => candidate !== key)
-        : [...current[section], key]
-      const next = { ...current, [section]: keys }
+      const next = { ...current, [section]: change(current[section]) }
       if (!temporarySession) {
         try {
           window.localStorage.setItem(LIBRARY_COLLAPSED_FOLDERS_KEY, JSON.stringify(next))
@@ -47,5 +52,23 @@ export function useLibraryFolderCollapse(temporarySession: boolean) {
       return next
     })
   }, [temporarySession])
-  return { isCollapsed, toggle }
+  const toggle = useCallback((section: LibrarySection, path: FolderPath) => {
+    const key = folderKey(path)
+    update(section, (keys) => keys.includes(key) ? keys.filter((candidate) => candidate !== key) : [...keys, key])
+  }, [update])
+  /** The collapsed state follows a renamed folder and its subfolders. */
+  const rename = useCallback((section: LibrarySection, from: FolderPath, to: FolderPath) => {
+    update(section, (keys) => keys.map((key) => {
+      const path = keyPath(key)
+      return path && isWithin(path, from) ? folderKey(replacePrefix(path, from, to)) : key
+    }))
+  }, [update])
+  /** Forgets a deleted folder and its subfolders, so that a later folder of that name starts expanded. */
+  const remove = useCallback((section: LibrarySection, deleted: FolderPath) => {
+    update(section, (keys) => keys.filter((key) => {
+      const path = keyPath(key)
+      return !(path && isWithin(path, deleted))
+    }))
+  }, [update])
+  return { isCollapsed, toggle, rename, remove }
 }
