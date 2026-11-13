@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import type { FolderPath } from '../document/folderModel'
+import { folderKey, type FolderPath } from '../document/folderModel'
 
 type FolderRowProps = Readonly<{
   path: FolderPath
@@ -25,6 +25,12 @@ type FolderRowProps = Readonly<{
   /** Further actions after Rename and Remove. */
   children?: ReactNode
 }>
+
+/**
+ * The folder whose toggle takes focus when its row mounts. A panel keys a row
+ * by its path, so a rename replaces the row and the old one cannot keep focus.
+ */
+let focusOnMount: string | null = null
 
 /**
  * The header row of a folder, shared by the expression panel (DOC-013) and the
@@ -53,6 +59,13 @@ export function FolderRow({
     inputRef.current?.select()
   }, [renaming, name])
 
+  useEffect(() => {
+    if (focusOnMount !== folderKey(path)) return
+    focusOnMount = null
+    toggleRef.current?.focus()
+    // Read on mount only: the row that a rename just created takes focus.
+  }, [])
+
   const finish = (commit: boolean) => {
     if (ended.current) return
     if (commit && onRename) {
@@ -62,6 +75,8 @@ export function FolderRow({
         inputRef.current?.focus()
         return
       }
+      const renamed = draft.trim()
+      focusOnMount = renamed === name ? null : folderKey([...path.slice(0, -1), renamed])
     }
     ended.current = true
     setError(null)

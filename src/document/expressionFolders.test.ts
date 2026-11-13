@@ -212,6 +212,25 @@ describe('moving rows', () => {
     expect(stepPlacement(document, 'd', 'down')).toBeNull()
   })
 
+  it('keeps the only row of a folder in place when it leaves the folder by keyboard', () => {
+    const items: ExpressionItem[] = [
+      { id: 'b', source: 'b = 1' },
+      { id: 'a', source: 'a = 2', folder: ['E'] },
+      { id: 'c', source: 'c = 3' },
+    ]
+    const document = { ...expressionDocument(items), folders: [{ path: ['E'], collapsed: false }] }
+    expect(layout(document)).toEqual(['b', '[E]', '  a', 'c'])
+    // The emptied folder goes last; the row stays between its neighbours.
+    for (const direction of ['up', 'down'] as const) {
+      const moved = step(document, 'a', direction)
+      expect(layout(moved)).toEqual(['b', 'a', 'c', '[E]'])
+      expectItemOrderMatchesRows(moved)
+    }
+    // A row dropped before a folder that was already empty joins the end of its parent.
+    const emptied = step(document, 'a', 'up')
+    expect(layout(move(emptied, 'b', { kind: 'before-folder', path: ['E'] }))).toEqual(['a', 'c', 'b', '[E]'])
+  })
+
   it('skips over a collapsed folder by keyboard', () => {
     const collapsed = { ...sample(), folders: [{ path: ['F'], collapsed: true }, { path: ['F', 'G'], collapsed: false }] }
     expect(layout(step(collapsed, 'd', 'up'))).toEqual(['a', 'd', '[F]+'])

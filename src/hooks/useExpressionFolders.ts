@@ -12,12 +12,14 @@ import type { HistoryAction } from '../document/documentHistory'
 import type { ExpressionDocument } from '../document/expressionDocument'
 import {
   applyItemMove,
+  createFolder as createFolderEdit,
   expressionRows,
   folderPaths,
   foldersToReveal,
   isFolderCollapsed,
   itemPosition,
   planItemMove,
+  renameFolder as renameFolderEdit,
   stepPlacement,
   type ItemPlacement,
   type MoveStep,
@@ -107,6 +109,11 @@ export function useExpressionFolders({ document, executeCommand, dispatchHistory
 
   const createFolder = useCallback(() => {
     const path = [uniqueFolderName(folderPaths(document), [])]
+    const edit = createFolderEdit(document, path)
+    if (edit.status !== 'applied') {
+      announce(`The folder could not be created. ${edit.reason}`)
+      return
+    }
     executeCommand({ kind: 'create-folder', path })
     setRenamingKey(folderKey(path))
     announce(`Folder ${path[0]} created at the end of the top level.`)
@@ -116,9 +123,8 @@ export function useExpressionFolders({ document, executeCommand, dispatchHistory
     const name = rawName.trim()
     if (name === folderName(path)) return null
     if (name === '') return 'A folder name cannot be empty.'
-    const renamed = [...path.slice(0, -1), name]
-    if (folderPaths(document).some((candidate) => folderKey(candidate) === folderKey(renamed)))
-      return `A folder named “${name}” already exists here.`
+    const edit = renameFolderEdit(document, path, name)
+    if (edit.status !== 'applied') return edit.reason
     executeCommand({ kind: 'rename-folder', path, name })
     announce(`Folder renamed to ${name}.`)
     return null

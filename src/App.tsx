@@ -30,7 +30,7 @@ import { ClearExpressionsButton } from './components/ClearExpressionsButton'
 import { ExpressionRow, type ExpressionRowActions, type ExpressionRowRefs } from './components/ExpressionRow'
 import { ExpressionTree } from './components/ExpressionTree'
 import { useExpressionFolders } from './hooks/useExpressionFolders'
-import { expressionRows } from './document/expressionFolders'
+import { documentFolders, expressionRows } from './document/expressionFolders'
 import { ZoomLevelField } from './components/ZoomLevelField'
 import type { DisplaySettings } from './components/SettingsMenu'
 import { resolveItemAppearance } from './components/appearancePalette'
@@ -2195,6 +2195,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
       description: '',
       items: [{ id: 'item-1', source: '' }],
       appearance: {},
+      folders: [],
     }, theme, null, null)
   }
   const renameLibraryEntry = (id: string, name: string) => {
@@ -2287,12 +2288,11 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
 
   const removeExpression = (id: string) => {
     if (playback.isPlaying(id)) playback.stop(id)
-    const index = expressionDoc.items.findIndex((item) => item.id === id)
-    const neighbor =
-      expressionDoc.items[index - 1] ??
-      expressionDoc.items[index + 1] ??
-      null
-    pendingFocus.current = neighbor?.id ?? null
+    // Focus goes to a visible row: those of a collapsed folder cannot take it.
+    const visible = expressionRows(expressionDoc).flatMap((row) => row.kind === 'entry' ? [row.entry.id] : [])
+    const index = visible.indexOf(id)
+    const neighbor = index < 0 ? null : visible[index - 1] ?? visible[index + 1] ?? null
+    pendingFocus.current = neighbor
     setExpandedListIds((current) => {
       if (!current.has(id)) return current
       const next = new Set(current)
@@ -2324,7 +2324,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
     setAppearanceItemId(null)
     setExpandedListIds(new Set())
     dispatchHistory({ type: 'begin-transaction' })
-    if (expressionDoc.items.length > 0) executeCommand({ kind: 'clear-items' })
+    if (expressionDoc.items.length > 0 || documentFolders(expressionDoc).length > 0) executeCommand({ kind: 'clear-items' })
     executeCommand({
       kind: 'select-algebra',
       algebra: {
@@ -2361,7 +2361,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
   ) => {
     rememberEditorFocus(editor)
     pendingHistoryFocus.current = lastEditorFocus.current
-    folders.moveStep(itemId, step)
+    // A refused move changes no document, so nothing would consume the focus.
+    if (!folders.moveStep(itemId, step)) pendingHistoryFocus.current = null
   }
 
   const handleItemKeyDown = (
@@ -2630,7 +2631,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
           </div>
           <div className="expression-list-footer">
             <ClearExpressionsButton
-              count={expressionDoc.items.length}
+              count={expressionDoc.items.length + documentFolders(expressionDoc).length}
               onClear={clearAllExpressions}
             />
           </div>
