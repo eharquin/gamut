@@ -1,5 +1,7 @@
 import { executeDocumentCommand, type CommandResult, type DocumentCommand } from './documentCommands'
 import type { ExpressionDocument } from './expressionDocument'
+import { setFolderCollapsed } from './expressionFolders'
+import type { FolderPath } from './folderModel'
 
 export const MAX_HISTORY_ENTRIES = 100
 export const KEYBOARD_COALESCE_MS = 750
@@ -46,6 +48,12 @@ export type HistoryAction =
   | Readonly<{ type: 'update-identity'; id: string }>
   /** Names the document, as the library does when it saves or renames it (#212). */
   | Readonly<{ type: 'update-title'; title: string }>
+  /**
+   * Collapses or expands an expression folder (DOC-013). The state is document
+   * content but not a history step, so it applies to every snapshot that has
+   * the folder.
+   */
+  | Readonly<{ type: 'set-folder-collapsed'; path: FolderPath; collapsed: boolean }>
 
 export function createDocumentHistory(document: ExpressionDocument): DocumentHistory {
   return {
@@ -79,6 +87,18 @@ function viewForSnapshot(
 }
 
 export function documentHistoryReducer(state: DocumentHistory, action: HistoryAction): DocumentHistory {
+  if (action.type === 'set-folder-collapsed') {
+    const update = (document: ExpressionDocument) => setFolderCollapsed(document, action.path, action.collapsed)
+    const present = update(state.present)
+    if (present === state.present) return state
+    return {
+      ...state,
+      past: state.past.map((entry) => ({ ...entry, document: update(entry.document) })),
+      present,
+      future: state.future.map((entry) => ({ ...entry, document: update(entry.document) })),
+      transaction: state.transaction ? { before: update(state.transaction.before) } : null,
+    }
+  }
   if (action.type === 'update-view' || action.type === 'update-identity' || action.type === 'update-title') {
     // Applied to every snapshot so that undo and redo never restore a
     // previous view, document identity, or library name.

@@ -28,6 +28,9 @@ import { isFramed, resolveEmbedMode, type EmbedOptions } from './application/emb
 import type { ReferenceExample } from './language/expressionReference'
 import { ClearExpressionsButton } from './components/ClearExpressionsButton'
 import { ExpressionRow, type ExpressionRowActions, type ExpressionRowRefs } from './components/ExpressionRow'
+import { ExpressionTree } from './components/ExpressionTree'
+import { useExpressionFolders } from './hooks/useExpressionFolders'
+import { documentFolders, expressionRows } from './document/expressionFolders'
 import { ZoomLevelField } from './components/ZoomLevelField'
 import type { DisplaySettings } from './components/SettingsMenu'
 import { resolveItemAppearance } from './components/appearancePalette'
@@ -391,12 +394,6 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
   const resizeDrag = useRef<Readonly<{ startX: number; startWidth: number }> | null>(
     null,
   )
-  const reorderDrag = useRef<Readonly<{
-    itemId: string
-    pointerId: number
-    fromIndex: number
-    targetIndex: number
-  }> | null>(null)
   const expressionRowRefs = useRef(new Map<string, HTMLElement>())
   const appearanceAnchorRef = useRef<HTMLButtonElement | null>(null)
   const viewportSvgRef = useRef<SVGSVGElement>(null)
@@ -524,7 +521,13 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
   )
   const [viewportAnnouncement, setViewportAnnouncement] = useState('')
   const [reorderAnnouncement, setReorderAnnouncement] = useState('')
-  const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null)
+  const folders = useExpressionFolders({
+    document: expressionDoc,
+    executeCommand,
+    dispatchHistory,
+    rowElements: expressionRowRefs,
+    announce: setReorderAnnouncement,
+  })
   const [anchorPreview, setAnchorPreview] = useState<AnchorCandidate | null>(null)
   const [viewportLocked, setViewportLocked] = useState(() => embed ? embed.viewportLocked : temporary ? false : restoredViewportLock())
   const [panelCollapsed, setPanelCollapsed] = useState(() => temporary ? false : restoredPanelCollapsed())
@@ -1712,113 +1715,6 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
     setPanelWidth(Math.max(MIN_PANEL_WIDTH, Math.min(maximumPanelWidth, next)))
   }
 
-  /** Insertion index into the current item order nearest a pointer position. */
-  const resolveDropTargetIndex = useCallback((clientY: number): number => {
-    const rows = expressionDoc.items
-      .map((item) => expressionRowRefs.current.get(item.id))
-      .filter((row): row is HTMLElement => row !== undefined)
-    for (let index = 0; index < rows.length; index += 1) {
-      const rect = rows[index].getBoundingClientRect()
-      if (clientY < rect.top + rect.height / 2) return index
-    }
-    return rows.length
-  }, [expressionDoc.items])
-
-  const announceMove = useCallback((itemId: string, targetIndex: number) => {
-    const item = expressionDoc.items.find((candidate) => candidate.id === itemId)
-    if (!item) return
-    const name = declaredName(item.source) ?? 'Expression'
-    setReorderAnnouncement(
-      `Moved ${name} to position ${targetIndex + 1} of ${expressionDoc.items.length}.`,
-    )
-  }, [expressionDoc.items])
-
-  /** Dispatches a move-item command placing itemId at the given final position. */
-  const moveItemToIndex = useCallback((itemId: string, target: number) => {
-    const from = expressionDoc.items.findIndex((item) => item.id === itemId)
-    if (from < 0) return
-    const withoutItem = expressionDoc.items.filter((item) => item.id !== itemId)
-    const clamped = Math.max(0, Math.min(withoutItem.length, target))
-    if (clamped === from) return
-    const anchor = withoutItem[clamped]
-    executeCommand(anchor === undefined
-      ? { kind: 'move-item', itemId }
-      : { kind: 'move-item', itemId, anchorId: anchor.id, placement: 'before' })
-    announceMove(itemId, clamped)
-  }, [expressionDoc.items, executeCommand, announceMove])
-
-  useEffect(() => {
-    const handlePointerMove = (event: PointerEvent) => {
-      if (!reorderDrag.current) return
-      const index = resolveDropTargetIndex(event.clientY)
-      reorderDrag.current = { ...reorderDrag.current, targetIndex: index }
-      setDropTargetIndex(index)
-    }
-    const endDrag = (commit: boolean) => {
-      const drag = reorderDrag.current
-      reorderDrag.current = null
-      document.body.classList.remove('reordering-items')
-      setDropTargetIndex(null)
-      if (!drag) return
-      if (commit) {
-        // The pointer target is an insertion index in the list that still
-        // holds the dragged row; past its own slot that is one final index
-        // too far.
-        moveItemToIndex(
-          drag.itemId,
-          drag.targetIndex > drag.fromIndex ? drag.targetIndex - 1 : drag.targetIndex,
-        )
-        dispatchHistory({ type: 'commit-transaction' })
-      } else {
-        dispatchHistory({ type: 'cancel-transaction' })
-      }
-    }
-    const handlePointerUp = () => endDrag(true)
-    const handlePointerCancel = () => endDrag(false)
-
-    window.addEventListener('pointermove', handlePointerMove)
-    window.addEventListener('pointerup', handlePointerUp)
-    window.addEventListener('pointercancel', handlePointerCancel)
-    return () => {
-      window.removeEventListener('pointermove', handlePointerMove)
-      window.removeEventListener('pointerup', handlePointerUp)
-      window.removeEventListener('pointercancel', handlePointerCancel)
-      document.body.classList.remove('reordering-items')
-    }
-  }, [resolveDropTargetIndex, moveItemToIndex, dispatchHistory])
-
-  const beginRowReorder = (
-    event: ReactPointerEvent<HTMLButtonElement>,
-    itemId: string,
-  ) => {
-    const index = expressionDoc.items.findIndex((item) => item.id === itemId)
-    reorderDrag.current = {
-      itemId, pointerId: event.pointerId, fromIndex: index, targetIndex: index,
-    }
-    dispatchHistory({ type: 'begin-transaction' })
-    document.body.classList.add('reordering-items')
-    event.currentTarget.setPointerCapture?.(event.pointerId)
-    event.preventDefault()
-  }
-
-  const reorderRowWithKeyboard = (
-    event: KeyboardEvent<HTMLButtonElement>,
-    itemId: string,
-  ) => {
-    if (!event.shiftKey && !event.altKey) return
-    const from = expressionDoc.items.findIndex((item) => item.id === itemId)
-    if (from < 0) return
-    let target = from
-    if (event.key === 'ArrowUp') target = from - 1
-    else if (event.key === 'ArrowDown') target = from + 1
-    else if (event.key === 'Home') target = 0
-    else if (event.key === 'End') target = expressionDoc.items.length - 1
-    else return
-
-    event.preventDefault()
-    moveItemToIndex(itemId, target)
-  }
-
   /**
    * Widens the expression panel until the remaining canvas is as wide as it is
    * tall. The panel cap does not apply: squaring needs the exact width the
@@ -2299,6 +2195,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
       description: '',
       items: [{ id: 'item-1', source: '' }],
       appearance: {},
+      folders: [],
     }, theme, null, null)
   }
   const renameLibraryEntry = (id: string, name: string) => {
@@ -2391,12 +2288,11 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
 
   const removeExpression = (id: string) => {
     if (playback.isPlaying(id)) playback.stop(id)
-    const index = expressionDoc.items.findIndex((item) => item.id === id)
-    const neighbor =
-      expressionDoc.items[index - 1] ??
-      expressionDoc.items[index + 1] ??
-      null
-    pendingFocus.current = neighbor?.id ?? null
+    // Focus goes to a visible row: those of a collapsed folder cannot take it.
+    const visible = expressionRows(expressionDoc).flatMap((row) => row.kind === 'entry' ? [row.entry.id] : [])
+    const index = visible.indexOf(id)
+    const neighbor = index < 0 ? null : visible[index - 1] ?? visible[index + 1] ?? null
+    pendingFocus.current = neighbor
     setExpandedListIds((current) => {
       if (!current.has(id)) return current
       const next = new Set(current)
@@ -2428,7 +2324,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
     setAppearanceItemId(null)
     setExpandedListIds(new Set())
     dispatchHistory({ type: 'begin-transaction' })
-    if (expressionDoc.items.length > 0) executeCommand({ kind: 'clear-items' })
+    if (expressionDoc.items.length > 0 || documentFolders(expressionDoc).length > 0) executeCommand({ kind: 'clear-items' })
     executeCommand({
       kind: 'select-algebra',
       algebra: {
@@ -2461,17 +2357,18 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
   const moveItemFromEditor = (
     editor: HTMLInputElement,
     itemId: string,
-    target: number,
+    step: 'up' | 'down',
   ) => {
     rememberEditorFocus(editor)
     pendingHistoryFocus.current = lastEditorFocus.current
-    moveItemToIndex(itemId, target)
+    // A refused move changes no document, so nothing would consume the focus.
+    if (!folders.moveStep(itemId, step)) pendingHistoryFocus.current = null
   }
 
   const handleItemKeyDown = (
     event: KeyboardEvent<HTMLInputElement>,
     item: ExpressionItem,
-    index: number,
+    _index: number,
   ) => {
     if (event.key === 'Enter') {
       event.preventDefault()
@@ -2479,17 +2376,19 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
     } else if (event.key === 'Backspace' && item.source === '') {
       event.preventDefault()
       removeExpression(item.id)
-    } else if (event.key === 'ArrowUp' && index > 0) {
+    } else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+      const up = event.key === 'ArrowUp'
+      if (event.altKey) {
+        event.preventDefault()
+        moveItemFromEditor(event.currentTarget, item.id, up ? 'up' : 'down')
+        return
+      }
+      // Focus moves through the visible rows: those of a collapsed folder are skipped.
+      const visible = expressionRows(expressionDoc).flatMap((row) => row.kind === 'entry' ? [row.entry.id] : [])
+      const neighbor = visible[visible.indexOf(item.id) + (up ? -1 : 1)]
+      if (neighbor === undefined) return
       event.preventDefault()
-      if (event.altKey) moveItemFromEditor(event.currentTarget, item.id, index - 1)
-      else inputRefs.current.get(expressionDoc.items[index - 1].id)?.focus()
-    } else if (
-      event.key === 'ArrowDown' &&
-      index < expressionDoc.items.length - 1
-    ) {
-      event.preventDefault()
-      if (event.altKey) moveItemFromEditor(event.currentTarget, item.id, index + 1)
-      else inputRefs.current.get(expressionDoc.items[index + 1].id)?.focus()
+      inputRefs.current.get(neighbor)?.focus()
     }
   }
 
@@ -2529,8 +2428,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
     handleItemKeyDown,
     insertExpression,
     removeExpression,
-    beginRowReorder,
-    reorderRowWithKeyboard,
+    beginRowReorder: folders.beginRowReorder,
+    reorderRowWithKeyboard: folders.reorderRowWithKeyboard,
     focusRow: (itemId) => setRowFocusId(itemId),
     blurRow: (itemId) => setRowFocusId((current) => current === itemId ? null : current),
     hoverRow: (itemId) => setRowHoverId(itemId),
@@ -2628,6 +2527,18 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
               <span aria-hidden="true">+</span>
               <span>Add expression</span>
             </button>
+            <button
+              type="button"
+              className="add-folder"
+              onClick={folders.createFolder}
+              aria-label="New folder"
+              title="New folder"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M1.75 4.25v8.5h12.5v-7h-6.5l-1.5-1.5h-4.5z" fill="none" strokeLinejoin="round" />
+                <path d="M8 7.25v4M6 9.25h4" strokeLinecap="round" />
+              </svg>
+            </button>
             <div className="expression-history-controls" role="group" aria-label="Expression history">
               <button
                 type="button"
@@ -2686,8 +2597,12 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
           </div>
 
           <div className="expression-list">
-            {evaluatedItems.map((entry, index) => (
-              <ExpressionRow
+            <ExpressionTree document={expressionDoc} folders={folders} renderItem={(itemId) => {
+              const index = evaluatedItems.findIndex((candidate) => candidate.item.id === itemId)
+              const entry = evaluatedItems[index]
+              if (!entry) return null
+              const target = folders.dropTarget
+              return <ExpressionRow
                 key={entry.item.id}
                 entry={entry}
                 index={index}
@@ -2701,9 +2616,9 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
                 objectRenderScale={objectRenderScale}
                 noViz={noViz}
                 reducedMotion={reducedMotion}
-                dropBefore={dropTargetIndex === index}
-                dropAfter={dropTargetIndex === evaluatedItems.length &&
-                  index === evaluatedItems.length - 1}
+                dropBefore={target?.kind === 'before' && target.itemId === itemId}
+                dropAfter={(target?.kind === 'after' && target.itemId === itemId) ||
+                  (target?.kind === 'end' && index === evaluatedItems.length - 1)}
                 listExpanded={expandedListIds.has(entry.item.id)}
                 appearanceOpen={appearanceItemId === entry.item.id}
                 normalizationChoiceActive={normalizationChoiceId === entry.item.id}
@@ -2712,11 +2627,11 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
                 refs={expressionRowElementRefs}
                 actions={expressionRowActions}
               />
-            ))}
+            }} />
           </div>
           <div className="expression-list-footer">
             <ClearExpressionsButton
-              count={expressionDoc.items.length}
+              count={expressionDoc.items.length + documentFolders(expressionDoc).length}
               onClear={clearAllExpressions}
             />
           </div>

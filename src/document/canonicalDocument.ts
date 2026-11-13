@@ -10,6 +10,14 @@ import type {
   PointStyle,
   StrokeStyle,
 } from './expressionDocument'
+import {
+  folderKey,
+  folderNameProblem,
+  MAX_EXPRESSION_FOLDERS,
+  MAX_FOLDER_DEPTH,
+  parentPath,
+  type FolderPath,
+} from './folderModel'
 
 export const MAX_DOCUMENT_BYTES = 4 * 1024 * 1024
 export const MAX_SOURCE_LENGTH = 65_536
@@ -38,7 +46,9 @@ export type CanonicalAppearance = Readonly<{
   primitiveStyles: CanonicalPrimitiveStyles
 }>
 type Appearance = CanonicalAppearance
-type Item = Readonly<{ id: string; kind: 'expression' | 'annotation'; source: string; positionSource: string | null; normalization: ItemNormalization | null; control: ExpressionControl | null }>
+/** `folder` is present only for an item inside a folder (DOC-013, §2.4). */
+type Item = Readonly<{ id: string; kind: 'expression' | 'annotation'; source: string; positionSource: string | null; normalization: ItemNormalization | null; control: ExpressionControl | null; folder?: FolderPath }>
+export type CanonicalFolder = Readonly<{ path: FolderPath; collapsed: boolean }>
 export type CanonicalViewport = Readonly<{ kind: 'none' }> | Readonly<{ kind: 'two-dimensional'; centerX: number; centerY: number; zoom: number }>
 
 export type CanonicalDocument = Readonly<{
@@ -50,6 +60,7 @@ export type CanonicalDocument = Readonly<{
   metadata: Readonly<{ title: string; description: string }>
   items: readonly Item[]
   appearance: Readonly<Record<string, Appearance>>
+  folders: readonly CanonicalFolder[]
   view: Readonly<{
     visualizerId: string | null
     positionEnabled: boolean
@@ -76,7 +87,7 @@ const NORMALIZATIONS: readonly ItemNormalization[] = ['natural', 'euclidean', 'i
 /** Appearance sources: numeric settings stored as source text; empty selects the kind default. */
 export const APPEARANCE_SOURCE_FIELDS = ['strokeWidthSource', 'pointSizeSource', 'opacitySource', 'labelAngleSource', 'labelSizeSource', 'labelDistanceSource'] as const
 const APPEARANCE_FIELDS = ['visible', 'labelVisible', 'label', 'style', 'borderVisible', 'orientationVisible', 'bivectorShape', 'idealPointDisplay', 'strokeStyle', 'pointStyle', 'labelAnchor', 'primitiveStyles', ...APPEARANCE_SOURCE_FIELDS]
-const requiredRoot = ['id', 'formatVersion', 'languageVersion', 'algebra', 'interpretation', 'metadata', 'items', 'appearance', 'view']
+const requiredRoot = ['id', 'formatVersion', 'languageVersion', 'algebra', 'interpretation', 'metadata', 'items', 'appearance', 'folders', 'view']
 
 function fail(code: string, message: string): never {
   throw new DocumentFormatError(code, message)
@@ -220,7 +231,11 @@ export function migrateDocument(value: unknown): unknown {
       fail('DOCUMENT_SCHEMA', 'document must be an object.')
     const document = current as Record<string, unknown>
     const version = document.formatVersion
-    if (version === CURRENT_FORMAT_VERSION) return current
+    if (version === CURRENT_FORMAT_VERSION) {
+      // Version 8 is unpublished until 0.3.0: a version 8 document written
+      // before folders joined it has none (#83).
+      return 'folders' in document ? current : { ...document, folders: [] }
+    }
     if (version === 1) {
       const appearance = document.appearance as Record<string, Record<string, unknown>>
       current = {
@@ -292,8 +307,10 @@ export function migrateDocument(value: unknown): unknown {
         ...document,
         formatVersion: 8,
         // Format version 7 always showed the values under the expressions,
-        // since the setting did not exist yet (#191).
+        // since the setting did not exist yet (#191), and had no folders, so
+        // every item stays at the top level in its order (#83).
         view: { ...view, display: { ...display, valuesVisible: true } },
+        folders: [],
       }
       continue
     }
@@ -420,6 +437,45 @@ export function parseCanonicalDocumentBytes(bytes: Uint8Array): CanonicalDocumen
   return parseCanonicalDocument(source)
 }
 
+function folderPath(value: unknown, path: string): FolderPath {
+  if (!Array.isArray(value)) fail('DOCUMENT_SCHEMA', path + ' must be an array of folder names.')
+  if (value.length > MAX_FOLDER_DEPTH)
+    fail('LIMIT_FOLDER_DEPTH', path + ' is nested deeper than ' + MAX_FOLDER_DEPTH + ' folders.')
+  return value.map((name, index) => {
+    const problem = folderNameProblem(typeof name === 'string' ? text(name, path + '[' + index + ']') : name)
+    if (problem) fail(problem.code === 'FOLDER_NAME_EMPTY' ? 'DOCUMENT_FOLDER_NAME' : problem.code, path + '[' + index + ']: ' + problem.message)
+    return name as string
+  })
+}
+
+/**
+ * The folders of a document (§2.4): closed records, each path declared once
+ * with its parent, within the folder limits.
+ */
+function folderList(value: unknown): CanonicalFolder[] {
+  if (!Array.isArray(value)) fail('DOCUMENT_SCHEMA', 'folders must be an array.')
+  if (value.length > MAX_EXPRESSION_FOLDERS)
+    fail('LIMIT_FOLDER_COUNT', 'A document may contain at most ' + MAX_EXPRESSION_FOLDERS + ' folders.')
+  const folders = value.map((entry, index): CanonicalFolder => {
+    const path = 'folders[' + index + ']'
+    const folder = record(entry, path, ['path', 'collapsed'])
+    const parsed = folderPath(folder.path, path + '.path')
+    if (parsed.length === 0) fail('DOCUMENT_FOLDER_NAME', path + '.path cannot be empty.')
+    return { path: parsed, collapsed: truth(folder.collapsed, path + '.collapsed') }
+  })
+  const keys = new Set<string>()
+  for (const { path } of folders) {
+    const key = folderKey(path)
+    if (keys.has(key)) fail('DOCUMENT_DUPLICATE_FOLDER', 'Duplicate folder “' + path.join(' › ') + '”.')
+    keys.add(key)
+  }
+  for (const { path } of folders) {
+    if (path.length > 1 && !keys.has(folderKey(parentPath(path))))
+      fail('DOCUMENT_ORPHAN_FOLDER', 'Folder “' + path.join(' › ') + '” has no declared parent.')
+  }
+  return folders
+}
+
 export function validateCanonicalDocument(value: unknown): CanonicalDocument {
   const root = record(value, 'document', requiredRoot)
   if (root.formatVersion !== CURRENT_FORMAT_VERSION) fail('DOCUMENT_FORMAT_VERSION', 'Unsupported format version ' + String(root.formatVersion) + '.')
@@ -430,10 +486,16 @@ export function validateCanonicalDocument(value: unknown): CanonicalDocument {
   const metadata = record(root.metadata, 'metadata', ['title', 'description'])
   if (!Array.isArray(root.items)) fail('DOCUMENT_SCHEMA', 'items must be an array.')
   if (root.items.length > 1_000) fail('LIMIT_ITEM_COUNT', 'A document may contain at most 1000 items.')
+  const folders = folderList(root.folders)
+  const folderKeys = new Set(folders.map(({ path }) => folderKey(path)))
   const ids = new Set<string>()
   const items = root.items.map((entry, index): Item => {
     const path = 'items[' + index + ']'
-    const item = record(entry, path, ['id', 'kind', 'source', 'positionSource', 'normalization', 'control'])
+    const hasFolderField = entry !== null && typeof entry === 'object' && !Array.isArray(entry) && 'folder' in entry
+    const item = record(entry, path, ['id', 'kind', 'source', 'positionSource', 'normalization', 'control', ...(hasFolderField ? ['folder'] : [])])
+    const folder = hasFolderField ? folderPath(item.folder, path + '.folder') : []
+    if (folder.length > 0 && !folderKeys.has(folderKey(folder)))
+      fail('DOCUMENT_ORPHAN_FOLDER', path + '.folder names an undeclared folder.')
     const id = text(item.id, path + '.id', true)
     if (ids.has(id)) fail('DOCUMENT_DUPLICATE_ID', 'Duplicate item identity “' + id + '”.')
     ids.add(id)
@@ -446,7 +508,11 @@ export function validateCanonicalDocument(value: unknown): CanonicalDocument {
     const parsedControl = control(item.control, path + '.control')
     if (item.kind === 'annotation' && (positionSource !== null || item.normalization !== null || parsedControl !== null))
       fail('DOCUMENT_SCHEMA', 'Annotations cannot have position, normalization, or controls.')
-    return { id, kind: item.kind, source, positionSource, normalization: item.normalization as ItemNormalization | null, control: parsedControl }
+    return {
+      id, kind: item.kind, source, positionSource, normalization: item.normalization as ItemNormalization | null, control: parsedControl,
+      // An empty list means the top level, written without the field.
+      ...(folder.length > 0 ? { folder } : {}),
+    }
   })
   if (root.appearance === null || typeof root.appearance !== 'object' || Array.isArray(root.appearance))
     fail('DOCUMENT_SCHEMA', 'appearance must be an object.')
@@ -488,7 +554,7 @@ export function validateCanonicalDocument(value: unknown): CanonicalDocument {
     algebra: { algebraId: text(algebra.algebraId, 'algebra.algebraId', true), definitionVersion: positiveInteger(algebra.definitionVersion, 'algebra.definitionVersion'), conventionVersion: positiveInteger(algebra.conventionVersion, 'algebra.conventionVersion'), parameters },
     interpretation: interpretation && { interpretationId: text(interpretation.interpretationId, 'interpretation.interpretationId', true), interpretationVersion: positiveInteger(interpretation.interpretationVersion, 'interpretation.interpretationVersion') },
     metadata: { title: text(metadata.title, 'metadata.title'), description: text(metadata.description, 'metadata.description') },
-    items, appearance,
+    items, appearance, folders,
     view: {
       visualizerId: view.visualizerId === null ? null : text(view.visualizerId, 'view.visualizerId', true),
       positionEnabled: truth(view.positionEnabled, 'view.positionEnabled'),
@@ -583,8 +649,12 @@ export function toCanonicalDocument(
     algebra: document.algebra,
     interpretation: document.interpretation,
     metadata: { title: document.title, description: document.description },
-    items: document.items.map((item) => ({ id: item.id, kind: item.kind ?? 'expression', source: item.source, positionSource: item.positionSource ?? null, normalization: item.normalization ?? null, control: item.control ?? null })),
+    items: document.items.map((item) => ({
+      id: item.id, kind: item.kind ?? 'expression', source: item.source, positionSource: item.positionSource ?? null, normalization: item.normalization ?? null, control: item.control ?? null,
+      ...(item.folder && item.folder.length > 0 ? { folder: item.folder } : {}),
+    })),
     appearance,
+    folders: document.folders ?? [],
     view: {
       ...document.view,
       display: { ...document.view.display, theme },
@@ -614,6 +684,7 @@ export function fromCanonicalDocument(
     ...(item.positionSource === null ? {} : { positionSource: item.positionSource }),
     ...(item.normalization === null ? {} : { normalization: item.normalization }),
     ...(item.control === null ? {} : { control: item.control }),
+    ...(item.folder === undefined ? {} : { folder: item.folder }),
   }))
   const { theme, ...display } = document.view.display
   return {
@@ -629,6 +700,7 @@ export function fromCanonicalDocument(
       view: { ...document.view, display, positionEnabled: document.view.visualizerId !== null || document.view.positionEnabled },
       items,
       appearance: document.appearance,
+      folders: document.folders,
     },
     theme,
     recoveryDiagnostic: document.view.viewport.kind === 'none' && document.view.visualizerId === null

@@ -112,7 +112,12 @@ classDiagram
       +Metadata metadata
       +Item[] items
       +map~ItemId, Appearance~ appearance
+      +Folder[] folders
       +ViewState view
+    }
+    class Folder {
+      +string[] path
+      +boolean collapsed
     }
     class AlgebraReference {
       +reverseDns algebraId
@@ -131,6 +136,7 @@ classDiagram
       +string|null positionSource
       +natural|euclidean|ideal|null normalization
       +Control|null control
+      +string[] folder
     }
     class Control {
       +number|slider mode
@@ -192,6 +198,7 @@ classDiagram
     Document *-- InterpretationReference
     Document *-- Metadata
     Document *-- Item
+    Document *-- Folder
     Document *-- Appearance
     Appearance *-- PrimitiveStyles
     PrimitiveStyles *-- PointPrimitiveStyle
@@ -221,6 +228,7 @@ unknown field as an implicit extension.
 | `metadata` | `Metadata` | Descriptive, non-executable document metadata. |
 | `items` | `Item[]` | Ordered; item identities shall be unique. |
 | `appearance` | object | Keys are item identities and values are `Appearance`; no orphan key is valid. |
+| `folders` | `Folder[]` | From format version 8: every expression folder with its collapsed state (section 2.4). |
 | `view` | `ViewState` | Persistent presentation state. |
 
 `Metadata` has exactly `title` and `description`, both strings. These fields
@@ -238,7 +246,8 @@ and its version is a positive integer.
 ### 2.2 Items, appearance, and controls
 
 An `Item` has exactly `id`, `kind`, `source`, `positionSource`, `normalization`,
-and `control`. Its identity is a non-empty opaque immutable string. `kind` is
+and `control`, and, from format version 8, the optional `folder` of section
+2.4. Its identity is a non-empty opaque immutable string. `kind` is
 `expression` or `annotation`; `source` is stored verbatim. An annotation
 requires `positionSource`, `normalization`, and `control` to be `null`.
 
@@ -422,27 +431,48 @@ Later format versions may add viewport variants through migration.
 From format version 8, a document may group its items in expression folders
 (DOC-013), as decided in [#83](https://github.com/eharquin/gamut/issues/83):
 
-- each item carries the list of folder names that contains it, from the root
-  (for example `["Triangle", "Angles"]`); an absent or empty list means the
-  top level;
+- each item carries the list of folder names that contains it, from the root,
+  in the optional field `Item.folder` (for example
+  `"folder": ["Triangle", "Angles"]`); an absent or empty list means the top
+  level, and the canonical form omits the field for an item at the top level;
 - the collapsed state of folders is stored separately in the document, not on
-  the items;
-- a folder name is stored plain text with no markup semantics; it is never
-  empty, and two folders with the same parent never share a name, so a name
-  list identifies one folder;
+  the items, in the required field `Document.folders`: an array of closed
+  `Folder` objects with exactly `path`, the non-empty list of folder names
+  from the root, and `collapsed`, a boolean. `folders` lists every folder,
+  empty ones included; its order only orders the folders that hold no item;
+- a folder name is stored plain text with no markup semantics and may contain
+  `/`; it is never empty, and two folders with the same parent never share a
+  name, so a name list identifies one folder. A path appears at most once in
+  `folders`, the parent of every listed folder is listed, and every
+  `Item.folder` names a listed folder;
 - the order of `items` stays the item order used for the canvas draw order and for every other order-dependent rule of
   this document; a folder never changes evaluation, appearance, position, or
-  dependency nodes (section 5);
+  dependency nodes (section 5). Since forward references resolve
+  ([language](language.md)), moving an item never invalidates a reference
+  and never rewrites source;
 - objects are closed and nesting depth, folder count, and name length obey
   the [folder limits](limits-and-constants.md#21-folders); folders do not
   count towards the 1,000 items per document;
 - the collapsed state is document content, serialized and compared like other
   fields, so changing it is an unsaved change; it is not an undo entry.
 
-The exact field names of the item folder list and of the collapsed-state
-record are fixed by the #83 implementation before 0.3.0 is published. A
-document without folders has all its items at the top level in their stored
-order.
+The expression panel shows the tree in item order: a folder sits at the
+position of its first item, and a folder that holds no item, directly or in a
+subfolder, follows the other rows of its parent in the order of `folders`.
+The commands that create, rename, remove, and move keep the items of every
+folder contiguous in `items`, so the panel shows the rows in item order;
+a document whose folder items are not contiguous is valid and shown with the
+same rule. Removing a folder moves its items and subfolders to its parent
+without changing the item order; it is refused when a subfolder has the name
+of a folder already in the parent.
+
+Validation fails with `DOCUMENT_FOLDER_NAME` for an empty name or path,
+`DOCUMENT_DUPLICATE_FOLDER` for a path listed twice, `DOCUMENT_ORPHAN_FOLDER`
+for a folder whose parent is not listed or an item whose folder is not
+listed, and the `LIMIT_FOLDER_*` diagnostics of the folder limits. A document
+without folders has `"folders": []` and all its items at the top level in
+their stored order. A version 8 document written before folders joined the
+version, without `folders`, is read as having none.
 
 ## 3. Canonical JSON
 
@@ -513,7 +543,7 @@ previous one; the implementation records the migrations in
 | 5 | `Appearance.idealPointDisplay` (`vector`, `ideal`, `both`): how an ideal PGA point is drawn; earlier documents default to `vector`. |
 | 6 | `Appearance.pointListDisplay` (`none`, `open-polyline`, `closed-loop`) and `Appearance.pointMarkersVisible`: how the elements of a list of finite and ideal points are connected, and whether a connected one keeps its point markers; earlier documents default to `none` with markers. |
 | 7 | Appearance sources (`strokeWidthSource`, `pointSizeSource`, `opacitySource`, `labelAngleSource`, `labelSizeSource`, `labelDistanceSource`), `strokeStyle`, `pointStyle`, `labelAnchor`, and `primitiveStyles`; `Item.normalization` adds `euclidean` and `ideal`; the style registry adds `orange`, `teal`, `purple`, and `pink`. The migration fills empty sources, `solid`, `dot`, and `labelAnchor: top-right` (the fixed position of earlier versions), and moves `pointListDisplay` to `primitiveStyles.points.connection` and `pointMarkersVisible` to `primitiveStyles.points.visible`, kept `true` for an unconnected list, which always drew its markers; `primitiveStyles.lines.orientationVisible` copies the item's orientation. Normalization is unchanged. |
-| 8 | **Planned for 0.3.0; may change until 0.3.0 is published.** `ViewState.display.valuesVisible` ([#191](https://github.com/eharquin/gamut/issues/191)); earlier documents always showed their values, so the migration sets `valuesVisible: true`. Expression folders join this version before 0.3.0 is published: each item's folder name list, and the collapsed state of folders stored separately (section 2.4, [#83](https://github.com/eharquin/gamut/issues/83)); their migration places every item at the top level in its current order, with no folders. |
+| 8 | **Planned for 0.3.0; may change until 0.3.0 is published.** `ViewState.display.valuesVisible` ([#191](https://github.com/eharquin/gamut/issues/191)); earlier documents always showed their values, so the migration sets `valuesVisible: true`. Expression folders ([#83](https://github.com/eharquin/gamut/issues/83)): the optional `Item.folder`, the item's folder name list, and `Document.folders`, every folder with its `path` and `collapsed` state (section 2.4); the migration adds `folders: []`, so every item stays at the top level in its current order. |
 
 A release can open only the format versions it knows. Release 0.2.0 cannot
 open a version 8 document; protecting an older release against a document
