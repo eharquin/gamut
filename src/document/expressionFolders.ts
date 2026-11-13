@@ -209,9 +209,22 @@ export function planItemMove(document: ExpressionDocument, itemId: string, place
     // An empty folder follows the other rows of its parent.
     return path.length === 0 ? {} : endAnchor(parentPath(path))
   }
+  /**
+   * Next to a folder that holds no other item. A folder the item empties has
+   * no position of its own any more, so the item keeps its place in the item
+   * order; a folder that was already empty is among the last rows of its parent.
+   */
+  const emptyFolderAnchor = (path: FolderPath): Anchor => {
+    if (!isWithin(itemFolder(item), path)) return endAnchor(parentPath(path))
+    const index = document.items.indexOf(item)
+    const previous = document.items[index - 1]
+    if (previous) return { anchorId: previous.id, placement: 'after' }
+    const next = document.items[index + 1]
+    return next ? { anchorId: next.id, placement: 'before' } : {}
+  }
   const beforeFolderAnchor = (path: FolderPath): Anchor => {
     const inside = subtree(path)
-    return inside.length > 0 ? { anchorId: inside[0].id, placement: 'before' } : endAnchor(parentPath(path))
+    return inside.length > 0 ? { anchorId: inside[0].id, placement: 'before' } : emptyFolderAnchor(path)
   }
   const startAnchor = (path: FolderPath): Anchor => {
     const tree = expressionFolderTree(without)
@@ -236,7 +249,7 @@ export function planItemMove(document: ExpressionDocument, itemId: string, place
     const inside = subtree(path)
     const anchor = placement.kind === 'before-folder'
       ? beforeFolderAnchor(path)
-      : inside.length > 0 ? { anchorId: inside[inside.length - 1].id, placement: 'after' as const } : endAnchor(parentPath(path))
+      : inside.length > 0 ? { anchorId: inside[inside.length - 1].id, placement: 'after' as const } : emptyFolderAnchor(path)
     move = { itemId, folder: parentPath(path), ...anchor }
   }
 

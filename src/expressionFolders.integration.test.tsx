@@ -47,6 +47,8 @@ describe('expression folders (DOC-013, A11Y-011)', () => {
     fireEvent.keyDown(name, { key: 'Enter' })
     expect(folderButton('Sums')).toHaveAccessibleName('Folder Sums, level 1, 0 rows')
     expect(folderButton('Sums')).toHaveAttribute('aria-expanded', 'true')
+    // The renamed folder is a new row: it takes focus back from the name field.
+    await waitFor(() => expect(folderButton('Sums')).toHaveFocus())
 
     // C is the last row: Alt+Down enters the empty folder after it.
     handleFor('C = A + B').focus()
@@ -110,6 +112,33 @@ describe('expression folders (DOC-013, A11Y-011)', () => {
     expect(visibleSources()).toEqual(['A = 1', 'B = 2', 'C = A + B'])
     fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
     expect(folderButton('Sums')).toBeInTheDocument()
+  })
+
+  it('refuses a name over the limit and keeps the name field open', () => {
+    open({ ...flat(), folders: [{ path: ['Sums'], collapsed: false }] })
+    fireEvent.click(screen.getByRole('button', { name: 'Rename folder Sums' }))
+    const name = screen.getByRole('textbox', { name: 'Name of folder Sums' })
+    fireEvent.change(name, { target: { value: 'x'.repeat(200) } })
+    fireEvent.keyDown(name, { key: 'Enter' })
+    expect(screen.getByRole('alert')).toBeInTheDocument()
+    expect(screen.queryByText(/^Folder renamed to/)).not.toBeInTheDocument()
+    fireEvent.keyDown(name, { key: 'Escape' })
+    expect(folderButton('Sums')).toBeInTheDocument()
+  })
+
+  it('does not move focus later when a row cannot move', () => {
+    open(flat())
+    editorOf('A = 1').focus()
+    fireEvent.keyDown(editorOf('A = 1'), { key: 'ArrowUp', altKey: true })
+    expect(screen.getByText('A cannot move up.')).toBeInTheDocument()
+    editorOf('C = A + B').focus()
+    fireEvent.change(editorOf('C = A + B'), { target: { value: 'C = A + B + 1' } })
+    expect(editorOf('C = A + B + 1')).toHaveFocus()
+  })
+
+  it('lets a document that holds only folders be cleared', () => {
+    open({ ...flat(), items: [], folders: [{ path: ['Sums'], collapsed: false }] })
+    expect(screen.getByRole('button', { name: /clear/i })).toBeEnabled()
   })
 
   it('drops a dragged row into a folder', () => {
