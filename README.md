@@ -111,6 +111,7 @@ work, and the [changelog](CHANGELOG.md) for user-visible changes.
 
 ## Documentation
 
+- [Embedding a scene in a presentation](docs/embedding.md)
 - [Design requirements](docs/design-requirements.md)
 - [Application architecture](docs/architecture/application-architecture.md)
 - [Technology decisions](docs/architecture/technology-decisions.md)
