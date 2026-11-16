@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { executeDocumentCommand, sourceKind } from './documentCommands'
+import { executeDocumentCommand } from './documentCommands'
 import { expressionDocument } from './expressionDocument'
 
 describe('semantic document commands', () => {
@@ -119,36 +119,37 @@ describe('semantic document commands', () => {
     })
   })
 
-  it('derives the item kind from the source on every source edit (#187)', () => {
+  it('stores the kind of a row and changes it only by its own command (#187)', () => {
     const control = { mode: 'slider', minimumSource: '0', maximumSource: '1', stepSource: '0.1', animation: null } as const
-    const document = expressionDocument([
-      { id: 'a', source: 'A = e1', positionSource: '(1, 2)', normalization: 'natural', control },
-    ], { a: { visible: false } })
-    const commented = executeDocumentCommand(document, { kind: 'update-source', itemId: 'a', source: '  # A = e1' })
-    // The format forbids position, normalization, and control on an annotation.
-    expect(commented.document.items).toEqual([{ id: 'a', kind: 'annotation', source: '  # A = e1' }])
-    expect(commented.document.appearance).toEqual(document.appearance)
+    const document = {
+      ...expressionDocument([
+        { id: 'a', source: 'A = e1', positionSource: '(1, 2)', normalization: 'natural', control, folder: ['F'] },
+      ], { a: { visible: false } }),
+      folders: [{ path: ['F'], collapsed: false }],
+    }
+    // A source edit never changes the kind, whatever the source starts with.
+    expect(executeDocumentCommand(document, { kind: 'update-source', itemId: 'a', source: '# A = e1' }).document.items[0])
+      .toEqual({ ...document.items[0], source: '# A = e1' })
 
-    const restored = executeDocumentCommand(commented.document, { kind: 'update-source', itemId: 'a', source: ' A = e1' })
-    expect(restored.document.items).toEqual([{ id: 'a', source: ' A = e1' }])
+    const noted = executeDocumentCommand(document, { kind: 'set-item-kind', itemId: 'a', itemKind: 'annotation' })
+    // The format forbids position, normalization, and control on an annotation; the folder stays.
+    expect(noted.document.items).toEqual([{ id: 'a', kind: 'annotation', source: 'A = e1', folder: ['F'] }])
+    expect(noted.document.appearance).toEqual(document.appearance)
+    // A note keeps its kind while its source changes, even to a heading.
+    const heading = executeDocumentCommand(noted.document, { kind: 'update-source', itemId: 'a', source: '# Title' })
+    expect(heading.document.items).toEqual([{ id: 'a', kind: 'annotation', source: '# Title', folder: ['F'] }])
 
-    // A stored annotation without # (valid for the format) becomes an
-    // expression on its next source edit, unless the edit adds a #.
-    const legacy = expressionDocument([{ id: 'note', kind: 'annotation', source: 'prose' }])
-    expect(executeDocumentCommand(legacy, { kind: 'update-source', itemId: 'note', source: 'prose!' })
-      .document.items).toEqual([{ id: 'note', source: 'prose!' }])
-    expect(executeDocumentCommand(legacy, { kind: 'update-source', itemId: 'note', source: '# prose' })
-      .document.items).toEqual([{ id: 'note', kind: 'annotation', source: '# prose' }])
-    // An inserted source gets its kind the same way.
-    expect(executeDocumentCommand(legacy, { kind: 'insert-item', item: { id: 'c', source: ' # note' } })
-      .document.items[1]).toEqual({ id: 'c', kind: 'annotation', source: ' # note' })
+    const restored = executeDocumentCommand(heading.document, { kind: 'set-item-kind', itemId: 'a', itemKind: 'expression', source: 'A = e2' })
+    expect(restored.document.items).toEqual([{ id: 'a', source: 'A = e2', folder: ['F'] }])
+
+    // An inserted item keeps the kind it is given.
+    expect(executeDocumentCommand(document, { kind: 'insert-item', item: { id: 'c', source: '# not a note' } })
+      .document.items[1]).toEqual({ id: 'c', source: '# not a note' })
     // A stored annotation reading like a scalar declaration has no slider value.
     const scalarNote = expressionDocument([{ id: 'n', kind: 'annotation', source: 'a = 1' }])
     expect(executeDocumentCommand(scalarNote, { kind: 'set-scalar-value', itemId: 'n', value: 5 })).toEqual({
       status: 'unsupported', document: scalarNote, reason: 'Annotations do not own algebraic controls.',
     })
-    expect(sourceKind('a # b')).toBe('expression')
-    expect(sourceKind('\t#')).toBe('annotation')
   })
 
   it('rewrites the smallest eligible literal and refuses compound inverse edits', () => {

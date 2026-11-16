@@ -50,10 +50,15 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- Comment rows: a row whose first non-whitespace character is `#` becomes an
-  annotation, shown as text and never evaluated, drawn, or referenced;
-  removing the `#` makes it an expression again, in one undo step. Its
-  position, normalization, and slider are cleared, and undo restores them.
+- Notes: typing `"` first in an expression row makes the row a note, an
+  annotation shown as text and never evaluated, drawn, or referenced. The
+  quotation mark is a trigger and is not stored, so a note may start with any
+  character, `#` included. Backspace before the first character of a note
+  makes it an expression again, with its text, in one undo step. The position,
+  normalization, and slider of a row that becomes a note are cleared, and undo
+  restores them. Notes are stored in canonical format version 9 with their
+  kind and without a marker; a document written during the development of
+  0.3.0, whose comment rows kept a leading `#`, loses that `#` on load.
   The text supports `**bold**`, `*italic*`, inline `` `code` ``, backslash
   escapes, and `[links](https://…)` limited to `http`, `https`, and `mailto`,
   with their parsed destination shown (web links open in a new tab); `a*b*c`, `2*3`, and

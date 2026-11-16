@@ -332,7 +332,7 @@ describe('canonical folders', () => {
     expect(apply(expressionDocument([]), { kind: 'create-folder', path: [name] }).folders).toHaveLength(1)
   })
 
-  it('migrates a version 7 document to version 8 without folders, in its order', () => {
+  it('migrates a version 7 document without folders, in its order', () => {
     const current = JSON.parse(serializeCanonicalDocument(toCanonicalDocument(
       expressionDocument([{ id: 'x', source: 'x = 1' }, { id: 'y', source: 'y = x' }]), 'system'))) as Record<string, unknown>
     const { folders: _folders, ...version8 } = current
@@ -348,6 +348,6 @@ describe('canonical folders', () => {
   it('reads a version 8 document written before folders as having none', () => {
     const { folders: _folders, ...earlier } = JSON.parse(serializeCanonicalDocument(toCanonicalDocument(sample(), 'system'))) as Record<string, unknown>
     const items = (earlier.items as Record<string, unknown>[]).map(({ folder: _folder, ...item }) => item)
-    expect(parseCanonicalDocument(JSON.stringify({ ...earlier, items })).folders).toEqual([])
+    expect(parseCanonicalDocument(JSON.stringify({ ...earlier, formatVersion: 8, items })).folders).toEqual([])
   })
 })

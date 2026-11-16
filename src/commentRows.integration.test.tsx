@@ -29,18 +29,19 @@ function row(name: string): HTMLElement {
 }
 
 describe('comment rows (#187)', () => {
-  it('turns a row starting with # into an annotation that is neither evaluated nor drawn', () => {
+  it('turns a row into a note when a quotation mark is typed first, neither evaluated nor drawn', () => {
     render(<App />)
     const input = screen.getByRole<HTMLInputElement>('textbox', { name: 'Expression 1' })
     expect(viewportDescription()).toContain('Vector 1')
 
-    fireEvent.change(input, { target: { value: '# Titre **gras**' } })
+    fireEvent.change(input, { target: { value: '"Titre **gras**' } })
 
     const note = screen.getByRole('textbox', { name: 'Annotation 1' })
     expect(note).toBe(input)
-    expect(note).toHaveValue('# Titre **gras**')
+    // The quotation mark is not stored.
+    expect(note).toHaveValue('Titre **gras**')
     const article = row('Annotation 1')
-    // Text without the # marker or the delimiters, as a screen reader reads it.
+    // Text without the delimiters, as a screen reader reads it.
     expect(note).toHaveAccessibleDescription('Titre gras')
     expect(within(article).getByText('gras').tagName).toBe('STRONG')
     expect(within(article).queryByRole('alert')).not.toBeInTheDocument()
@@ -59,23 +60,40 @@ describe('comment rows (#187)', () => {
     expect(screen.getByText('2e1 + e2')).toBeInTheDocument()
     expect(viewportDescription()).toContain('Vector 1')
     fireEvent.click(screen.getByRole('button', { name: 'Redo document change' }))
-    expect(screen.getByRole('textbox', { name: 'Annotation 1' })).toHaveValue('# Titre **gras**')
+    expect(screen.getByRole('textbox', { name: 'Annotation 1' })).toHaveValue('Titre **gras**')
+
+    // A note keeps its kind whatever it starts with: # and a quotation mark are text.
+    fireEvent.change(screen.getByRole('textbox', { name: 'Annotation 1' }), { target: { value: '# "quoted"' } })
+    expect(screen.getByRole('textbox', { name: 'Annotation 1' })).toHaveValue('# "quoted"')
   })
 
-  it('turns back into an evaluated expression when the # is removed', () => {
+  it('leaves a quotation mark elsewhere in an expression alone', () => {
     render(<App />)
     const input = screen.getByRole<HTMLInputElement>('textbox', { name: 'Expression 1' })
-    fireEvent.change(input, { target: { value: '# V = vector(1, 3)' } })
+    fireEvent.change(input, { target: { value: 'vector(2, 1) "' } })
+    expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('vector(2, 1) "')
+  })
+
+  it('turns back into an evaluated expression on Backspace before its first character', () => {
+    render(<App />)
+    const input = screen.getByRole<HTMLInputElement>('textbox', { name: 'Expression 1' })
+    fireEvent.change(input, { target: { value: '"V = vector(1, 3)' } })
     fireEvent.blur(input)
     expect(screen.getByRole('textbox', { name: 'Annotation 1' })).toBeInTheDocument()
 
-    fireEvent.change(input, { target: { value: 'V = vector(1, 3)' } })
+    // Backspace elsewhere in the note edits its text only.
+    input.setSelectionRange(3, 3)
+    fireEvent.keyDown(input, { key: 'Backspace' })
+    expect(screen.getByRole('textbox', { name: 'Annotation 1' })).toBeInTheDocument()
+    input.setSelectionRange(0, 0)
+    fireEvent.keyDown(input, { key: 'Backspace' })
     expect(screen.getByRole('textbox', { name: 'Expression 1' })).toBe(input)
+    expect(input).toHaveValue('V = vector(1, 3)')
     expect(screen.getByText('e1 + 3e2')).toBeInTheDocument()
     expect(viewportDescription()).toMatch(/V runs from the origin to 1, 3/)
 
     fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
-    expect(screen.getByRole('textbox', { name: 'Annotation 1' })).toHaveValue('# V = vector(1, 3)')
+    expect(screen.getByRole('textbox', { name: 'Annotation 1' })).toHaveValue('V = vector(1, 3)')
   })
 
   it('comments out a positioned row and restores its position with one undo', () => {
@@ -83,7 +101,7 @@ describe('comment rows (#187)', () => {
     const input = screen.getByRole('textbox', { name: 'Expression 1' })
     expect(screen.getByRole('textbox', { name: 'Position 1' })).toHaveValue('(1, 1)')
 
-    fireEvent.change(input, { target: { value: '#V = vector(2, 1)' } })
+    fireEvent.change(input, { target: { value: '"V = vector(2, 1)' } })
     expect(screen.queryByRole('textbox', { name: 'Position 1' })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
@@ -95,7 +113,7 @@ describe('comment rows (#187)', () => {
     render(<App />)
     const input = screen.getByRole('textbox', { name: 'Expression 1' })
     fireEvent.change(input, {
-      target: { value: '# See [the docs](https://example.org/docs), [bad](javascript:alert(1)) and <b>x</b>' },
+      target: { value: '"See [the docs](https://example.org/docs), [bad](javascript:alert(1)) and <b>x</b>' },
     })
     const article = row('Annotation 1')
     const links = within(article).getAllByRole('link')
@@ -132,7 +150,7 @@ describe('comment rows (#187)', () => {
     expect(screen.getByRole('textbox', { name: 'Expression 2' })).toHaveValue('A = vector(1.25, 1.25)')
   })
 
-  it('opens stored annotations without # unchanged (format fixtures stay valid)', () => {
+  it('opens stored annotations unchanged', () => {
     openStored([
       { id: 'note', kind: 'annotation', source: 'This is prose, not an expression!' },
       { id: 'v', source: 'V = vector(2, 1)' },
@@ -155,9 +173,9 @@ describe('comment rows (#187)', () => {
     act(() => vi.advanceTimersByTime(500))
     const playing = input.value
 
-    fireEvent.change(input, { target: { value: '# ' + playing } })
+    fireEvent.change(input, { target: { value: '"' + playing } })
     act(() => vi.advanceTimersByTime(1000))
-    expect(input).toHaveValue('# ' + playing)
+    expect(input).toHaveValue(playing)
     expect(screen.queryByRole('slider', { name: 'Value for a' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Play scalar animation' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Delete annotation 1' })).toBeInTheDocument()

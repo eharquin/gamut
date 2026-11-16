@@ -2447,6 +2447,11 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
     if (event.key === 'Enter') {
       event.preventDefault()
       insertExpression(item.id, event.shiftKey ? 'before' : 'after')
+    } else if (event.key === 'Backspace' && item.kind === 'annotation' &&
+      event.currentTarget.selectionStart === 0 && event.currentTarget.selectionEnd === 0) {
+      // Backspace before the first character of a note makes it an expression again, with its source.
+      event.preventDefault()
+      executeCommand({ kind: 'set-item-kind', itemId: item.id, itemKind: 'expression' })
     } else if (event.key === 'Backspace' && item.source === '') {
       event.preventDefault()
       removeExpression(item.id)

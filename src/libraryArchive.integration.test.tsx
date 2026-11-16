@@ -78,7 +78,7 @@ describe('library archives (STORE-017, STORE-018)', () => {
     fireEvent.click(within(panel()).getByRole('tab', { name: 'Examples' }))
     fireEvent.drop(document.body, { dataTransfer: { types: ['Files'], files: [archiveFile(bytes)] } })
     await waitFor(() => expect(index().entries).toHaveLength(3))
-    expect(within(panel()).getByRole('tab', { name: 'My library' })).toHaveAttribute('aria-selected', 'true')
+    await waitFor(() => expect(within(panel()).getByRole('tab', { name: 'My library' })).toHaveAttribute('aria-selected', 'true'))
     expect(within(panel()).getByRole('group', { name: 'Library archive' })).toHaveTextContent(/^Imported 1 graph/)
     // The open graph is untouched.
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()

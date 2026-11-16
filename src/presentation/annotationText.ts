@@ -68,17 +68,6 @@ export function isSafeAnnotationHref(raw: string): boolean {
   return safeAnnotationHref(raw) !== null
 }
 
-/**
- * The text of an annotation source: everything after its first `#`, without
- * the whitespace that follows it. A stored annotation whose source has no `#`
- * (allowed by the document format) keeps its whole source.
- */
-export function annotationText(source: string): string {
-  const marker = source.indexOf('#')
-  const leading = source.slice(0, marker)
-  return (marker >= 0 && leading.trim() === '' ? source.slice(marker + 1) : source).trim()
-}
-
 type Delimiter = { kind: 'delimiter'; count: number; canOpen: boolean; canClose: boolean }
 type Node = AnnotationSegment | Delimiter
 

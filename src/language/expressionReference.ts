@@ -175,11 +175,11 @@ export function generalReference(examples: Readonly<{ regressive: ReferenceExamp
 }
 
 /**
- * Comment rows (#187): a row whose first non-whitespace character is `#` is
- * an annotation, shown as text in a restricted Markdown subset.
+ * Notes (#187): typing `"` first in a row makes it an annotation, shown as
+ * text in a restricted Markdown subset; the mark itself is not stored.
  */
 export const COMMENT_REFERENCE: readonly ReferenceTopic[] = [
-  topic('Comment', '# text', 'a row starting with # is shown as text, never evaluated'),
+  topic('Note', '" text', 'typing " first in a row makes it a note, shown as text and never evaluated; Backspace at its start makes it an expression again'),
   topic('Emphasis', '**bold**, *italic*', 'a*b*c, 2*3 and x_1 stay literal'),
   topic('Code', '`code`'),
   topic('Link', '[text](https://…)', 'http, https or mailto, with the destination shown'),

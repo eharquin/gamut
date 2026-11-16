@@ -16,7 +16,6 @@ import type {
 import type { AnyInterpretation } from '../geometry/interpretation'
 import { declaredName } from '../language/declaredName'
 import { directScalarEdit } from '../language/directScalarEdit'
-import { annotationText } from '../presentation/annotationText'
 import {
   formatDisplayMultivector,
   formatDisplayNumber,
@@ -78,6 +77,9 @@ export type ExpressionRowActions = Readonly<{
   closeNormalizationChoice(): void
   toggleListExpanded(itemId: string): void
 }>
+
+/** Typed first in an expression row, it turns the row into a note. */
+export const NOTE_TRIGGER = '"'
 
 type ExpressionRowProps = Readonly<{
   entry: EvaluatedDocumentItem
@@ -215,9 +217,9 @@ export function ExpressionRow({
     declaredName(item.source),
   )
   const objectName = annotation ? `Annotation ${position}` : displayLabel ?? kind
-  // An annotation shows its text, without the # marker, in the Markdown
+  // A note shows its source in the Markdown
   // subset of language §3; it is never evaluated or drawn (#187).
-  const noteText = annotation ? annotationText(item.source) : ''
+  const noteText = annotation ? item.source.trim() : ''
   const noteTextId = `annotation-text-${item.id}`
   const labelFieldShown = drawable && labelVisible && evaluation?.status === 'valid' &&
     evaluation.valueType !== 'list'
@@ -342,9 +344,19 @@ export function ExpressionRow({
               onChange={(event) => {
                 if (isPlaying) playback.stop(item.id)
                 playback.forgetPaused(item.id)
+                const { value } = event.target
+                // A quotation mark typed or pasted at the start of an expression
+                // makes the row a note and is not stored (language §3).
+                if (!annotation && value.startsWith(NOTE_TRIGGER)) {
+                  const input = event.target
+                  const caret = Math.max(0, (input.selectionStart ?? 1) - 1)
+                  executeCommand({ kind: 'set-item-kind', itemId: item.id, itemKind: 'annotation', source: value.slice(1) })
+                  requestAnimationFrame(() => input.setSelectionRange(caret, caret))
+                  return
+                }
                 executeCommand({
                   kind: 'update-source', itemId: item.id,
-                  source: event.target.value,
+                  source: value,
                 }, `source:${item.id}`)
               }}
               onBlur={() => dispatchHistory({ type: 'boundary' })}

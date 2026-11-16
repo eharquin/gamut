@@ -26,6 +26,11 @@ export type DocumentCommand =
   | Readonly<{ kind: 'delete-item'; itemId: string }>
   | Readonly<{ kind: 'clear-items' }>
   | Readonly<{ kind: 'update-source'; itemId: string; source: string }>
+  /**
+   * Makes a row a note (`annotation`) or an expression again, in one step,
+   * with `source` as its new source when given (language §3).
+   */
+  | Readonly<{ kind: 'set-item-kind'; itemId: string; itemKind: 'expression' | 'annotation'; source?: string }>
   | Readonly<{ kind: 'update-position'; itemId: string; positionSource: string }>
   | Readonly<{ kind: 'update-normalization'; itemId: string; normalization?: ItemNormalization }>
   | Readonly<{ kind: 'update-appearance'; itemId: string; appearance: ExpressionAppearance }>
@@ -54,22 +59,16 @@ export type DocumentCommand =
     }>
 
 /**
- * The kind a source gives its item (language §3): an annotation when its first
- * non-whitespace character is `#`, an expression otherwise (#187).
+ * The item with another kind (language §3). The kind of a row is stored: it
+ * never follows from its source. An item that becomes an annotation drops the
+ * position, normalization, and control the format forbids on it, and keeps
+ * its folder; undo restores them.
  */
-export function sourceKind(source: string): 'expression' | 'annotation' {
-  return source.trimStart().startsWith('#') ? 'annotation' : 'expression'
-}
-
-/**
- * The item after a source edit, with its kind derived from the new source. An
- * item that becomes an annotation drops the position, normalization, and
- * control the format forbids on it; undo restores them with the source.
- */
-function withSource(item: ExpressionItem, source: string): ExpressionItem {
-  if (sourceKind(source) === 'annotation') return { id: item.id, kind: 'annotation', source }
-  if (item.kind === 'annotation') return { id: item.id, source }
-  return { ...item, source }
+function withKind(item: ExpressionItem, kind: 'expression' | 'annotation', source: string): ExpressionItem {
+  const folder = item.folder === undefined ? {} : { folder: item.folder }
+  if (kind === 'annotation') return { id: item.id, kind, source, ...folder }
+  if (item.kind !== 'annotation') return { ...item, source }
+  return { id: item.id, source, ...folder }
 }
 
 /**
@@ -119,7 +118,7 @@ export function executeDocumentCommand(
     if (document.items.length >= MAX_EXPRESSION_ITEMS)
       return invalid(document, `A document may contain at most ${MAX_EXPRESSION_ITEMS} items.`)
     let index = document.items.length
-    let inserted = withSource(command.item, command.item.source)
+    let inserted = command.item
     if (command.anchorId !== undefined) {
       const anchor = itemIndex(document, command.anchorId)
       if (anchor < 0) return invalid(document, `Item “${command.anchorId}” does not exist.`)
@@ -263,8 +262,10 @@ export function executeDocumentCommand(
   }
 
   const replacement = command.kind === 'update-source'
-    ? withSource(item, command.source)
-    : command.kind === 'update-position'
+    ? { ...item, source: command.source }
+    : command.kind === 'set-item-kind'
+      ? withKind(item, command.itemKind, command.source ?? item.source)
+      : command.kind === 'update-position'
       ? { ...item, positionSource: command.positionSource }
       : command.kind === 'update-normalization'
         ? { ...item, normalization: command.normalization }
