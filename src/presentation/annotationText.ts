@@ -11,9 +11,12 @@
  * - links `[text](url)` whose destination is an absolute `http` or `https`
  *   URL or a `mailto` URL; any other destination leaves the whole link source
  *   as plain text;
- * - backslash escapes before `*`, `` ` ``, `[`, `]`, and `\`.
+ * - backslash escapes before `*`, `` ` ``, `[`, `]`, `\`, and the characters
+ *   that start a block: `#`, `>`, `-`, `+`, `~`, and the `.` or `)` of a
+ *   list number.
  *
- * Everything else, including raw HTML, images, headings, and lists, is text.
+ * Everything else, including raw HTML and images, is text. Blocks (headings,
+ * lists, quotes, code blocks, rules) are the layer above, `annotationBlocks.ts`.
  * Parsing takes time linear in the text length, so a source at the document
  * source limit cannot stall the interface.
  */
@@ -24,8 +27,8 @@ export type AnnotationSegment =
   | Readonly<{ kind: 'code'; text: string }>
   | Readonly<{ kind: 'link'; href: string; children: readonly AnnotationSegment[] }>
 
-/** The characters a backslash makes literal. */
-const ESCAPABLE = new Set(['*', '`', '[', ']', '\\'])
+/** The characters a backslash makes literal: the inline delimiters, and those that start a block. */
+const ESCAPABLE = new Set(['*', '`', '[', ']', '\\', '#', '>', '-', '+', '.', ')', '~'])
 
 /** Deepest emphasis nesting; further openers stay literal stars. */
 export const MAX_EMPHASIS_DEPTH = 32

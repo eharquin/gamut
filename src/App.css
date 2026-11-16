@@ -1118,8 +1118,64 @@ body.reordering-items .reorder-handle {
   color: var(--text);
   font: 0.875rem/1.45 var(--font-sans);
   overflow-wrap: anywhere;
-  /* The lines of a note show as written. */
-  white-space: pre-wrap;
+  display: grid;
+  gap: 4px;
+}
+
+.annotation-text > *,
+.annotation-text blockquote > *,
+.annotation-text li > ul,
+.annotation-text li > ol {
+  margin: 0;
+}
+
+/* The line breaks of a paragraph or a list item show as written. */
+.annotation-text p,
+.annotation-text li {
+  white-space: pre-line;
+}
+
+.annotation-text h4,
+.annotation-text h5,
+.annotation-text h6 {
+  line-height: 1.25;
+  font-weight: 700;
+}
+
+.annotation-text .note-heading-1 { font-size: 1.15rem; }
+.annotation-text .note-heading-2 { font-size: 1.02rem; }
+.annotation-text .note-heading-3 { font-size: 0.9rem; }
+
+.annotation-text ul,
+.annotation-text ol {
+  padding-inline-start: 1.3em;
+}
+
+.annotation-text blockquote {
+  display: grid;
+  gap: 4px;
+  padding-inline-start: 8px;
+  color: var(--muted);
+  border-inline-start: 2px solid var(--border-input);
+}
+
+.annotation-text pre {
+  padding: 4px 6px;
+  overflow-x: auto;
+  background: var(--surface-code);
+  border-radius: 3px;
+}
+
+.annotation-text pre code {
+  padding: 0;
+  background: transparent;
+  white-space: pre;
+}
+
+.annotation-text hr {
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--border-input);
 }
 
 .annotation-text code {

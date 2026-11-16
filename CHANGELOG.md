@@ -62,7 +62,11 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   A note is written on several lines: Enter adds a line and Ctrl or Cmd with
   Enter adds the next row. A note shows its source only while it is edited;
   otherwise only its rendered text shows, and a click on it, or focus, edits
-  it again. Escape shows the rendered text without leaving the row.
+  it again. Escape shows the rendered text without leaving the row. Besides
+  the inline subset, a note has headings (`#`, `##`, `###`), bullet and
+  numbered lists with one nested level, quotes (`>`), code blocks between
+  fences, and rules (`---`); a backslash keeps `#`, `>`, `-`, `+` or a list
+  number literal. Raw HTML, images, and tables stay text.
   The text supports `**bold**`, `*italic*`, inline `` `code` ``, backslash
   escapes, and `[links](https://…)` limited to `http`, `https`, and `mailto`,
   with their parsed destination shown (web links open in a new tab); `a*b*c`, `2*3`, and
