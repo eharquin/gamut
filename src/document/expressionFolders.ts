@@ -7,6 +7,7 @@ import {
   folderName,
   isWithin,
   MAX_EXPRESSION_FOLDERS,
+  MAX_FOLDER_DEPTH,
   newFolderProblem,
   parentPath,
   replacePrefix,
@@ -192,16 +193,27 @@ export function applyItemMove(document: ExpressionDocument, move: ItemMove): Fol
   }
 }
 
+type PlacementTarget = Readonly<{ folder: FolderPath; anchor: Anchor }>
+
 /**
- * The move that puts an item at `placement`, or null when the item, its
- * target, or the resulting document would not change. The anchor is chosen so
- * that the items of every folder stay contiguous in the item order.
+ * The folder and the anchor of `placement` for a block of items that moves
+ * together: one item, or every item of a folder. `origin` is the folder the
+ * block lies in, and `movedFolder` the folder that moves with it, if any. The
+ * anchor keeps the items of every folder contiguous in the item order.
  */
-export function planItemMove(document: ExpressionDocument, itemId: string, placement: ItemPlacement): ItemMove | null {
-  const item = document.items.find((candidate) => candidate.id === itemId)
-  if (!item) return null
-  const others = document.items.filter((candidate) => candidate.id !== itemId)
-  const without: ExpressionDocument = { ...document, items: others }
+function placementTarget(
+  document: ExpressionDocument,
+  movedIds: ReadonlySet<string>,
+  origin: FolderPath,
+  placement: ItemPlacement,
+  movedFolder?: FolderPath,
+): PlacementTarget | null {
+  const others = document.items.filter((candidate) => !movedIds.has(candidate.id))
+  const without: ExpressionDocument = {
+    ...document,
+    items: others,
+    folders: documentFolders(document).filter((folder) => !(movedFolder && isWithin(folder.path, movedFolder))),
+  }
   const subtree = (path: FolderPath) => others.filter((candidate) => isWithin(itemFolder(candidate), path))
   const endAnchor = (path: FolderPath): Anchor => {
     const inside = subtree(path)
@@ -210,16 +222,16 @@ export function planItemMove(document: ExpressionDocument, itemId: string, place
     return path.length === 0 ? {} : endAnchor(parentPath(path))
   }
   /**
-   * Next to a folder that holds no other item. A folder the item empties has
-   * no position of its own any more, so the item keeps its place in the item
+   * Next to a folder that holds no other item. A folder the block empties has
+   * no position of its own any more, so the block keeps its place in the item
    * order; a folder that was already empty is among the last rows of its parent.
    */
   const emptyFolderAnchor = (path: FolderPath): Anchor => {
-    if (!isWithin(itemFolder(item), path)) return endAnchor(parentPath(path))
-    const index = document.items.indexOf(item)
-    const previous = document.items[index - 1]
+    if (movedIds.size === 0 || !isWithin(origin, path)) return endAnchor(parentPath(path))
+    const first = document.items.findIndex((candidate) => movedIds.has(candidate.id))
+    const previous = document.items[first - 1]
     if (previous) return { anchorId: previous.id, placement: 'after' }
-    const next = document.items[index + 1]
+    const next = document.items.slice(first).find((candidate) => !movedIds.has(candidate.id))
     return next ? { anchorId: next.id, placement: 'before' } : {}
   }
   const beforeFolderAnchor = (path: FolderPath): Anchor => {
@@ -233,31 +245,113 @@ export function planItemMove(document: ExpressionDocument, itemId: string, place
     if (!first) return endAnchor(path)
     return first.kind === 'entry' ? { anchorId: first.entry.id, placement: 'before' } : beforeFolderAnchor(first.path)
   }
-  const anchorItem = (id: string) => others.find((candidate) => candidate.id === id)
 
-  let move: ItemMove
   if (placement.kind === 'start' || placement.kind === 'end') {
     if (!hasFolder(document, placement.folder)) return null
-    move = { itemId, folder: placement.folder, ...(placement.kind === 'start' ? startAnchor(placement.folder) : endAnchor(placement.folder)) }
-  } else if (placement.kind === 'before' || placement.kind === 'after') {
-    const anchor = anchorItem(placement.itemId)
-    if (!anchor) return null
-    move = { itemId, folder: itemFolder(anchor), anchorId: anchor.id, placement: placement.kind }
-  } else {
-    const { path } = placement as Extract<ItemPlacement, { path: FolderPath }>
-    if (path.length === 0 || !hasFolder(document, path)) return null
-    const inside = subtree(path)
-    const anchor = placement.kind === 'before-folder'
-      ? beforeFolderAnchor(path)
-      : inside.length > 0 ? { anchorId: inside[inside.length - 1].id, placement: 'after' as const } : emptyFolderAnchor(path)
-    move = { itemId, folder: parentPath(path), ...anchor }
+    return { folder: placement.folder, anchor: placement.kind === 'start' ? startAnchor(placement.folder) : endAnchor(placement.folder) }
   }
+  if (placement.kind === 'before' || placement.kind === 'after') {
+    const anchor = others.find((candidate) => candidate.id === placement.itemId)
+    if (!anchor) return null
+    return { folder: itemFolder(anchor), anchor: { anchorId: anchor.id, placement: placement.kind } }
+  }
+  const { path } = placement as Extract<ItemPlacement, { path: FolderPath }>
+  if (path.length === 0 || !hasFolder(document, path)) return null
+  const inside = subtree(path)
+  const anchor = placement.kind === 'before-folder'
+    ? beforeFolderAnchor(path)
+    : inside.length > 0 ? { anchorId: inside[inside.length - 1].id, placement: 'after' as const } : emptyFolderAnchor(path)
+  return { folder: parentPath(path), anchor }
+}
 
+/**
+ * The move that puts an item at `placement`, or null when the item, its
+ * target, or the resulting document would not change.
+ */
+export function planItemMove(document: ExpressionDocument, itemId: string, placement: ItemPlacement): ItemMove | null {
+  const item = document.items.find((candidate) => candidate.id === itemId)
+  if (!item) return null
+  const target = placementTarget(document, new Set([itemId]), itemFolder(item), placement)
+  if (!target) return null
+  const move: ItemMove = { itemId, folder: target.folder, ...target.anchor }
   const result = applyItemMove(document, move)
   if (result.status !== 'applied') return null
   const before = document.items.indexOf(item)
   const after = result.document.items.findIndex((candidate) => candidate.id === itemId)
   return before === after && samePath(itemFolder(item), move.folder) ? null : move
+}
+
+/** The move of a folder, with everything it holds, into `parent` and next to the anchor. */
+export type FolderMove = Readonly<{
+  path: FolderPath
+  parent: FolderPath
+  anchorId?: string
+  placement?: 'before' | 'after'
+}>
+
+/**
+ * Moves a folder into `parent`: its items move together, in their order, next
+ * to the anchor or to the end, and its subfolders and collapsed state follow
+ * it. Refused when the folder would enter itself, when `parent` already has a
+ * folder of that name, or when its subfolders would lie too deep.
+ */
+export function applyFolderMove(document: ExpressionDocument, move: FolderMove): FolderEdit {
+  const { path, parent } = move
+  if (path.length === 0 || !hasFolder(document, path)) return refused('The folder does not exist.')
+  if (!hasFolder(document, parent)) return refused(`The folder “${describeFolder(parent)}” does not exist.`)
+  if (isWithin(parent, path)) return refused('A folder cannot move into itself.')
+  const name = folderName(path)
+  const moved = [...parent, name]
+  if (!samePath(parent, parentPath(path))) {
+    if (hasFolder(document, moved))
+      return refused(`A folder named “${name}” already exists in ${parent.length === 0 ? 'the top level' : `“${describeFolder(parent)}”`}.`)
+    const deepest = Math.max(...folderPaths(document).filter((candidate) => isWithin(candidate, path)).map((candidate) => candidate.length))
+    if (deepest - path.length + moved.length > MAX_FOLDER_DEPTH)
+      return refused(`Folders may be nested at most ${MAX_FOLDER_DEPTH} levels deep.`)
+  }
+  const block = document.items.filter((item) => isWithin(itemFolder(item), path))
+  const others = document.items.filter((item) => !isWithin(itemFolder(item), path))
+  let target = others.length
+  if (move.anchorId !== undefined) {
+    const anchor = others.findIndex(({ id }) => id === move.anchorId)
+    if (anchor < 0) return refused(`Item “${move.anchorId}” does not exist outside the folder.`)
+    target = anchor + (move.placement === 'before' ? 0 : 1)
+  }
+  const reordered = { ...document, items: [...others.slice(0, target), ...block, ...others.slice(target)] }
+  return { status: 'applied', document: samePath(moved, path) ? reordered : moveFolderContents(reordered, path, moved) }
+}
+
+/**
+ * The move that puts a folder at `placement`, or null when the folder or the
+ * target does not exist, or nothing would change. A move that the document
+ * refuses is still returned, so that its reason can be reported.
+ */
+export function planFolderMove(document: ExpressionDocument, path: FolderPath, placement: ItemPlacement): FolderMove | null {
+  if (path.length === 0 || !hasFolder(document, path)) return null
+  const movedIds = new Set(document.items.filter((item) => isWithin(itemFolder(item), path)).map(({ id }) => id))
+  const target = placementTarget(document, movedIds, parentPath(path), placement, path)
+  if (!target) return null
+  const move: FolderMove = { path, parent: target.folder, ...target.anchor }
+  const result = applyFolderMove(document, move)
+  if (result.status !== 'applied') return move
+  const unchanged = samePath(target.folder, parentPath(path)) &&
+    result.document.items.every((item, index) => item.id === document.items[index].id)
+  return unchanged ? null : move
+}
+
+/** Removes a folder with its subfolders and every item they hold. */
+export function deleteFolderContents(document: ExpressionDocument, path: FolderPath): FolderEdit {
+  if (path.length === 0 || !hasFolder(document, path)) return refused('The folder does not exist.')
+  const removed = new Set(document.items.filter((item) => isWithin(itemFolder(item), path)).map(({ id }) => id))
+  return {
+    status: 'applied',
+    document: {
+      ...document,
+      folders: documentFolders(document).filter((folder) => !isWithin(folder.path, path)),
+      items: document.items.filter(({ id }) => !removed.has(id)),
+      appearance: Object.fromEntries(Object.entries(document.appearance).filter(([id]) => !removed.has(id))),
+    },
+  }
 }
 
 export type MoveStep = 'up' | 'down' | 'first' | 'last'
@@ -299,6 +393,51 @@ export function stepPlacement(document: ExpressionDocument, itemId: string, step
   // A collapsed folder is skipped; one without items is among the last rows
   // of its parent, so the row is already last there.
   return next.entryCount > 0 ? { kind: 'after-folder', path: next.path } : leave
+}
+
+/**
+ * The keyboard move of a folder through the visible rows (A11Y-011), with the
+ * rules of `stepPlacement`: up and down pass a neighbouring row of the same
+ * folder, enter an expanded folder next to it, skip a collapsed one, and
+ * leave the parent from its first or last place.
+ */
+export function folderStepPlacement(document: ExpressionDocument, path: FolderPath, step: MoveStep): ItemPlacement | null {
+  const rows = expressionRows(document)
+  const index = rows.findIndex((row) => row.kind === 'folder' && samePath(row.path, path))
+  if (index < 0) return null
+  const parent = parentPath(path)
+  if (step === 'first') return { kind: 'start', folder: parent }
+  if (step === 'last') return { kind: 'end', folder: parent }
+  const container = (row: ExpressionRow) => row.kind === 'folder' ? row.path : row.folder
+  /** The folder directly inside `parent` that a row belongs to. */
+  const sibling = (row: ExpressionRow) => container(row).slice(0, parent.length + 1)
+  if (step === 'up') {
+    const previous = rows[index - 1]
+    if (!previous) return null
+    if (previous.kind === 'folder' && samePath(previous.path, parent)) return { kind: 'before-folder', path: parent }
+    if (previous.kind === 'entry' && samePath(previous.folder, parent)) return { kind: 'before', itemId: previous.entry.id }
+    const beside = sibling(previous)
+    return isFolderCollapsed(document, beside) ? { kind: 'before-folder', path: beside } : { kind: 'end', folder: beside }
+  }
+  const leave: ItemPlacement | null = parent.length === 0 ? null : { kind: 'after-folder', path: parent }
+  const next = rows.slice(index + 1).find((row) => !isWithin(container(row), path))
+  if (!next || !isWithin(container(next), parent) || (next.kind === 'folder' && samePath(next.path, parent))) return leave
+  if (next.kind === 'entry' && samePath(next.folder, parent)) return { kind: 'after', itemId: next.entry.id }
+  const beside = sibling(next)
+  if (!isFolderCollapsed(document, beside)) return { kind: 'start', folder: beside }
+  return next.kind === 'folder' && next.entryCount > 0 ? { kind: 'after-folder', path: beside } : leave
+}
+
+/** The position of a folder among the rows of its parent, for announcements. */
+export function folderPosition(
+  document: ExpressionDocument,
+  path: FolderPath,
+): Readonly<{ parent: FolderPath; position: number; count: number }> | null {
+  const parent = parentPath(path)
+  const tree = expressionFolderTree(document)
+  const children = parent.length === 0 ? tree : findFolderNode(tree, parent)?.children ?? []
+  const position = children.findIndex((node) => node.kind === 'folder' && samePath(node.path, path))
+  return position < 0 ? null : { parent, position: position + 1, count: children.length }
 }
 
 /** The position of an item among the rows of its folder, for announcements. */

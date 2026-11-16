@@ -4,7 +4,10 @@ import { createDocumentHistory, documentHistoryReducer } from './documentHistory
 import { expressionDocument, type ExpressionDocument, type ExpressionItem } from './expressionDocument'
 import {
   expressionRows,
+  folderPosition,
+  folderStepPlacement,
   itemPosition,
+  planFolderMove,
   planItemMove,
   stepPlacement,
   type ItemPlacement,
@@ -246,6 +249,104 @@ describe('moving rows', () => {
   it('reports the position of a row in its folder', () => {
     expect(itemPosition(sample(), 'b')).toEqual({ folder: ['F'], position: 1, count: 2 })
     expect(itemPosition(sample(), 'd')).toEqual({ folder: [], position: 3, count: 3 })
+  })
+})
+
+function moveFolder(document: ExpressionDocument, path: string[], placement: ItemPlacement): ExpressionDocument {
+  const planned = planFolderMove(document, path, placement)
+  if (!planned) return document
+  return apply(document, { kind: 'move-folder', ...planned })
+}
+
+function stepFolder(document: ExpressionDocument, path: string[], direction: MoveStep): ExpressionDocument {
+  const placement = folderStepPlacement(document, path, direction)
+  return placement ? moveFolder(document, path, placement) : document
+}
+
+/** a, folder F with b, folder H with c, then d. */
+function siblings(): ExpressionDocument {
+  const items: ExpressionItem[] = [
+    { id: 'a', source: 'a = 1' },
+    { id: 'b', source: 'b = 2', folder: ['F'] },
+    { id: 'c', source: 'c = 3', folder: ['H'] },
+    { id: 'd', source: 'd = a + b + c' },
+  ]
+  return { ...expressionDocument(items), folders: [{ path: ['F'], collapsed: false }, { path: ['H'], collapsed: true }] }
+}
+
+describe('moving folders', () => {
+  it('moves a folder with every row and subfolder it holds, and keeps values', () => {
+    const before = evaluations(sample())
+    const moved = moveFolder(sample(), ['F'], { kind: 'after', itemId: 'd' })
+    expect(layout(moved)).toEqual(['a', 'd', '[F]', '  b', '  [G]', '    c'])
+    expectItemOrderMatchesRows(moved)
+    expect(evaluations(moved)).toEqual(before)
+    expect(layout(moveFolder(moved, ['F'], { kind: 'start', folder: [] }))).toEqual(['[F]', '  b', '  [G]', '    c', 'a', 'd'])
+  })
+
+  it('nests a folder in another and takes it out again, with its collapsed state', () => {
+    const nested = moveFolder(siblings(), ['H'], { kind: 'end', folder: ['F'] })
+    expect(layout(nested)).toEqual(['a', '[F]', '  b', '  [H]+', 'd'])
+    expect(nested.items.find(({ id }) => id === 'c')?.folder).toEqual(['F', 'H'])
+    expectItemOrderMatchesRows({ ...nested, folders: nested.folders?.map((folder) => ({ ...folder, collapsed: false })) })
+    const out = moveFolder(nested, ['F', 'H'], { kind: 'before-folder', path: ['F'] })
+    expect(layout(out)).toEqual(['a', '[H]+', '[F]', '  b', 'd'])
+    expect(folderPosition(out, ['H'])).toEqual({ parent: [], position: 2, count: 4 })
+  })
+
+  it('refuses a move into itself, onto a name already there, and past the depth limit', () => {
+    const refusal = (document: ExpressionDocument, command: DocumentCommand) => {
+      const result = executeDocumentCommand(document, command)
+      return result.status === 'applied' ? 'applied' : result.reason
+    }
+    expect(refusal(sample(), { kind: 'move-folder', path: ['F'], parent: ['F', 'G'] })).toBe('A folder cannot move into itself.')
+    const clash = apply(sample(), { kind: 'create-folder', path: ['G'] })
+    expect(refusal(clash, { kind: 'move-folder', path: ['F', 'G'], parent: [] })).toBe('A folder named “G” already exists in the top level.')
+    let deep = sample()
+    const chain = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7']
+    chain.forEach((_, index) => { deep = apply(deep, { kind: 'create-folder', path: chain.slice(0, index + 1) }) })
+    // F holds G: under seven folders its subfolder would be at level nine.
+    expect(refusal(deep, { kind: 'move-folder', path: ['F'], parent: chain })).toBe('Folders may be nested at most 8 levels deep.')
+    expect(refusal(deep, { kind: 'move-folder', path: ['F'], parent: chain.slice(0, 6) })).toBe('applied')
+    expect(planFolderMove(sample(), ['F'], { kind: 'before', itemId: 'd' })).toBeNull()
+    expect(planFolderMove(sample(), ['F'], { kind: 'before', itemId: 'b' })).toBeNull()
+  })
+
+  it('moves a folder step by step by keyboard', () => {
+    let document = siblings()
+    expect(layout(document)).toEqual(['a', '[F]', '  b', '[H]+', 'd'])
+    // Down skips the collapsed folder, then passes the row, then cannot go further.
+    document = stepFolder(document, ['F'], 'down')
+    expect(layout(document)).toEqual(['a', '[H]+', '[F]', '  b', 'd'])
+    document = stepFolder(document, ['F'], 'down')
+    expect(layout(document)).toEqual(['a', '[H]+', 'd', '[F]', '  b'])
+    expect(folderStepPlacement(document, ['F'], 'down')).toBeNull()
+    document = stepFolder(document, ['F'], 'first')
+    expect(layout(document)).toEqual(['[F]', '  b', 'a', '[H]+', 'd'])
+    expect(folderStepPlacement(document, ['F'], 'up')).toBeNull()
+    // An expanded folder next to it is entered, and left again from its first place.
+    document = apply(document, { kind: 'move-folder', path: ['H'], parent: [], anchorId: 'b', placement: 'after' })
+    document = { ...document, folders: document.folders?.map((folder) => ({ ...folder, collapsed: false })) }
+    expect(layout(document)).toEqual(['[F]', '  b', '[H]', '  c', 'a', 'd'])
+    document = stepFolder(document, ['H'], 'up')
+    expect(layout(document)).toEqual(['[F]', '  b', '  [H]', '    c', 'a', 'd'])
+    document = stepFolder(document, ['F', 'H'], 'up')
+    expect(layout(document)).toEqual(['[F]', '  [H]', '    c', '  b', 'a', 'd'])
+    document = stepFolder(document, ['F', 'H'], 'up')
+    expect(layout(document)).toEqual(['[H]', '  c', '[F]', '  b', 'a', 'd'])
+    expectItemOrderMatchesRows(document)
+  })
+
+  it('removes a folder with its subfolders, rows, and their appearance, in one undo step', () => {
+    const styled = { ...sample(), appearance: { b: { visible: false }, a: { label: 'kept' } } }
+    const removed = apply(styled, { kind: 'delete-folder', path: ['F'], contents: true })
+    expect(layout(removed)).toEqual(['a', 'd'])
+    expect(removed.folders).toEqual([])
+    expect(removed.appearance).toEqual({ a: { label: 'kept' } })
+    let history = createDocumentHistory(styled)
+    history = documentHistoryReducer(history, { type: 'execute', command: { kind: 'delete-folder', path: ['F'], contents: true } })
+    history = documentHistoryReducer(history, { type: 'undo' })
+    expect(layout(history.present)).toEqual(layout(styled))
   })
 })
 

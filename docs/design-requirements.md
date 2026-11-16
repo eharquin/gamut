@@ -254,9 +254,14 @@ They are stored in canonical format version 8.
   are structural only: they have no value, name binding, or dependency, do
   not override appearance or position, and do not change evaluation or the
   canvas draw order, which stays the item order. Removing a folder keeps its
-  items at the folder's position in its parent. Creating, renaming, removing,
-  nesting folders and moving items are undoable commands; a move preserves
-  item identities and source. A folder's collapsed state is document content:
+  items at the folder's position in its parent; removing a folder together
+  with its subfolders and items is a separate action that requires the
+  sustained hold of A11Y-007 and is one undoable step. A folder moves with
+  every item and subfolder it holds, between rows, into another folder, or
+  out of one; a move that would give two folders of one parent the same
+  name, or exceed the nesting limit, is refused. Creating, renaming, removing,
+  nesting, and moving folders and moving items are undoable commands; a move
+  preserves item identities and source. A folder's collapsed state is document content:
   it is saved, exported, and carried by scene links and library graphs, and
   changing it counts as an unsaved change, but it creates no history entry.
   Collapsing a folder hides its rows in the expression panel only. A folder
