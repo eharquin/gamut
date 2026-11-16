@@ -37,9 +37,12 @@ describe('comment rows (#187)', () => {
     fireEvent.change(input, { target: { value: '"Titre **gras**' } })
 
     const note = screen.getByRole('textbox', { name: 'Annotation 1' })
-    expect(note).toBe(input)
+    // A note is edited in a textarea, which takes the focus of the row.
+    expect(note.tagName).toBe('TEXTAREA')
+    expect(note).toHaveFocus()
     // The quotation mark is not stored.
     expect(note).toHaveValue('Titre **gras**')
+    fireEvent.blur(note)
     const article = row('Annotation 1')
     // Text without the delimiters, as a screen reader reads it.
     expect(note).toHaveAccessibleDescription('Titre gras')
@@ -78,17 +81,19 @@ describe('comment rows (#187)', () => {
     render(<App />)
     const input = screen.getByRole<HTMLInputElement>('textbox', { name: 'Expression 1' })
     fireEvent.change(input, { target: { value: '"V = vector(1, 3)' } })
-    fireEvent.blur(input)
-    expect(screen.getByRole('textbox', { name: 'Annotation 1' })).toBeInTheDocument()
+    const note = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Annotation 1' })
 
     // Backspace elsewhere in the note edits its text only.
-    input.setSelectionRange(3, 3)
-    fireEvent.keyDown(input, { key: 'Backspace' })
+    note.setSelectionRange(3, 3)
+    fireEvent.keyDown(note, { key: 'Backspace' })
     expect(screen.getByRole('textbox', { name: 'Annotation 1' })).toBeInTheDocument()
-    input.setSelectionRange(0, 0)
-    fireEvent.keyDown(input, { key: 'Backspace' })
-    expect(screen.getByRole('textbox', { name: 'Expression 1' })).toBe(input)
-    expect(input).toHaveValue('V = vector(1, 3)')
+    note.setSelectionRange(0, 0)
+    fireEvent.keyDown(note, { key: 'Backspace' })
+    const expression = screen.getByRole<HTMLInputElement>('textbox', { name: 'Expression 1' })
+    expect(expression).toHaveValue('V = vector(1, 3)')
+    // The row keeps the focus, with the caret where the note started.
+    expect(expression).toHaveFocus()
+    expect(expression.selectionStart).toBe(0)
     expect(screen.getByText('e1 + 3e2')).toBeInTheDocument()
     expect(viewportDescription()).toMatch(/V runs from the origin to 1, 3/)
 
@@ -115,6 +120,7 @@ describe('comment rows (#187)', () => {
     fireEvent.change(input, {
       target: { value: '"See [the docs](https://example.org/docs), [bad](javascript:alert(1)) and <b>x</b>' },
     })
+    fireEvent.blur(screen.getByRole('textbox', { name: 'Annotation 1' }))
     const article = row('Annotation 1')
     const links = within(article).getAllByRole('link')
     expect(links).toHaveLength(1)
@@ -126,9 +132,75 @@ describe('comment rows (#187)', () => {
     expect(link).toHaveAttribute('title', 'https://example.org/docs')
     expect(link).toHaveAccessibleDescription('https://example.org/docs (opens in a new tab)')
     expect(article.querySelector('a[href^="javascript"], b, script')).toBeNull()
-    expect(within(article).getByText(/\[bad\]\(javascript:alert\(1\)\) and <b>x<\/b>/)).toBeInTheDocument()
+    expect(article.querySelector('.note-rendered')).toHaveTextContent('[bad](javascript:alert(1)) and <b>x</b>')
     // The link follows the source editor in reading and Tab order.
-    expect(input.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByRole('textbox', { name: 'Annotation 1' }).compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('edits a note on several lines and shows only its rendered text when it is not edited', () => {
+    openStored([{ id: 'note', kind: 'annotation', source: 'First **line**' }, { id: 'v', source: 'V = vector(2, 1)' }])
+    const note = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Annotation 1' })
+    const rendered = () => row('Annotation 1').querySelector('.note-rendered') as HTMLElement
+    // Not edited: the rendered text shows and the textarea stays in the Tab order.
+    expect(rendered()).not.toHaveAttribute('hidden')
+    expect(note).toHaveClass('is-collapsed')
+    expect(note.tabIndex).toBe(0)
+
+    // A click on the rendered text edits the source.
+    fireEvent.mouseDown(within(rendered()).getByText('line'))
+    expect(note).toHaveFocus()
+    expect(rendered()).toHaveAttribute('hidden')
+    expect(note).not.toHaveClass('is-collapsed')
+
+    // Enter adds a line to the note, not a row to the document.
+    fireEvent.keyDown(note, { key: 'Enter' })
+    fireEvent.change(note, { target: { value: 'First **line**\nSecond line' } })
+    expect(screen.getAllByRole('textbox', { name: /^(Annotation|Expression) \d+$/ })).toHaveLength(2)
+    expect(note).toHaveValue('First **line**\nSecond line')
+
+    // Escape shows the rendered text again and keeps the focus on the row.
+    fireEvent.keyDown(note, { key: 'Escape' })
+    expect(rendered()).not.toHaveAttribute('hidden')
+    expect(rendered()).toHaveTextContent('First line Second line')
+    expect(note).toHaveFocus()
+    // Enter edits it again.
+    fireEvent.keyDown(note, { key: 'Enter' })
+    expect(rendered()).toHaveAttribute('hidden')
+
+    // Ctrl with Enter adds the next row, an expression.
+    fireEvent.keyDown(note, { key: 'Enter', ctrlKey: true })
+    expect(screen.getByRole('textbox', { name: 'Expression 2' })).toHaveValue('')
+    expect(screen.getByRole('textbox', { name: 'Expression 3' })).toHaveValue('V = vector(2, 1)')
+  })
+
+  it('moves between rows with the arrows only from the first and last position of a note', () => {
+    openStored([
+      { id: 'a', source: 'a = 1' },
+      { id: 'note', kind: 'annotation', source: 'one\ntwo' },
+      { id: 'b', source: 'b = 2' },
+    ])
+    const note = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Annotation 2' })
+    act(() => note.focus())
+    note.setSelectionRange(2, 2)
+    fireEvent.keyDown(note, { key: 'ArrowDown' })
+    fireEvent.keyDown(note, { key: 'ArrowUp' })
+    expect(note).toHaveFocus()
+    note.setSelectionRange(7, 7)
+    fireEvent.keyDown(note, { key: 'ArrowDown' })
+    expect(screen.getByRole('textbox', { name: 'Expression 3' })).toHaveFocus()
+    act(() => note.focus())
+    note.setSelectionRange(0, 0)
+    fireEvent.keyDown(note, { key: 'ArrowUp' })
+    expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveFocus()
+  })
+
+  it('makes a note of several lines one line when it becomes an expression', () => {
+    openStored([{ id: 'note', kind: 'annotation', source: 'V =\n  vector(2, 1)' }])
+    const note = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Annotation 1' })
+    act(() => note.focus())
+    note.setSelectionRange(0, 0)
+    fireEvent.keyDown(note, { key: 'Backspace' })
+    expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('V = vector(2, 1)')
   })
 
   it('keeps annotations out of names and dependencies', () => {
