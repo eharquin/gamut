@@ -2598,26 +2598,29 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
             <button
               ref={addButtonRef}
               type="button"
-              className="add-expression"
+              className="toolbar-add"
               onClick={() => insertExpression()}
               disabled={
                 expressionDoc.items.length >= MAX_EXPRESSION_ITEMS
               }
               aria-label="Add expression"
+              title="Add expression"
             >
-              <span aria-hidden="true">+</span>
-              <span>Add expression</span>
+              <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+                <path d="M9 3.5v11M3.5 9h11" strokeLinecap="round" />
+              </svg>
             </button>
             <button
               type="button"
-              className="add-folder"
+              className="toolbar-add"
               onClick={folders.createFolder}
               aria-label="New folder"
               title="New folder"
             >
-              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-                <path d="M1.75 4.25v8.5h12.5v-7h-6.5l-1.5-1.5h-4.5z" fill="none" strokeLinejoin="round" />
-                <path d="M8 7.25v4M6 9.25h4" strokeLinecap="round" />
+              {/* A folder with a plus inside it. */}
+              <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+                <path d="M2.25 14.75V3.25h4.9l1.6 1.75h7v9.75z" strokeLinejoin="round" />
+                <path d="M9 7.5v5M6.5 10h5" strokeLinecap="round" />
               </svg>
             </button>
             <div className="expression-history-controls" role="group" aria-label="Expression history">
