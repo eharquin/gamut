@@ -238,7 +238,7 @@ describe('expression folders (DOC-013, A11Y-011)', () => {
     expect(visibleSources()).toEqual(['B = 2', 'C = A + B', 'A = 1'])
   })
 
-  it('makes a folder of a row when a slash is typed first, where the row is', () => {
+  it('makes a folder of a row when a slash is typed first, where the row is', async () => {
     open(flat())
     fireEvent.change(editorOf('B = 2'), { target: { value: '/Sums' } })
     // The folder is named by what follows the slash, and its name is open for editing.
@@ -250,8 +250,14 @@ describe('expression folders (DOC-013, A11Y-011)', () => {
     expect(visibleSources()).toEqual(['A = 1', '', 'C = A + B'])
     expect(editorOf('').closest('.folder-member')).toHaveStyle({ '--folder-depth': '1' })
     expect(screen.getByText('Folder Sums created with this row.')).toBeInTheDocument()
-    fireEvent.keyDown(name, { key: 'Escape' })
-    // One undo gives the row back.
+    // Enter validates the name and goes to the first row of the folder.
+    fireEvent.change(name, { target: { value: 'Totals' } })
+    fireEvent.keyDown(name, { key: 'Enter' })
+    await waitFor(() => expect(editorOf('')).toHaveFocus())
+    expect(folderButton('Totals')).toHaveAccessibleName('Folder Totals, level 1, 1 row')
+    // One undo takes the new name back, and one more gives the row back.
+    fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
+    expect(folderButton('Sums')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
     expect(visibleSources()).toEqual(['A = 1', 'B = 2', 'C = A + B'])
     expect(screen.queryByRole('button', { name: /^Folder / })).not.toBeInTheDocument()

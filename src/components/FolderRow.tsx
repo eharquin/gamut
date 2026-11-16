@@ -26,6 +26,11 @@ type FolderRowProps = Readonly<{
   onToggle(): void
   /** Absent for a read-only folder. Returns why a name is refused, or null. */
   onRename?(name: string): string | null
+  /**
+   * Called when Enter has validated the name: moves focus into the folder and
+   * returns true, or returns false to leave focus on the folder itself.
+   */
+  onNameEntered?(): boolean
   /** Absent for a read-only folder. */
   onDelete?(): void
   /**
@@ -61,7 +66,7 @@ let focusOnMount: string | null = null
  */
 export function FolderRow({
   path, name, level, expanded, entryCount, entryNoun, renaming, onRenamingChange,
-  onToggle, onRename, onDelete, onDeleteContents, handle, className, rowRef, children,
+  onToggle, onRename, onNameEntered, onDelete, onDeleteContents, handle, className, rowRef, children,
 }: FolderRowProps) {
   const [draft, setDraft] = useState(name)
   const [error, setError] = useState<string | null>(null)
@@ -91,7 +96,7 @@ export function FolderRow({
     toggleRef.current?.focus()
   }, [key])
 
-  const finish = (commit: boolean) => {
+  const finish = (commit: boolean, entered = false) => {
     if (ended.current) return
     if (commit && onRename) {
       const problem = onRename(draft)
@@ -101,7 +106,15 @@ export function FolderRow({
         return
       }
       const renamed = draft.trim()
-      focusOnMount = renamed === name ? null : folderKey([...path.slice(0, -1), renamed])
+      // Enter goes on to the content of the folder when there is some.
+      const inside = entered && (onNameEntered?.() ?? false)
+      focusOnMount = inside || renamed === name ? null : folderKey([...path.slice(0, -1), renamed])
+      if (inside) {
+        ended.current = true
+        setError(null)
+        onRenamingChange(false)
+        return
+      }
     }
     ended.current = true
     setError(null)
@@ -187,7 +200,7 @@ export function FolderRow({
             maxLength={512}
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === 'Enter') { event.preventDefault(); finish(true) }
+              if (event.key === 'Enter') { event.preventDefault(); finish(true, true) }
               else if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); finish(false) }
             }}
             onBlur={() => { if (!error) finish(true) }}
