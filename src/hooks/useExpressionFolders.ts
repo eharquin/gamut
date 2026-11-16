@@ -63,8 +63,6 @@ export type ExpressionFolders = Readonly<{
   /** Renames a folder; returns why it is refused, or null. */
   renameFolder(path: FolderPath, name: string): string | null
   deleteFolder(path: FolderPath): void
-  /** Removes a folder with its subfolders and every row they hold. */
-  deleteFolderContents(path: FolderPath): void
   toggleFolder(path: FolderPath): void
   beginFolderReorder(event: ReactPointerEvent<HTMLButtonElement>, path: FolderPath): void
   reorderFolderWithKeyboard(event: KeyboardEvent<HTMLButtonElement>, path: FolderPath): void
@@ -81,8 +79,6 @@ type Options = Readonly<{
   /** Each row's article, by item identity. */
   rowElements: RefObject<Map<string, HTMLElement>>
   announce(message: string): void
-  /** Called before rows are removed with their folder, to release what the interface holds for them. */
-  onRowsRemoved?(itemIds: readonly string[]): void
 }>
 
 /** What a drag moves: one row, or a folder with everything it holds. */
@@ -99,7 +95,7 @@ function rowName(document: ExpressionDocument, itemId: string): string {
  * pointer and keyboard, with one announcement per move. Every change goes
  * through a document command; collapsing is not a history step.
  */
-export function useExpressionFolders({ document, executeCommand, dispatchHistory, rowElements, announce, onRowsRemoved }: Options): ExpressionFolders {
+export function useExpressionFolders({ document, executeCommand, dispatchHistory, rowElements, announce }: Options): ExpressionFolders {
   const [renamingKey, setRenamingKey] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
   const folderRowRefs = useRef(new Map<string, HTMLElement>())
@@ -161,13 +157,6 @@ export function useExpressionFolders({ document, executeCommand, dispatchHistory
     announce(`Folder ${folderName(path)} cannot move ${step === 'up' || step === 'first' ? 'up' : 'down'}.`)
     return false
   }, [document, moveFolderTo, announce])
-
-  const deleteFolderContents = useCallback((path: FolderPath) => {
-    const removed = document.items.filter((item) => isWithin(itemFolder(item), path)).map(({ id }) => id)
-    onRowsRemoved?.(removed)
-    executeCommand({ kind: 'delete-folder', path, contents: true })
-    announce(`Folder ${folderName(path)} removed with its ${removed.length} ${removed.length === 1 ? 'row' : 'rows'}.`)
-  }, [document, executeCommand, announce, onRowsRemoved])
 
   const createFolder = useCallback(() => {
     const path = [uniqueFolderName(folderPaths(document), [])]
@@ -367,7 +356,7 @@ export function useExpressionFolders({ document, executeCommand, dispatchHistory
 
   return {
     renamingKey, setRenamingKey, dropTarget, folderRowRefs,
-    createFolder, convertRowToFolder, renameFolder, deleteFolder, deleteFolderContents, toggleFolder, moveStep,
+    createFolder, convertRowToFolder, renameFolder, deleteFolder, toggleFolder, moveStep,
     beginRowReorder, reorderRowWithKeyboard, beginFolderReorder, reorderFolderWithKeyboard,
   }
 }

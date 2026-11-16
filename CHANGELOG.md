@@ -100,10 +100,8 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   has the same handle: dragging it, or the same keys, moves the folder with
   every row it holds, between rows and past other folders. Folders all stay at
   the top level: the interface does not put a folder inside another one. The **×** of a folder, shown with its number of
-  rows while the folder's row is hovered or holds focus, removes the folder and keeps its rows at its
-  position; holding it for one second, with the ring of **Clear all
-  expressions**, removes the folder with its subfolders and rows, in one undo
-  step. Enter inserts the new row in the same folder.
+  rows while the folder's row is hovered or holds focus, removes the folder
+  and keeps its rows, which move to the level above. Enter inserts the new row in the same folder.
   Folders are structural only: values, appearance, and the draw order are
   unchanged, and forward references stay valid. Folders are stored in
   canonical format version 8 (`Item.folder`, the folder names from the root,

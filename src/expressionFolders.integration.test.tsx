@@ -1,7 +1,6 @@
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
-import { CLEAR_HOLD_MS } from './components/ClearExpressionsButton'
 import { parseCanonicalDocument, serializeCanonicalDocument, toCanonicalDocument } from './document/canonicalDocument'
 import { ACTIVE_DOCUMENT_KEY } from './document/documentStorage'
 import { expressionDocument, type ExpressionDocument } from './document/expressionDocument'
@@ -152,43 +151,6 @@ describe('expression folders (DOC-013, A11Y-011)', () => {
     fireEvent.change(name, { target: { value: 'Totals' } })
     fireEvent.keyDown(name, { key: 'Enter' })
     expect(folderButton('Totals')).toBeInTheDocument()
-  })
-
-  it('removes only the folder on a press, and its rows too on a sustained hold', () => {
-    vi.useFakeTimers()
-    try {
-      open({
-        ...flat(),
-        items: flat().items.map((item, index) => index > 0 ? { ...item, folder: ['Sums'] } : item),
-        folders: [{ path: ['Sums'], collapsed: false }],
-      })
-      const remove = () => screen.getByRole('button', { name: 'Remove folder Sums' })
-      expect(remove()).toHaveAccessibleDescription('Press to remove the folder and keep its rows. Hold to remove the folder and its 2 rows.')
-      // A release before the hold completes keeps the rows.
-      fireEvent.pointerDown(remove(), { button: 0 })
-      act(() => { vi.advanceTimersByTime(CLEAR_HOLD_MS - 100) })
-      fireEvent.pointerUp(remove(), { button: 0 })
-      expect(screen.queryByRole('button', { name: /^Folder Sums/ })).not.toBeInTheDocument()
-      expect(visibleSources()).toEqual(['A = 1', 'B = 2', 'C = A + B'])
-
-      fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
-      fireEvent.pointerDown(remove(), { button: 0 })
-      expect(remove()).toHaveClass('is-holding')
-      act(() => { vi.advanceTimersByTime(CLEAR_HOLD_MS) })
-      expect(screen.queryByRole('button', { name: /^Folder Sums/ })).not.toBeInTheDocument()
-      expect(visibleSources()).toEqual(['A = 1'])
-      expect(screen.getByText('Folder Sums removed with its 2 rows.')).toBeInTheDocument()
-      // One undo brings the folder and its rows back.
-      fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
-      expect(visibleSources()).toEqual(['A = 1', 'B = 2', 'C = A + B'])
-
-      // The keyboard holds too.
-      fireEvent.keyDown(remove(), { key: 'Enter' })
-      act(() => { vi.advanceTimersByTime(CLEAR_HOLD_MS) })
-      expect(visibleSources()).toEqual(['A = 1'])
-    } finally {
-      vi.useRealTimers()
-    }
   })
 
   it('moves a folder with its rows by its handle, without entering another folder', () => {

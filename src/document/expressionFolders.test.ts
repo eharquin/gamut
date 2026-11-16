@@ -339,17 +339,6 @@ describe('moving folders', () => {
     expect(folderStepPlacement(stepFolder(stepFolder(withEmpty, ['F'], 'down'), ['F'], 'down'), ['F'], 'down')).toBeNull()
   })
 
-  it('removes a folder with its subfolders, rows, and their appearance, in one undo step', () => {
-    const styled = { ...sample(), appearance: { b: { visible: false }, a: { label: 'kept' } } }
-    const removed = apply(styled, { kind: 'delete-folder', path: ['F'], contents: true })
-    expect(layout(removed)).toEqual(['a', 'd'])
-    expect(removed.folders).toEqual([])
-    expect(removed.appearance).toEqual({ a: { label: 'kept' } })
-    let history = createDocumentHistory(styled)
-    history = documentHistoryReducer(history, { type: 'execute', command: { kind: 'delete-folder', path: ['F'], contents: true } })
-    history = documentHistoryReducer(history, { type: 'undo' })
-    expect(layout(history.present)).toEqual(layout(styled))
-  })
 })
 
 describe('folder history', () => {

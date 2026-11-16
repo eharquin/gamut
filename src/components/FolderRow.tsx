@@ -8,7 +8,6 @@ import {
   type ReactNode,
 } from 'react'
 import { folderKey, type FolderPath } from '../document/folderModel'
-import { CLEAR_HOLD_MS } from './ClearExpressionsButton'
 
 type FolderRowProps = Readonly<{
   path: FolderPath
@@ -33,12 +32,6 @@ type FolderRowProps = Readonly<{
   onNameEntered?(): boolean
   /** Absent for a read-only folder. */
   onDelete?(): void
-  /**
-   * Removes the folder with everything it holds. When given, a click on the
-   * remove button keeps the entries (`onDelete`) and a sustained hold, as for
-   * clearing every expression, removes them too.
-   */
-  onDeleteContents?(): void
   /** The handle that moves the folder by pointer and keyboard; absent when folders cannot be moved. */
   handle?: Readonly<{
     onPointerDown(event: ReactPointerEvent<HTMLButtonElement>): void
@@ -66,7 +59,7 @@ let focusOnMount: string | null = null
  */
 export function FolderRow({
   path, name, level, expanded, entryCount, entryNoun, renaming, onRenamingChange,
-  onToggle, onRename, onNameEntered, onDelete, onDeleteContents, handle, className, rowRef, children,
+  onToggle, onRename, onNameEntered, onDelete, handle, className, rowRef, children,
 }: FolderRowProps) {
   const [draft, setDraft] = useState(name)
   const [error, setError] = useState<string | null>(null)
@@ -76,7 +69,6 @@ export function FolderRow({
   const ended = useRef(false)
   const idSuffix = path.map(encodeURIComponent).join('/')
   const errorId = `folder-error-${idSuffix}`
-  const hintId = `folder-remove-hint-${idSuffix}`
 
   useEffect(() => {
     if (!renaming) return
@@ -120,35 +112,6 @@ export function FolderRow({
     setError(null)
     onRenamingChange(false)
     requestAnimationFrame(() => toggleRef.current?.focus())
-  }
-
-  // Remove: a click keeps the entries; a sustained hold removes them too.
-  const [holding, setHolding] = useState(false)
-  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  /** Set when the hold completed, so that the release that follows removes nothing more. */
-  const held = useRef(false)
-  const cancelHold = () => {
-    if (holdTimer.current !== null) clearTimeout(holdTimer.current)
-    holdTimer.current = null
-    setHolding(false)
-  }
-  useEffect(() => cancelHold, [])
-  const beginHold = () => {
-    held.current = false
-    if (!onDeleteContents || holdTimer.current !== null) return
-    setHolding(true)
-    holdTimer.current = setTimeout(() => {
-      holdTimer.current = null
-      held.current = true
-      setHolding(false)
-      onDeleteContents()
-    }, CLEAR_HOLD_MS)
-  }
-  /** The end of a press: a short one removes the folder only. */
-  const release = () => {
-    cancelHold()
-    if (!held.current) onDelete?.()
-    held.current = false
   }
 
   const count = `${entryCount} ${entryCount === 1 ? entryNoun[0] : entryNoun[1]}`
@@ -226,36 +189,12 @@ export function FolderRow({
           {onDelete && (
             <button
               type="button"
-              className={`folder-action folder-delete${holding ? ' is-holding' : ''}`}
-              style={onDeleteContents ? { '--hold-duration': `${CLEAR_HOLD_MS}ms` } as CSSProperties : undefined}
+              className="folder-action folder-delete"
               aria-label={`Remove folder ${name}`}
-              aria-describedby={onDeleteContents ? hintId : undefined}
-              title={onDeleteContents ? `Remove folder; hold to remove its ${entryNoun[1]} too` : 'Remove folder'}
-              // A pointer press is handled by its release, so that a completed hold is
-              // not followed by a click; a click without a press comes from assistive technology.
-              onClick={(event) => { if (event.detail === 0) onDelete() }}
-              onPointerDown={(event) => { if (event.button === 0) beginHold() }}
-              onPointerUp={(event) => { if (event.button === 0) release() }}
-              onPointerLeave={cancelHold}
-              onPointerCancel={cancelHold}
-              onBlur={cancelHold}
-              onKeyDown={(event) => {
-                if (event.key !== 'Enter' && event.key !== ' ') return
-                event.preventDefault()
-                if (!event.repeat) beginHold()
-              }}
-              onKeyUp={(event) => {
-                if (event.key !== 'Enter' && event.key !== ' ') return
-                event.preventDefault()
-                release()
-              }}
+              title="Remove folder"
+              onClick={onDelete}
             >
               <span aria-hidden="true">×</span>
-              {onDeleteContents && (
-                <span className="visually-hidden" id={hintId}>
-                  Press to remove the folder and keep its {entryNoun[1]}. Hold to remove the folder and its {count}.
-                </span>
-              )}
             </button>
           )}
         </span>

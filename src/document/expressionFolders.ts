@@ -339,21 +339,6 @@ export function planFolderMove(document: ExpressionDocument, path: FolderPath, p
   return unchanged ? null : move
 }
 
-/** Removes a folder with its subfolders and every item they hold. */
-export function deleteFolderContents(document: ExpressionDocument, path: FolderPath): FolderEdit {
-  if (path.length === 0 || !hasFolder(document, path)) return refused('The folder does not exist.')
-  const removed = new Set(document.items.filter((item) => isWithin(itemFolder(item), path)).map(({ id }) => id))
-  return {
-    status: 'applied',
-    document: {
-      ...document,
-      folders: documentFolders(document).filter((folder) => !isWithin(folder.path, path)),
-      items: document.items.filter(({ id }) => !removed.has(id)),
-      appearance: Object.fromEntries(Object.entries(document.appearance).filter(([id]) => !removed.has(id))),
-    },
-  }
-}
-
 export type MoveStep = 'up' | 'down' | 'first' | 'last'
 
 function rowParent(row: ExpressionRow): FolderPath {
