@@ -3747,9 +3747,10 @@ html.is-embedded body {
   border-color: var(--accent-border);
 }
 
+/* The indent of a row inside a folder is filled with the colour of the folder header. */
 .folder-member {
   --folder-indent: 14px;
-  margin-inline-start: calc(var(--folder-depth, 0) * var(--folder-indent));
+  border-inline-start: calc(var(--folder-depth, 0) * var(--folder-indent)) solid var(--surface-soft);
 }
 
 .folder-member[hidden] {
@@ -3828,27 +3829,39 @@ html.is-embedded body {
 }
 
 /* The handle shows with its row, as on an expression row. */
+/* With a handle, the row starts at the panel edge like an expression row, so
+   that the two handles line up and have the same size. */
+.folder-row.has-handle {
+  align-items: stretch;
+  padding-block: 0;
+  padding-inline-start: 0;
+  border-inline-start: 0;
+}
+
+.folder-row.has-handle > :not(.folder-handle) {
+  align-self: center;
+}
+
 .folder-row .folder-handle {
   align-self: stretch;
   opacity: 0;
+}
+
+/* The number of rows shows with the row's actions. */
+.folder-count {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.folder-row:hover .folder-count,
+.folder-row:focus-within .folder-count {
+  opacity: 1;
 }
 
 .folder-row:hover .folder-handle,
 .folder-row:focus-within .folder-handle,
 body.reordering-items .folder-handle {
   opacity: 1;
-}
-
-/* A thin bar closes an open folder below its last row. */
-.folder-end {
-  height: 3px;
-  background: var(--accent-border);
-  border-radius: 0 0 2px 2px;
-  opacity: 0.6;
-}
-
-.folder-end[hidden] {
-  display: none;
 }
 
 .folder-chevron {
@@ -3906,6 +3919,7 @@ body.reordering-items .folder-handle {
 
 @media (hover: none) {
   .folder-actions,
+  .folder-count,
   .folder-row .folder-handle {
     opacity: 1;
   }

@@ -70,15 +70,15 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   8 document (#191).
 - Expression folders: **New folder** in the expression toolbar creates a
   folder, named in place; a folder is renamed by clicking its name (or F2),
-  and collapsed or expanded by its chevron. A thin bar closes an open folder
-  below its last row. Rows move into, within, and out of folders by dragging
+  and collapsed or expanded by its chevron. The indent of the rows of a
+  folder is filled with the colour of its header. Rows move into, within, and out of folders by dragging
   their handle, or by Alt or Shift with the arrow keys, Home, and End on the
   handle, and by Alt with the up and down arrows in the editor; focus stays
   on the moved row and its new position and folder are announced. A folder
   has the same handle: dragging it, or the same keys, moves the folder with
   every row and subfolder it holds, between rows, into another folder, which
-  nests it, or out of one. The **×** of a folder, shown while its row is
-  hovered or holds focus, removes the folder and keeps its rows at its
+  nests it, or out of one. The **×** of a folder, shown with its number of
+  rows while the folder's row is hovered or holds focus, removes the folder and keeps its rows at its
   position; holding it for one second, with the ring of **Clear all
   expressions**, removes the folder with its subfolders and rows, in one undo
   step. Enter inserts the new row in the same folder.

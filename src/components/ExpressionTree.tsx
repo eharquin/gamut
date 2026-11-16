@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react'
-import type { ExpressionDocument, ExpressionItem } from '../document/expressionDocument'
+import type { ExpressionDocument } from '../document/expressionDocument'
 import { expressionFolderTree, isFolderCollapsed } from '../document/expressionFolders'
 import { flattenFolderTree, folderKey } from '../document/folderModel'
 import type { ExpressionFolders } from '../hooks/useExpressionFolders'
@@ -12,31 +12,16 @@ type ExpressionTreeProps = Readonly<{
   renderItem(itemId: string): ReactNode
 }>
 
-type TreeRow =
-  | Readonly<{ kind: 'row'; row: ReturnType<typeof flattenFolderTree<ExpressionItem>>[number]; hidden: boolean }>
-  /** The thin bar that closes an expanded folder with rows. */
-  | Readonly<{ kind: 'end'; key: string; depth: number; hidden: boolean }>
-
-/** Every row with the collapsed folder state that hides it, in folder order, and the end of each open folder. */
-function treeRows(document: ExpressionDocument): TreeRow[] {
+/** Every row with the collapsed folder state that hides it, in folder order. */
+function treeRows(document: ExpressionDocument) {
   const rows = flattenFolderTree(expressionFolderTree(document), () => false)
-  const result: TreeRow[] = []
   const collapsedDepths: number[] = []
-  const open: { key: string; depth: number; hidden: boolean }[] = []
-  const closeTo = (depth: number) => {
-    while (open.length > 0 && open[open.length - 1].depth >= depth) result.push({ kind: 'end', ...open.pop()! })
-  }
-  for (const row of rows) {
-    closeTo(row.depth)
+  return rows.map((row) => {
     while (collapsedDepths.length > 0 && collapsedDepths[collapsedDepths.length - 1] >= row.depth) collapsedDepths.pop()
     const hidden = collapsedDepths.length > 0
-    result.push({ kind: 'row', row, hidden })
-    if (row.kind !== 'folder') continue
-    if (isFolderCollapsed(document, row.path)) collapsedDepths.push(row.depth)
-    else if (row.childCount > 0) open.push({ key: folderKey(row.path), depth: row.depth, hidden })
-  }
-  closeTo(0)
-  return result
+    if (row.kind === 'folder' && isFolderCollapsed(document, row.path)) collapsedDepths.push(row.depth)
+    return { row, hidden }
+  })
 }
 
 const indent = (depth: number): CSSProperties | undefined =>
@@ -49,11 +34,7 @@ const indent = (depth: number): CSSProperties | undefined =>
  */
 export function ExpressionTree({ document, folders, renderItem }: ExpressionTreeProps) {
   const target = folders.dropTarget
-  return treeRows(document).map((entry) => {
-    if (entry.kind === 'end') {
-      return <div key={`end:${entry.key}`} className="folder-end" hidden={entry.hidden} style={indent(entry.depth)} aria-hidden="true" />
-    }
-    const { row, hidden } = entry
+  return treeRows(document).map(({ row, hidden }) => {
     if (row.kind === 'entry') {
       return (
         <div key={row.entry.id} className="folder-member" hidden={hidden} style={indent(row.depth)}>

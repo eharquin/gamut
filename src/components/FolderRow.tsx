@@ -148,7 +148,7 @@ export function FolderRow({
   return (
     <div
       ref={rowRef}
-      className={`folder-row${expanded ? '' : ' is-collapsed'}${className ? ` ${className}` : ''}`}
+      className={`folder-row${expanded ? '' : ' is-collapsed'}${handle ? ' has-handle' : ''}${className ? ` ${className}` : ''}`}
       style={{ '--folder-level': level } as CSSProperties}
     >
       {handle && (

@@ -235,18 +235,14 @@ describe('expression folders (DOC-013, A11Y-011)', () => {
     expect(folderButton('Sums')).toHaveAccessibleName('Folder Sums, level 2, 1 row')
   })
 
-  it('closes an open folder that has rows with a thin bar', () => {
+  it('fills the indent of the rows of a folder', () => {
     open({
       ...flat(),
       items: flat().items.map((item, index) => index === 1 ? { ...item, folder: ['Sums'] } : item),
-      folders: [{ path: ['Sums'], collapsed: false }, { path: ['Empty'], collapsed: false }],
+      folders: [{ path: ['Sums'], collapsed: false }],
     })
-    const bars = () => [...document.querySelectorAll('.folder-end')].filter((bar) => !bar.hasAttribute('hidden'))
-    expect(bars()).toHaveLength(1)
-    // The bar follows the last row of the folder.
-    expect(bars()[0].previousElementSibling).toContainElement(editorOf('B = 2'))
-    fireEvent.click(folderButton('Sums'))
-    expect(document.querySelectorAll('.folder-end')).toHaveLength(0)
+    expect(editorOf('B = 2').closest('.folder-member')).toHaveStyle({ '--folder-depth': '1' })
+    expect(editorOf('A = 1').closest('.folder-member')).not.toHaveStyle({ '--folder-depth': '1' })
   })
 
   it('drops a dragged row into a folder', () => {
