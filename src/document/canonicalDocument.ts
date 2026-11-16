@@ -23,7 +23,7 @@ export const MAX_DOCUMENT_BYTES = 4 * 1024 * 1024
 export const MAX_SOURCE_LENGTH = 65_536
 export const MAX_MIGRATION_STEPS = 32
 export type ThemeMode = 'system' | 'light' | 'dark'
-export const CURRENT_FORMAT_VERSION = 8
+export const CURRENT_FORMAT_VERSION = 9
 export type CanonicalPrimitiveStyles = Readonly<{ points: PointPrimitiveStyle; lines: LinePrimitiveStyle }>
 export type CanonicalAppearance = Readonly<{
   visible: boolean
@@ -231,11 +231,7 @@ export function migrateDocument(value: unknown): unknown {
       fail('DOCUMENT_SCHEMA', 'document must be an object.')
     const document = current as Record<string, unknown>
     const version = document.formatVersion
-    if (version === CURRENT_FORMAT_VERSION) {
-      // Version 8 is unpublished until 0.3.0: a version 8 document written
-      // before folders joined it has none (#83).
-      return 'folders' in document ? current : { ...document, folders: [] }
-    }
+    if (version === CURRENT_FORMAT_VERSION) return current
     if (version === 1) {
       const appearance = document.appearance as Record<string, Record<string, unknown>>
       current = {
@@ -314,9 +310,34 @@ export function migrateDocument(value: unknown): unknown {
       }
       continue
     }
+    if (version === 8) {
+      current = {
+        ...document,
+        formatVersion: 9,
+        // Version 8 was never released, and a document written before folders joined it has none (#83).
+        folders: 'folders' in document ? document.folders : [],
+        // A version 8 annotation kept its `#` marker in its source. A note now
+        // stores its text only, where a leading `#` would be a heading.
+        items: Array.isArray(document.items) ? document.items.map(migrateVersion8Item) : document.items,
+      }
+      continue
+    }
     fail('DOCUMENT_FORMAT_VERSION', 'Unsupported format version ' + String(version) + '.')
   }
   fail('DOCUMENT_FORMAT_VERSION', 'Migration exceeded the maximum number of steps.')
+}
+
+/**
+ * Version 8 to 9, for one item: the source of an annotation loses its first
+ * `#` and the whitespace around the text, which is what version 8 displayed.
+ */
+function migrateVersion8Item(item: unknown): unknown {
+  if (item === null || typeof item !== 'object' || Array.isArray(item)) return item
+  const { kind, source } = item as Record<string, unknown>
+  if (kind !== 'annotation' || typeof source !== 'string') return item
+  const marker = source.indexOf('#')
+  const text = marker >= 0 && source.slice(0, marker).trim() === '' ? source.slice(marker + 1) : source
+  return { ...item, source: text.trim() }
 }
 
 /**

@@ -50,10 +50,28 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- Comment rows: a row whose first non-whitespace character is `#` becomes an
-  annotation, shown as text and never evaluated, drawn, or referenced;
-  removing the `#` makes it an expression again, in one undo step. Its
-  position, normalization, and slider are cleared, and undo restores them.
+- Notes: typing `"` first in an expression row makes the row a note, an
+  annotation shown as text and never evaluated, drawn, or referenced. The
+  quotation mark is a trigger and is not stored, so a note may start with any
+  character, `#` included. Backspace before the first character of a note
+  makes it an expression again, with its text, in one undo step. The position,
+  normalization, and slider of a row that becomes a note are cleared, and undo
+  restores them. Notes are stored in canonical format version 9 with their
+  kind and without a marker; a document written during the development of
+  0.3.0, whose comment rows kept a leading `#`, loses that `#` on load.
+  A note is written on several lines: Enter adds a line and Ctrl or Cmd with
+  Enter adds the next row. A note shows its source only while it is edited;
+  otherwise only its rendered text shows, and a click on it, or focus, edits
+  it again. Escape shows the rendered text without leaving the row. Besides
+  the inline subset, a note has headings (`#`, `##`, `###`), bullet and
+  numbered lists with one nested level, quotes (`>`), code blocks between
+  fences, and rules (`---`); a backslash keeps `#`, `>`, `-`, `+` or a list
+  number literal. Raw HTML, images, and tables stay text. Mathematics is
+  written in TeX, `$…$` inline and `$$…$$` on its own lines, and typeset with
+  KaTeX, which is fetched with its fonts from the application itself the
+  first time a note with mathematics is shown; `It costs $5 and $10` stays
+  text and `\$` is a literal dollar. TeX commands that create links, load
+  images, or set attributes are refused.
   The text supports `**bold**`, `*italic*`, inline `` `code` ``, backslash
   escapes, and `[links](https://…)` limited to `http`, `https`, and `mailto`,
   with their parsed destination shown (web links open in a new tab); `a*b*c`, `2*3`, and

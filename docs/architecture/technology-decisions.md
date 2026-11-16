@@ -122,6 +122,17 @@ TECH-005 and TECH-006 permit replacement by an owned TypeScript, sparse, or
 Rust/Wasm engine. Such replacement shall not change documents, source-language
 semantics, owned values, geometric entities, or presentation code.
 
+### Mathematics typesetting
+
+[KaTeX](https://katex.org/), pinned to an exact version, typesets the
+mathematics of annotations (SEC-012). It was chosen over MathJax for its
+synchronous rendering into DOM nodes without an HTML string, its small size,
+and its `trust`, `maxExpand`, and `maxSize` options, which bound what
+untrusted TeX can do. It is a production dependency loaded on demand, in its
+own chunk with its style sheet and fonts, so a document without mathematics
+never fetches it. It is used through one component and is replaceable
+without a change to documents, which store only TeX source.
+
 ### Independent verification
 
 Fundamental operations shall have project-owned reference fixtures under

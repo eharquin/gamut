@@ -1,4 +1,4 @@
-import type { KeyboardEvent, PointerEvent as ReactPointerEvent, RefObject } from 'react'
+import { useLayoutEffect, useRef, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import type { AlgebraEngine } from '../algebra/algebraEngine'
 import type { ItemAppearanceSources } from '../application/evaluateAppearanceSources'
 import type { EvaluatedDocumentItem } from '../application/evaluateDocument'
@@ -16,18 +16,18 @@ import type {
 import type { AnyInterpretation } from '../geometry/interpretation'
 import { declaredName } from '../language/declaredName'
 import { directScalarEdit } from '../language/directScalarEdit'
-import { annotationText } from '../presentation/annotationText'
 import {
   formatDisplayMultivector,
   formatDisplayNumber,
   formatDisplayValue,
 } from '../presentation/formatNumber'
 import { listPrimitiveTypes, pointListVertices } from '../visualization/layout'
-import { AnnotationText } from './AnnotationText'
 import { AppearancePopover } from './AppearancePopover'
 import { resolveItemAppearance } from './appearancePalette'
 import { NormalizationPopover } from './NormalizationPopover'
+import { NoteEditor } from './NoteEditor'
 import { ScalarSliderControl } from './ScalarSliderControl'
+import { NOTE_TRIGGER, type SourceEditor } from './sourceEditor'
 
 /** The row's normalization modes, by stored value; off is no mode (#185). */
 const NORMALIZATION_TEXT = { off: 'off', natural: 'auto', euclidean: 'norm', ideal: 'inorm' } as const
@@ -45,7 +45,7 @@ export type ExpressionRowRefs = Readonly<{
   /** Each row's article, for reordering and focus restoration. */
   expressionRowRefs: RefObject<Map<string, HTMLElement>>
   /** Each row's source editor, focused after creation, deletion, undo and redo. */
-  inputRefs: RefObject<Map<string, HTMLInputElement>>
+  inputRefs: RefObject<Map<string, SourceEditor>>
   /** Each row's norm button; a choice whose button is gone is closed. */
   normalizationToggleRefs: RefObject<Map<string, HTMLButtonElement>>
   /** The swatch that opened the appearance menu. */
@@ -59,9 +59,9 @@ export type ExpressionRowActions = Readonly<{
   executeCommand(command: DocumentCommand, coalesceKey?: string): void
   dispatchHistory(action: HistoryAction): void
   /** Records the editor and selection that undo and redo return to. */
-  rememberEditorFocus(element: HTMLInputElement): void
+  rememberEditorFocus(element: SourceEditor): void
   /** Keyboard handling of the source editor: insertion, deletion, navigation. */
-  handleItemKeyDown(event: KeyboardEvent<HTMLInputElement>, item: ExpressionItem, index: number): void
+  handleItemKeyDown(event: KeyboardEvent<SourceEditor>, item: ExpressionItem, index: number): void
   insertExpression(anchorId: string, placement: 'before' | 'after'): void
   removeExpression(itemId: string): void
   beginRowReorder(event: ReactPointerEvent<HTMLButtonElement>, itemId: string): void
@@ -162,6 +162,19 @@ export function ExpressionRow({
   },
 }: ExpressionRowProps) {
   const annotation = item.kind === 'annotation'
+  // A row that changes kind gets another editor element: the new one takes
+  // the focus and the caret that the conversion asked for.
+  const pendingCaret = useRef<number | null>(null)
+  useLayoutEffect(() => {
+    const caret = pendingCaret.current
+    pendingCaret.current = null
+    const editor = inputRefs.current.get(item.id)
+    if (caret === null || !editor) return
+    editor.focus()
+    editor.setSelectionRange(caret, caret)
+    rememberEditorFocus(editor)
+    // Runs when the kind changes only.
+  }, [annotation]) // eslint-disable-line react-hooks/exhaustive-deps
   const feedbackId = `expression-feedback-${item.id}`
   const inputId = `expression-source-${item.id}`
   const invalid = evaluation?.status === 'invalid'
@@ -215,9 +228,6 @@ export function ExpressionRow({
     declaredName(item.source),
   )
   const objectName = annotation ? `Annotation ${position}` : displayLabel ?? kind
-  // An annotation shows its text, without the # marker, in the Markdown
-  // subset of language §3; it is never evaluated or drawn (#187).
-  const noteText = annotation ? annotationText(item.source) : ''
   const noteTextId = `annotation-text-${item.id}`
   const labelFieldShown = drawable && labelVisible && evaluation?.status === 'valid' &&
     evaluation.valueType !== 'list'
@@ -319,32 +329,62 @@ export function ExpressionRow({
                   aria-hidden="true"
                 />
               </button>
-          ) : (
+          ) : !annotation && (
+            // A note has no status: its column stays, so that its text lines up with the sources.
             <span
-              className={`expression-status-pastille${
-                annotation ? ' is-annotation' : empty ? ' is-empty' : ' is-error'
-              }`}
+              className={`expression-status-pastille${empty ? ' is-empty' : ' is-error'}`}
               aria-hidden="true"
             />
           )}
         </div>
         <div className="expression-body">
           <div className="expression-editor-row">
+            {annotation ? (
+              <NoteEditor
+                id={inputId}
+                textId={noteTextId}
+                position={position}
+                source={item.source}
+                editorRef={(element) => {
+                  if (element) inputRefs.current.set(item.id, element)
+                  else if (inputRefs.current.get(item.id) instanceof HTMLTextAreaElement) inputRefs.current.delete(item.id)
+                }}
+                onChange={(source) => executeCommand({ kind: 'update-source', itemId: item.id, source }, `source:${item.id}`)}
+                onConvertToExpression={() => {
+                  pendingCaret.current = 0
+                  // An expression is one line.
+                  executeCommand({ kind: 'set-item-kind', itemId: item.id, itemKind: 'expression', source: item.source.replace(/\s*\n\s*/g, ' ') })
+                }}
+                onInsertAfter={() => insertExpression(item.id, 'after')}
+                onRowKeyDown={(event) => handleItemKeyDown(event, item, index)}
+                onFocus={rememberEditorFocus}
+                onSelect={rememberEditorFocus}
+                onBlur={() => dispatchHistory({ type: 'boundary' })}
+              />
+            ) : (
             <input
               ref={(element) => {
                 if (element) inputRefs.current.set(item.id, element)
-                else inputRefs.current.delete(item.id)
+                else if (inputRefs.current.get(item.id) instanceof HTMLInputElement) inputRefs.current.delete(item.id)
               }}
               id={inputId}
               className="expression-source"
-              aria-label={`${annotation ? 'Annotation' : 'Expression'} ${position}`}
+              aria-label={`Expression ${position}`}
               value={item.source}
               onChange={(event) => {
                 if (isPlaying) playback.stop(item.id)
                 playback.forgetPaused(item.id)
+                const { value } = event.target
+                // A quotation mark typed or pasted at the start of an expression
+                // makes the row a note and is not stored (language §3).
+                if (value.startsWith(NOTE_TRIGGER)) {
+                  pendingCaret.current = Math.max(0, (event.target.selectionStart ?? 1) - 1)
+                  executeCommand({ kind: 'set-item-kind', itemId: item.id, itemKind: 'annotation', source: value.slice(1) })
+                  return
+                }
                 executeCommand({
                   kind: 'update-source', itemId: item.id,
-                  source: event.target.value,
+                  source: value,
                 }, `source:${item.id}`)
               }}
               onBlur={() => dispatchHistory({ type: 'boundary' })}
@@ -353,11 +393,12 @@ export function ExpressionRow({
               onKeyDown={(event) =>
                 handleItemKeyDown(event, item, index)
               }
-              aria-describedby={evaluation ? feedbackId : noteText ? noteTextId : undefined}
+              aria-describedby={evaluation ? feedbackId : undefined}
               aria-invalid={invalid}
               spellCheck={false}
               autoComplete="off"
             />
+            )}
             {supportsNormalization && (
               <span className="normalize-control">
                 <button
@@ -401,7 +442,6 @@ export function ExpressionRow({
               </span>
             )}
           </div>
-          {noteText && <AnnotationText id={noteTextId} text={noteText} />}
           {/* The mode is chosen in a popover anchored to the norm button, like the appearance menu. */}
           {normalizationChoiceOpen && (
             <NormalizationPopover

@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "ganja.js": "^1.0.204",
+    "katex": "0.19.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },

@@ -2925,7 +2925,7 @@ describe('expression reference docked in the expression panel', () => {
     expect(panel()).toHaveAccessibleName('General')
     expect(titles()).toEqual(['Values and names', 'Lists and ranges', 'Operators', 'Properties', 'Functions', 'Precedence', 'Comments', 'Style'])
     expect(panel()).toHaveTextContent('A ^ B')
-    expect(panel()).toHaveTextContent('Comment # text')
+    expect(panel()).toHaveTextContent('Note " text')
     expect(panel()).toHaveTextContent('Color 9 hues × 6 shades')
     expect(panel()).not.toHaveTextContent('vector(2, 1)')
 

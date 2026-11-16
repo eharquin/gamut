@@ -93,7 +93,9 @@ release number or a commitment to implement every later milestone in strict
 sequence.
 
 The initial scope excludes slides, visual LaTeX input, embedding-space
-visualization, and a required Rust implementation.
+visualization, and a required Rust implementation. Mathematics written as
+TeX source in an annotation and typeset for display (SEC-012) is not visual
+LaTeX input: expressions are still written in the GAMUT language.
 
 ## 4. Technology baseline
 
@@ -279,9 +281,10 @@ They are stored in canonical format version 8.
   a teaching aid, not a protection: the values remain in the document.
 
 Moving the canonical format from version 7 to version 8 for DOC-013 and
-DOC-014 follows DOC-003: earlier documents migrate on load. An earlier
-release cannot open a version 8 document: 0.2.0 replaces a stored version 8
-active document with its example on reload and reports a version 8 library
+DOC-014, and to version 9 for annotations stored without a marker, follows
+DOC-003: earlier documents migrate on load. An earlier
+release cannot open a version 8 or 9 document: 0.2.0 replaces such a stored
+active document with its example on reload and reports such a library
 graph as unreadable when it is opened. Protecting an older
 release against a newer format is deferred to
 [#275](https://github.com/eharquin/gamut/issues/275) and accepted while GAMUT
@@ -665,9 +668,21 @@ that explicitly include library archives or comment rows, starting with
   subset, specified in [language §3](specifications/language.md#3-items-names-and-annotations):
   bold and italic with delimiters that leave intraword and mathematical text
   such as `a*b*c`, `2*3`, and `x_1` literal, inline code, backslash escapes,
-  and links. Rendering shall build interface elements and never parse or
-  inject HTML (SEC-002): raw HTML, images, headings, and lists are shown as
-  text. A link is active only when its scheme is `http`, `https`, or
+  links, and the blocks of that section: headings, lists, quotes, code
+  blocks, and rules. Rendering shall build interface elements and never parse
+  or inject HTML (SEC-002): raw HTML, images, and tables are shown as
+  text. Parsing shall take time linear in the length of the text.
+  Mathematics between `$…$` and `$$…$$` is typeset by a pinned typesetting
+  library that builds DOM nodes from the TeX source, with its trust option
+  off, so that commands that create links, load images, or set identities,
+  classes, data attributes, or styles are refused, and with macro expansion,
+  sizes, source length, and the number of typeset segments per annotation
+  bounded by the
+  [limits and interaction constants](specifications/limits-and-constants.md#23-annotation-mathematics).
+  The library and its fonts are served with the application and fetched only
+  when an annotation with mathematics is shown; nothing is requested from a
+  third party. Until the library has loaded, and when it cannot load or
+  typeset, the TeX source is shown as text. A link is active only when its scheme is `http`, `https`, or
   `mailto`; any other destination, including `javascript:`, `data:`, and
   relative URLs, is shown as plain text. Active links open in a new browsing
   context with `rel="noopener noreferrer"`, and their destination is exposed
@@ -724,7 +739,8 @@ or hidden values, starting with
   announce that its value is hidden and never expose the hidden coefficients
   through its accessible name, description, or live announcements.
 - **A11Y-014:** An annotation row shall keep its accessible name
-  (“Annotation N”) and expose its text without Markdown delimiters. Its links
+  (“Annotation N”) and expose its text without Markdown delimiters, with the
+  TeX source of its mathematics; typeset mathematics also carries MathML. Its links
   are reachable with Tab in reading order and expose their destination
   (SEC-012).
 

@@ -1064,10 +1064,50 @@ body.reordering-items .reorder-handle {
 .expression-status-pastille.is-empty { background: var(--text-dim); }
 .expression-status-pastille.is-error { background: var(--error); }
 /* An annotation row is never evaluated: a hollow pastille, muted source. */
-.expression-status-pastille.is-annotation { background: transparent; border-color: var(--text-dim); }
 
 .is-annotation .expression-source {
   color: var(--muted);
+}
+
+/* A note: its source while it is edited, its rendered text otherwise. */
+.note {
+  min-width: 0;
+  flex: 1;
+  position: relative;
+}
+
+.note-source {
+  width: 100%;
+  resize: none;
+  overflow: hidden;
+  font: 0.875rem/1.5 var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Kept focusable, so that the row stays in the Tab order while its rendered text shows. */
+.note-source.is-collapsed {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.note-rendered {
+  cursor: text;
+  border-radius: 3px;
+}
+
+.note-rendered[hidden] {
+  display: none;
+}
+
+.note.is-focused .note-rendered {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* Annotation text in the Markdown subset (#187): prose, not code. */
@@ -1077,6 +1117,80 @@ body.reordering-items .reorder-handle {
   color: var(--text);
   font: 0.875rem/1.45 var(--font-sans);
   overflow-wrap: anywhere;
+  display: grid;
+  gap: 4px;
+}
+
+.annotation-text > *,
+.annotation-text blockquote > *,
+.annotation-text li > ul,
+.annotation-text li > ol {
+  margin: 0;
+}
+
+/* The line breaks of a paragraph or a list item show as written. */
+.annotation-text p,
+.annotation-text li {
+  white-space: pre-line;
+}
+
+.annotation-text h4,
+.annotation-text h5,
+.annotation-text h6 {
+  line-height: 1.25;
+  font-weight: 700;
+}
+
+.annotation-text .note-heading-1 { font-size: 1.15rem; }
+.annotation-text .note-heading-2 { font-size: 1.02rem; }
+.annotation-text .note-heading-3 { font-size: 0.9rem; }
+
+.annotation-text ul,
+.annotation-text ol {
+  padding-inline-start: 1.3em;
+}
+
+.annotation-text blockquote {
+  display: grid;
+  gap: 4px;
+  padding-inline-start: 8px;
+  color: var(--muted);
+  border-inline-start: 2px solid var(--border-input);
+}
+
+.annotation-text pre {
+  padding: 4px 6px;
+  overflow-x: auto;
+  background: var(--surface-code);
+  border-radius: 3px;
+}
+
+.annotation-text pre code {
+  padding: 0;
+  background: transparent;
+  white-space: pre;
+}
+
+.note-math.is-display {
+  display: block;
+  margin: 2px 0;
+  overflow-x: auto;
+  text-align: center;
+}
+
+.note-math [hidden] {
+  display: none;
+}
+
+/* KaTeX sizes itself from the text around it; 1.21em is its default and too large in a row. */
+.annotation-text .katex {
+  font-size: 1.05em;
+}
+
+.annotation-text hr {
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--border-input);
 }
 
 .annotation-text code {

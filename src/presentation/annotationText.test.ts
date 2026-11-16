@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { MAX_SOURCE_LENGTH } from '../document/canonicalDocument'
 import {
   annotationPlainText,
-  annotationText,
   isSafeAnnotationHref,
   MAX_EMPHASIS_DEPTH,
   parseAnnotationMarkdown,
@@ -12,17 +11,6 @@ import {
 
 const text = (value: string): AnnotationSegment => ({ kind: 'text', text: value })
 const parse = (source: string) => parseAnnotationMarkdown(source)
-
-describe('annotation text', () => {
-  it('takes everything after the first # without the surrounding whitespace', () => {
-    expect(annotationText('# Triangle and its angle at A')).toBe('Triangle and its angle at A')
-    expect(annotationText('   #était sympa  ')).toBe('était sympa')
-    expect(annotationText('## not a heading # still text')).toBe('# not a heading # still text')
-    expect(annotationText('#')).toBe('')
-    // A stored annotation without # (allowed by the format) keeps its source.
-    expect(annotationText('This is prose, not an expression!')).toBe('This is prose, not an expression!')
-  })
-})
 
 describe('annotation Markdown subset', () => {
   it('keeps plain text as one segment', () => {
@@ -80,12 +68,47 @@ describe('annotation Markdown subset', () => {
     expect(parse('an `unclosed span')).toEqual([text('an `unclosed span')])
   })
 
-  it('applies backslash escapes before *, `, [, ] and \\ only', () => {
+  it('applies backslash escapes before the inline delimiters and the characters that start a block only', () => {
     expect(parse('\\*not italic\\*')).toEqual([text('*not italic*')])
     expect(parse('\\`not code\\`')).toEqual([text('`not code`')])
     expect(parse('\\[x\\](https://a.b)')).toEqual([text('[x](https://a.b)')])
     expect(parse('a \\\\ b')).toEqual([text('a \\ b')])
-    expect(parse('\\_ \\n \\#')).toEqual([text('\\_ \\n \\#')])
+    expect(parse('\\_ \\n \\!')).toEqual([text('\\_ \\n \\!')])
+    expect(parse('\\# \\> \\- \\+ 1\\. 1\\) \\~')).toEqual([text('# > - + 1. 1) ~')])
+  })
+
+  it('reads inline and display mathematics as TeX, without parsing inside', () => {
+    const math = (tex: string, display = false): AnnotationSegment => ({ kind: 'math', tex, display })
+    expect(parse('Let $R_\\theta = e^{-\\theta B/2}$ be')).toEqual([text('Let '), math('R_\\theta = e^{-\\theta B/2}'), text(' be')])
+    // Stars and backticks inside mathematics are TeX.
+    expect(parse('$a*b*c$ and $`x`$')).toEqual([math('a*b*c'), text(' and '), math('`x`')])
+    expect(parse('$$\\sum_i a_i$$')).toEqual([math('\\sum_i a_i', true)])
+    expect(parse('$$\na + b\n$$ after')).toEqual([math('a + b', true), text(' after')])
+    // An escaped dollar inside mathematics does not close it.
+    expect(parse('$\\$5$')).toEqual([math('\\$5')])
+    expect(annotationPlainText(parse('**if** $x > 0$'))).toBe('if x > 0')
+  })
+
+  it('leaves prices and lone dollars as text', () => {
+    expect(parse('It costs $5 and $10.')).toEqual([text('It costs $5 and $10.')])
+    expect(parse('from $ 5 to 10 $')).toEqual([text('from $ 5 to 10 $')])
+    // The closing $ is the next one: a price never pairs with mathematics further on.
+    expect(parse('It costs $5 and $10, and $\\frac{1}{2}$')).toEqual([
+      text('It costs $5 and $10, and '), { kind: 'math', tex: '\\frac{1}{2}', display: false },
+    ])
+    expect(parse('\\$x\\$')).toEqual([text('$x$')])
+    expect(parse('$')).toEqual([text('$')])
+    expect(parse('$$')).toEqual([text('$$')])
+    expect(parse('$$ $$')).toEqual([text('$$ $$')])
+    expect(parse('$$unclosed $x')).toEqual([text('$$unclosed $x')])
+    // Code wins when it starts first.
+    expect(parse('`$x$`')).toEqual([{ kind: 'code', text: '$x$' }])
+  })
+
+  it('finds mathematics in linear time', () => {
+    const started = performance.now()
+    for (const source of ['$a '.repeat(21_000), '$$a '.repeat(16_000), '$'.repeat(65_536), '$a$'.repeat(21_000), 'x$1'.repeat(21_000)]) parse(source)
+    expect(performance.now() - started).toBeLessThan(2000)
   })
 
   it('renders links with an http, https or mailto destination', () => {

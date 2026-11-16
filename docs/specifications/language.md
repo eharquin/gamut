@@ -45,8 +45,8 @@ retain positions through supported list operations without a list-level
 position field; `position` and vector `head` distribute over compatible lists.
 
 The scalar functions of section 10 are implemented, including `atan2`.
-Annotations are implemented as comment rows: editing a source re-derives its
-item's kind from the first non-whitespace character, and an expression that
+Annotations are implemented as notes: a quotation mark typed first in an
+expression row makes the row an annotation, and an expression that
 becomes an annotation loses its position source, normalization, and control
 in the same undoable edit. Their text renders the Markdown subset of section
 3. The remaining properties and operators, serialization, and the
@@ -86,8 +86,10 @@ Each item contains at most one declaration, expression, or annotation.
 a = 1
 V = vector(a)
 V + e1
-# A visible annotation
 ```
+
+A fourth row may be a note, such as `A visible annotation`: an annotation is
+a kind of item, not a syntax, so its source carries no marker.
 
 Names match `[A-Za-z_][A-Za-z0-9_]*`, are case-sensitive, and shall be unique
 within a document. Reserved language names and symbols registered by the active
@@ -98,21 +100,25 @@ visualized but cannot be referenced by another expression.
 Item identity is independent of its visible name. Renaming an item does not
 rename its references in the initial scope.
 
-An item whose first non-whitespace character is `#` is an annotation. It has no
-value and no dependencies. Everything after that first `#` is annotation text,
-not expression syntax, and may contain any valid Unicode text, including further
-`#` characters, accented characters, symbols, and emoji, subject only to the
-common source-length and document-validity limits. For example, `# était sympa`
+An annotation is an item whose stored kind is `annotation`. It has no value
+and no dependencies. Its whole source is annotation text, not expression
+syntax, and may contain any valid Unicode text, including `#` and `"`
+characters, accented characters, symbols, and emoji, subject only to the
+common source-length and document-validity limits. For example, `était sympa`
 is a valid annotation. Inline trailing comments are not supported.
 
-The stored source keeps the leading `#` verbatim, and an item's kind is derived
-from its source on every source edit. A document may still store an
-annotation whose source has no `#`: its kind decides, and its whole source is
-its text until the next edit derives the kind again.
+The kind of an item is stored and never derived from its source. In the
+interface, a quotation mark `"` typed or pasted as the first character of an
+expression row makes the row an annotation; the quotation mark is a trigger
+and is not stored. `"` has no other meaning in the language. Backspace before
+the first character of an annotation makes it an expression again, with its
+source unchanged. Each conversion is one undoable step. Editing the source of
+an item never changes its kind: an annotation may start with `#`, and an
+expression that starts with `#` is an expression with a syntax diagnostic.
 
 #### Annotation text
 
-Annotation text, without the first `#` and the whitespace around the text, is
+Annotation text, without the whitespace around it, is
 displayed in a restricted Markdown subset. Annotation text is untrusted, since
 shared documents and scene links display text written by someone else, so an
 implementation builds interface elements from it and never parses or injects
@@ -151,12 +157,62 @@ HTML.
   browsing context; every link has `rel="noopener noreferrer"`.
 - **Escapes.** A backslash before `*`, `` ` ``, `[`, `]`, or `\` makes that
   character literal; before any other character the backslash is literal.
+- **Mathematics.** `$…$` is inline mathematics written in TeX and `$$…$$`
+  display mathematics, typeset when the annotation is displayed. An opening
+  `$` is followed by a character that is not whitespace; the closing `$` is
+  the next `$` without a backslash before it, and it closes only when it
+  follows a character that is not whitespace and is not followed by a digit,
+  so `It costs $5 and $10` is text. `\$` is a literal
+  dollar. Nothing between the delimiters is read as Markdown. From a line
+  that starts with `$$` to the line that holds the closing `$$`, the lines
+  are not read as other blocks, so a line of TeX may start with `-`, `>`, or
+  `#`. Mathematics that cannot be typeset shows the error in place, and
+  mathematics over the limits of the
+  [limits and interaction constants](limits-and-constants.md#23-annotation-mathematics)
+  shows as its TeX source. TeX commands that would create links, load
+  images, or set attributes are not available.
+- **Blocks.** Annotation text is a sequence of blocks, separated by blank
+  lines or by the start of another block; the inline rules above apply to the
+  text of each block except code blocks.
+  - *Heading:* one to three `#` followed by a space, then text; a closing run
+    of `#` after a space is dropped. `#tag`, `####`, and a `#` without text
+    are paragraph text. The three levels are below the headings of the
+    interface.
+  - *Paragraph:* consecutive lines; their line breaks are kept.
+  - *List:* lines starting with `-`, `*`, or `+` and a space, or with up to
+    nine digits, `.` or `)`, and a space. A numbered list starts at its first
+    number. An item indented by two spaces or more belongs to a nested list
+    of the item above, one level deep; another indented line continues its
+    item. A blank line ends the list. A numbered list interrupts a paragraph
+    only when it starts at 1, so that `2026. was…` on a second line stays
+    text.
+  - *Quote:* consecutive lines starting with `>`; their text holds blocks,
+    nested at most eight deep.
+  - *Code block:* the lines between a fence of three or more backticks or
+    tildes and the next fence of the same character at least as long, or the
+    end of the text. They are displayed as written, in a fixed-width font; any
+    text after the opening fence is ignored.
+  - *Rule:* a line of three or more `-`, `*`, or `_`, optionally separated by
+    spaces.
+  A backslash also makes literal the characters that start a block: `#`, `>`,
+  `-`, `+`, `~`, and the `.` or `)` of a list number.
 - **Everything else is text.** Raw HTML, character references, images
-  (`![alt](url)` is displayed as written), headings, lists, and other
+  (`![alt](url)` is displayed as written), tables, and other
   Markdown constructs are displayed as text.
 
+An annotation may span several lines; an expression is one line, and an
+annotation that becomes an expression has each line break replaced by a
+space. In the interface, an annotation shows its source while it is edited
+and only its rendered text otherwise: clicking the rendered text, or
+focusing the row, edits it. While it is edited, Enter adds a line, Ctrl or
+Cmd with Enter adds the next row, and Escape shows the rendered text again
+without moving focus; Enter then edits again. The up and down arrows move to
+the neighbouring row only from the first and the last position of the text.
+
 An annotation row exposes its text without delimiters to assistive
-technology, and its links are reachable with Tab in reading order.
+technology, its editor keeps its accessible name and its place in the Tab
+order while the rendered text shows, and its links are reachable with Tab in
+reading order.
 
 ## 4. Numeric literals and implicit multiplication
 

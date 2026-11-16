@@ -175,15 +175,22 @@ export function generalReference(examples: Readonly<{ regressive: ReferenceExamp
 }
 
 /**
- * Comment rows (#187): a row whose first non-whitespace character is `#` is
- * an annotation, shown as text in a restricted Markdown subset.
+ * Notes (#187): typing `"` first in a row makes it an annotation, shown as
+ * text in a restricted Markdown subset; the mark itself is not stored.
  */
 export const COMMENT_REFERENCE: readonly ReferenceTopic[] = [
-  topic('Comment', '# text', 'a row starting with # is shown as text, never evaluated'),
+  topic('Note', '" text', 'typing " first in a row makes it a note, shown as text and never evaluated; Backspace at its start makes it an expression again'),
+  topic('Lines', 'Enter', 'a new line in the note; Ctrl or Cmd with Enter adds the next row, Escape shows the rendered note'),
   topic('Emphasis', '**bold**, *italic*', 'a*b*c, 2*3 and x_1 stay literal'),
   topic('Code', '`code`'),
   topic('Link', '[text](https://…)', 'http, https or mailto, with the destination shown'),
-  topic('Escape', '\\*, \\`, \\[, \\], \\\\', 'a literal character'),
+  topic('Mathematics', '$R = e^{-B/2}$', 'TeX; $$…$$ on its own lines for a displayed formula, \\$ for a dollar'),
+  topic('Heading', '# title', 'one to three #, then a space'),
+  topic('List', '- item, 1. item', 'two spaces before a nested item'),
+  topic('Quote', '> text'),
+  topic('Code block', '``` … ```', 'shown as written'),
+  topic('Rule', '---'),
+  topic('Escape', '\\*, \\`, \\[, \\#, \\-, \\>', 'a literal character'),
 ]
 
 /**

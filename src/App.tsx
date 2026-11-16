@@ -28,6 +28,7 @@ import { isFramed, resolveEmbedMode, type EmbedOptions } from './application/emb
 import type { ReferenceExample } from './language/expressionReference'
 import { ClearExpressionsButton } from './components/ClearExpressionsButton'
 import { ExpressionRow, type ExpressionRowActions, type ExpressionRowRefs } from './components/ExpressionRow'
+import { isSourceEditor, type SourceEditor } from './components/sourceEditor'
 import { ExpressionTree } from './components/ExpressionTree'
 import { useExpressionFolders } from './hooks/useExpressionFolders'
 import { documentFolders, expressionRows } from './document/expressionFolders'
@@ -384,7 +385,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
   ) => dispatchHistory({ type: 'execute', command, coalesceKey }), [dispatchHistory])
   const nextId = useRef(2)
   const labelPlacementCache = useRef<{ key: string; placed: ReturnType<typeof placeLabels> } | null>(null)
-  const inputRefs = useRef(new Map<string, HTMLInputElement>())
+  const inputRefs = useRef(new Map<string, SourceEditor>())
   const pendingFocus = useRef<string | null>(null)
   const lastEditorFocus = useRef<EditorFocus | null>(null)
   const pendingHistoryFocus = useRef(lastEditorFocus.current)
@@ -568,7 +569,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
     setAppearanceItemId(null)
     dispatchHistory({ type: 'boundary' })
   }, [dispatchHistory])
-  const rememberEditorFocus = (element: HTMLInputElement) => {
+  const rememberEditorFocus = (element: SourceEditor) => {
     lastEditorFocus.current = {
       id: element.id,
       start: element.selectionStart ?? 0,
@@ -1649,19 +1650,19 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
     pendingHistoryFocus.current = null
     let restoredSelection = selection
     let input = document.getElementById(restoredSelection.id)
-    if (!(input instanceof HTMLInputElement)) {
+    if (!(isSourceEditor(input))) {
       const fallback = removedEditorFallbacks.current.get(selection.id)
       if (fallback) {
         restoredSelection = fallback
         input = document.getElementById(fallback.id)
       }
     }
-    if (!(input instanceof HTMLInputElement) &&
+    if (!(isSourceEditor(input)) &&
         viewportCreatedItemIds.current.has(selection.id.replace('expression-source-', ''))) {
       viewportSvgRef.current?.focus({ preventScroll: true })
       return
     }
-    if (!(input instanceof HTMLInputElement)) return
+    if (!(isSourceEditor(input))) return
     input.focus()
     const maximum = input.value.length
     input.setSelectionRange(
@@ -2435,7 +2436,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
 
   /** Moves the row of a focused editor and restores its caret afterwards. */
   const moveItemFromEditor = (
-    editor: HTMLInputElement,
+    editor: SourceEditor,
     itemId: string,
     step: 'up' | 'down',
   ) => {
@@ -2446,7 +2447,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
   }
 
   const handleItemKeyDown = (
-    event: KeyboardEvent<HTMLInputElement>,
+    event: KeyboardEvent<SourceEditor>,
     item: ExpressionItem,
     _index: number,
   ) => {
