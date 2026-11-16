@@ -4039,45 +4039,8 @@ body.reordering-items .folder-handle {
   }
 }
 
-/* Remove: the hold that also removes the rows sweeps the ring of the Clear button. */
-.folder-delete {
-  position: relative;
-  border-radius: 50%;
-  touch-action: none;
-}
-
-.folder-delete:hover,
-.folder-delete.is-holding {
+.folder-delete:hover {
   color: var(--error);
-}
-
-.folder-delete::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: conic-gradient(
-    var(--error) calc(var(--hold-progress) * 360deg),
-    transparent 0
-  );
-  mask: radial-gradient(
-    farthest-side,
-    transparent calc(100% - 2px),
-    #000 calc(100% - 2px)
-  );
-  opacity: 0;
-}
-
-.folder-delete.is-holding::before {
-  opacity: 1;
-  animation: clear-hold var(--hold-duration) linear forwards;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .folder-delete.is-holding::before {
-    animation: none;
-    --hold-progress: 1;
-  }
 }
 
 .folder-rename {

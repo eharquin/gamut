@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import type { ExpressionDocument } from '../document/expressionDocument'
-import { expressionFolderTree, isFolderCollapsed } from '../document/expressionFolders'
-import { flattenFolderTree, folderKey } from '../document/folderModel'
+import { expressionFolderTree, isFolderCollapsed, itemFolder } from '../document/expressionFolders'
+import { flattenFolderTree, folderKey, isWithin } from '../document/folderModel'
 import type { ExpressionFolders } from '../hooks/useExpressionFolders'
 import { FolderRow } from './FolderRow'
 
@@ -58,8 +58,14 @@ export function ExpressionTree({ document, folders, renderItem }: ExpressionTree
           onRenamingChange={(renaming) => folders.setRenamingKey(renaming ? key : null)}
           onToggle={() => folders.toggleFolder(row.path)}
           onRename={(name) => folders.renameFolder(row.path, name)}
+          onNameEntered={() => {
+            // The first row of the folder takes focus once the renamed folder has rendered.
+            const first = document.items.find((item) => isWithin(itemFolder(item), row.path))
+            if (!first || isFolderCollapsed(document, row.path)) return false
+            requestAnimationFrame(() => window.document.getElementById(`expression-source-${first.id}`)?.focus())
+            return true
+          }}
           onDelete={() => folders.deleteFolder(row.path)}
-          onDeleteContents={() => folders.deleteFolderContents(row.path)}
           handle={{
             onPointerDown: (event) => folders.beginFolderReorder(event, row.path),
             onKeyDown: (event) => folders.reorderFolderWithKeyboard(event, row.path),

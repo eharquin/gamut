@@ -532,12 +532,6 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
     dispatchHistory,
     rowElements: expressionRowRefs,
     announce: setReorderAnnouncement,
-    // Rows removed with their folder release what the interface holds for them.
-    onRowsRemoved: (ids) => {
-      ids.forEach((id) => { if (playback.isPlaying(id)) playback.stop(id) })
-      setAppearanceItemId((current) => current !== null && ids.includes(current) ? null : current)
-      setExpandedListIds((current) => ids.some((id) => current.has(id)) ? new Set([...current].filter((id) => !ids.includes(id))) : current)
-    },
   })
   const [anchorPreview, setAnchorPreview] = useState<AnchorCandidate | null>(null)
   const [viewportLocked, setViewportLocked] = useState(() => embed ? embed.viewportLocked : temporary ? false : restoredViewportLock())
@@ -2511,6 +2505,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
     removeExpression,
     beginRowReorder: folders.beginRowReorder,
     reorderRowWithKeyboard: folders.reorderRowWithKeyboard,
+    convertRowToFolder: folders.convertRowToFolder,
     focusRow: (itemId) => setRowFocusId(itemId),
     blurRow: (itemId) => setRowFocusId((current) => current === itemId ? null : current),
     hoverRow: (itemId) => setRowHoverId(itemId),

@@ -27,7 +27,7 @@ import { resolveItemAppearance } from './appearancePalette'
 import { NormalizationPopover } from './NormalizationPopover'
 import { NoteEditor } from './NoteEditor'
 import { ScalarSliderControl } from './ScalarSliderControl'
-import { NOTE_TRIGGER, type SourceEditor } from './sourceEditor'
+import { FOLDER_TRIGGER, NOTE_TRIGGER, type SourceEditor } from './sourceEditor'
 
 /** The row's normalization modes, by stored value; off is no mode (#185). */
 const NORMALIZATION_TEXT = { off: 'off', natural: 'auto', euclidean: 'norm', ideal: 'inorm' } as const
@@ -66,6 +66,8 @@ export type ExpressionRowActions = Readonly<{
   removeExpression(itemId: string): void
   beginRowReorder(event: ReactPointerEvent<HTMLButtonElement>, itemId: string): void
   reorderRowWithKeyboard(event: KeyboardEvent<HTMLButtonElement>, itemId: string): void
+  /** Makes a folder of the row, named by `name`. */
+  convertRowToFolder(itemId: string, name: string): void
   /** Focus entering or leaving the row. */
   focusRow(itemId: string): void
   blurRow(itemId: string): void
@@ -150,6 +152,7 @@ export function ExpressionRow({
     removeExpression,
     beginRowReorder,
     reorderRowWithKeyboard,
+    convertRowToFolder,
     focusRow,
     blurRow,
     hoverRow,
@@ -380,6 +383,12 @@ export function ExpressionRow({
                 if (value.startsWith(NOTE_TRIGGER)) {
                   pendingCaret.current = Math.max(0, (event.target.selectionStart ?? 1) - 1)
                   executeCommand({ kind: 'set-item-kind', itemId: item.id, itemKind: 'annotation', source: value.slice(1) })
+                  return
+                }
+                // A slash typed or pasted at the start makes a folder of the row,
+                // named by what follows it; no expression starts with a division.
+                if (value.startsWith(FOLDER_TRIGGER)) {
+                  convertRowToFolder(item.id, value.slice(1))
                   return
                 }
                 executeCommand({
