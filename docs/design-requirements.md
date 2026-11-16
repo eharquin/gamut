@@ -93,7 +93,9 @@ release number or a commitment to implement every later milestone in strict
 sequence.
 
 The initial scope excludes slides, visual LaTeX input, embedding-space
-visualization, and a required Rust implementation.
+visualization, and a required Rust implementation. Mathematics written as
+TeX source in an annotation and typeset for display (SEC-012) is not visual
+LaTeX input: expressions are still written in the GAMUT language.
 
 ## 4. Technology baseline
 
@@ -664,7 +666,18 @@ that explicitly include library archives or comment rows, starting with
   links, and the blocks of that section: headings, lists, quotes, code
   blocks, and rules. Rendering shall build interface elements and never parse
   or inject HTML (SEC-002): raw HTML, images, and tables are shown as
-  text. Parsing shall take time linear in the length of the text. A link is active only when its scheme is `http`, `https`, or
+  text. Parsing shall take time linear in the length of the text.
+  Mathematics between `$…$` and `$$…$$` is typeset by a pinned typesetting
+  library that builds DOM nodes from the TeX source, with its trust option
+  off, so that commands that create links, load images, or set identities,
+  classes, data attributes, or styles are refused, and with macro expansion,
+  sizes, source length, and the number of typeset segments per annotation
+  bounded by the
+  [limits and interaction constants](specifications/limits-and-constants.md#23-annotation-mathematics).
+  The library and its fonts are served with the application and fetched only
+  when an annotation with mathematics is shown; nothing is requested from a
+  third party. Until the library has loaded, and when it cannot load or
+  typeset, the TeX source is shown as text. A link is active only when its scheme is `http`, `https`, or
   `mailto`; any other destination, including `javascript:`, `data:`, and
   relative URLs, is shown as plain text. Active links open in a new browsing
   context with `rel="noopener noreferrer"`, and their destination is exposed
@@ -721,7 +734,8 @@ or hidden values, starting with
   announce that its value is hidden and never expose the hidden coefficients
   through its accessible name, description, or live announcements.
 - **A11Y-014:** An annotation row shall keep its accessible name
-  (“Annotation N”) and expose its text without Markdown delimiters. Its links
+  (“Annotation N”) and expose its text without Markdown delimiters, with the
+  TeX source of its mathematics; typeset mathematics also carries MathML. Its links
   are reachable with Tab in reading order and expose their destination
   (SEC-012).
 

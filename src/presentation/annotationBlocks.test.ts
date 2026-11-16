@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_QUOTE_DEPTH, parseAnnotationBlocks, type AnnotationBlock } from './annotationBlocks'
+import { annotationBlocksPlainText, MAX_QUOTE_DEPTH, parseAnnotationBlocks, type AnnotationBlock } from './annotationBlocks'
 import { annotationPlainText } from './annotationText'
 
 /** A compact reading of blocks: their kind and plain text. */
@@ -89,6 +89,19 @@ describe('annotation blocks', () => {
     expect(parse('- - x')).toEqual([['ul', ['- x']]])
   })
 
+  it('keeps the lines of display mathematics out of the other blocks', () => {
+    const blocks = parseAnnotationBlocks('Before\n$$\na\n- b\n> c\n# d\n$$\nAfter')
+    expect(blocks).toEqual([
+      { kind: 'paragraph', children: [{ kind: 'text', text: 'Before' }] },
+      { kind: 'paragraph', children: [{ kind: 'math', tex: 'a\n- b\n> c\n# d', display: true }] },
+      { kind: 'paragraph', children: [{ kind: 'text', text: 'After' }] },
+    ])
+    expect(parseAnnotationBlocks('$$x^2$$')).toEqual([{ kind: 'paragraph', children: [{ kind: 'math', tex: 'x^2', display: true }] }])
+    // Without a closing $$ the lines are ordinary blocks.
+    expect(parse('$$\n- item')).toEqual([['p', '$$'], ['ul', ['item']]])
+    expect(annotationBlocksPlainText(parseAnnotationBlocks('# Title\n- $x$\n  - **y**\n\n---\n> q'))).toBe('Title\nx\ny\nq')
+  })
+
   it('never produces HTML: markup is text', () => {
     expect(parse('<h1>x</h1>\n<script>alert(1)</script>')).toEqual([['p', '<h1>x</h1>\n<script>alert(1)</script>']])
     expect(parse('![alt](https://example.org/a.png)')).toEqual([['p', '![alt](https://example.org/a.png)']])
@@ -120,6 +133,7 @@ describe('annotation blocks', () => {
       `\`\`\`\n${'x\n'.repeat(limit / 2)}`,
       '* '.repeat(limit / 2) + 'x',
       '1. '.repeat(limit / 3),
+      '$$ x\n'.repeat(limit / 5),
     ]
     const started = performance.now()
     for (const source of sources) parseAnnotationBlocks(source)

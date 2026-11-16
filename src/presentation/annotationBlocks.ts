@@ -1,4 +1,4 @@
-import { parseAnnotationMarkdown, type AnnotationSegment } from './annotationText'
+import { annotationPlainText, parseAnnotationMarkdown, type AnnotationSegment } from './annotationText'
 
 /**
  * The block layer of annotation text (language §3): a note is a sequence of
@@ -11,7 +11,10 @@ import { parseAnnotationMarkdown, type AnnotationSegment } from './annotationTex
  * - quotes, lines starting with `>`, which hold blocks;
  * - code blocks between fences of three or more backticks or tildes, shown
  *   as written;
- * - rules, a line of three or more `-`, `*`, or `_`.
+ * - rules, a line of three or more `-`, `*`, or `_`;
+ * - display mathematics: from a line that starts with `$$` to the line that
+ *   holds the closing `$$`, the lines are one paragraph and are never read as
+ *   other blocks, so that a line of TeX may start with `-` or `>`.
  *
  * Like the inline layer, this parser only produces plain data, never HTML,
  * and takes time linear in the text length: no pattern here can backtrack
@@ -99,7 +102,7 @@ function listMarker(line: string): Marker | null {
 
 /** Whether a line ends the paragraph before it by starting another block. */
 function interruptsParagraph(line: string, quotes: boolean): boolean {
-  if (openingFence(line) || isRule(line) || heading(line) || (quotes && isQuote(line))) return true
+  if (openingFence(line) || isRule(line) || heading(line) || (quotes && isQuote(line)) || line.trimStart().startsWith('$$')) return true
   const marker = listMarker(line)
   // As in CommonMark, only a list that starts at 1 interrupts a paragraph: "2026. was…" stays text.
   return marker !== null && marker.indent < 2 && (!marker.ordered || marker.start === 1)
@@ -119,12 +122,24 @@ function finishItem(item: DraftItem): AnnotationListItem {
 function parseLines(lines: readonly string[], depth: number): AnnotationBlock[] {
   const blocks: AnnotationBlock[] = []
   const quotes = depth < MAX_QUOTE_DEPTH
+  /** No later line closes display mathematics: a line that holds `$$` closes any opener before it. */
+  let displayExhausted = false
   let index = 0
   while (index < lines.length) {
     const line = lines[index]
     if (isBlank(line)) {
       index += 1
       continue
+    }
+    if (!displayExhausted && line.trimStart().startsWith('$$')) {
+      let end = line.indexOf('$$', line.indexOf('$$') + 2) >= 0 ? index : index + 1
+      while (end > index && end < lines.length && !lines[end].includes('$$')) end += 1
+      if (end < lines.length) {
+        blocks.push({ kind: 'paragraph', children: parseAnnotationMarkdown(lines.slice(index, end + 1).map((each) => each.trim()).join('\n')) })
+        index = end + 1
+        continue
+      }
+      displayExhausted = true
     }
     const fence = openingFence(line)
     if (fence) {
@@ -193,4 +208,20 @@ function parseLines(lines: readonly string[], depth: number): AnnotationBlock[] 
 /** The blocks of an annotation text. */
 export function parseAnnotationBlocks(text: string): AnnotationBlock[] {
   return parseLines(text.split(/\r\n?|\n/), 0)
+}
+
+/** The plain text of blocks, as a screen reader reads a note: without delimiters, mathematics as its TeX source. */
+export function annotationBlocksPlainText(blocks: readonly AnnotationBlock[]): string {
+  const listText = (list: AnnotationList): string => list.items.map((item) =>
+    annotationPlainText(item.children) + (item.sublist ? `\n${listText(item.sublist)}` : '')).join('\n')
+  return blocks.map((block) => {
+    switch (block.kind) {
+      case 'paragraph':
+      case 'heading': return annotationPlainText(block.children)
+      case 'list': return listText(block)
+      case 'quote': return annotationBlocksPlainText(block.children)
+      case 'code': return block.text
+      case 'rule': return ''
+    }
+  }).filter((text) => text !== '').join('\n')
 }

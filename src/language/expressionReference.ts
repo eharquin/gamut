@@ -184,6 +184,7 @@ export const COMMENT_REFERENCE: readonly ReferenceTopic[] = [
   topic('Emphasis', '**bold**, *italic*', 'a*b*c, 2*3 and x_1 stay literal'),
   topic('Code', '`code`'),
   topic('Link', '[text](https://…)', 'http, https or mailto, with the destination shown'),
+  topic('Mathematics', '$R = e^{-B/2}$', 'TeX; $$…$$ on its own lines for a displayed formula, \\$ for a dollar'),
   topic('Heading', '# title', 'one to three #, then a space'),
   topic('List', '- item, 1. item', 'two spaces before a nested item'),
   topic('Quote', '> text'),

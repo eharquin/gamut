@@ -66,7 +66,12 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the inline subset, a note has headings (`#`, `##`, `###`), bullet and
   numbered lists with one nested level, quotes (`>`), code blocks between
   fences, and rules (`---`); a backslash keeps `#`, `>`, `-`, `+` or a list
-  number literal. Raw HTML, images, and tables stay text.
+  number literal. Raw HTML, images, and tables stay text. Mathematics is
+  written in TeX, `$…$` inline and `$$…$$` on its own lines, and typeset with
+  KaTeX, which is fetched with its fonts from the application itself the
+  first time a note with mathematics is shown; `It costs $5 and $10` stays
+  text and `\$` is a literal dollar. TeX commands that create links, load
+  images, or set attributes are refused.
   The text supports `**bold**`, `*italic*`, inline `` `code` ``, backslash
   escapes, and `[links](https://…)` limited to `http`, `https`, and `mailto`,
   with their parsed destination shown (web links open in a new tab); `a*b*c`, `2*3`, and

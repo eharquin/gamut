@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { serializeCanonicalDocument, toCanonicalDocument } from './document/canonicalDocument'
@@ -191,7 +191,14 @@ describe('comment rows (#187)', () => {
     expect(rendered.querySelector('pre')).toHaveTextContent('A = **raw**')
     expect(rendered.querySelector('pre strong')).toBeNull()
     // The row is described by the whole rendered text.
-    expect(screen.getByRole('textbox', { name: 'Annotation 1' })).toHaveAccessibleDescription(/^Triangle Its angles one inner two first quoted A = \*\*raw\*\*$/)
+    expect(screen.getByRole('textbox', { name: 'Annotation 1' })).toHaveAccessibleDescription(/^Triangle\s+Its angles\s+one\s+inner\s+two\s+first\s+quoted\s+A = \*\*raw\*\*$/)
+  })
+
+  it('typesets the mathematics of a note and describes the row by its TeX source', async () => {
+    openStored([{ id: 'note', kind: 'annotation', source: 'Rotor $R = e^{-\\theta B/2}$' }])
+    const article = row('Annotation 1')
+    await waitFor(() => expect(article.querySelector('.katex')).not.toBeNull())
+    expect(screen.getByRole('textbox', { name: 'Annotation 1' })).toHaveAccessibleDescription('Rotor R = e^{-\\theta B/2}')
   })
 
   it('moves between rows with the arrows only from the first and last position of a note', () => {
