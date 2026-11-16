@@ -59,6 +59,11 @@ export function ExpressionTree({ document, folders, renderItem }: ExpressionTree
           onToggle={() => folders.toggleFolder(row.path)}
           onRename={(name) => folders.renameFolder(row.path, name)}
           onDelete={() => folders.deleteFolder(row.path)}
+          onDeleteContents={() => folders.deleteFolderContents(row.path)}
+          handle={{
+            onPointerDown: (event) => folders.beginFolderReorder(event, row.path),
+            onKeyDown: (event) => folders.reorderFolderWithKeyboard(event, row.path),
+          }}
           className={dropClass}
           rowRef={(element) => {
             if (element) folders.folderRowRefs.current.set(key, element)

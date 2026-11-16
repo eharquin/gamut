@@ -1,6 +1,7 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { CLEAR_HOLD_MS } from './components/ClearExpressionsButton'
 import { parseCanonicalDocument, serializeCanonicalDocument, toCanonicalDocument } from './document/canonicalDocument'
 import { ACTIVE_DOCUMENT_KEY } from './document/documentStorage'
 import { expressionDocument, type ExpressionDocument } from './document/expressionDocument'
@@ -139,6 +140,109 @@ describe('expression folders (DOC-013, A11Y-011)', () => {
   it('lets a document that holds only folders be cleared', () => {
     open({ ...flat(), items: [], folders: [{ path: ['Sums'], collapsed: false }] })
     expect(screen.getByRole('button', { name: /clear/i })).toBeEnabled()
+  })
+
+  it('edits the name of a folder by clicking it, and toggles it by its chevron only', () => {
+    open({ ...flat(), folders: [{ path: ['Sums'], collapsed: false }] })
+    expect(screen.queryByText('✎')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByText('Sums'))
+    const name = screen.getByRole('textbox', { name: 'Name of folder Sums' })
+    expect(name).toHaveFocus()
+    expect(folderButton('Sums')).toHaveAttribute('aria-expanded', 'true')
+    fireEvent.change(name, { target: { value: 'Totals' } })
+    fireEvent.keyDown(name, { key: 'Enter' })
+    expect(folderButton('Totals')).toBeInTheDocument()
+  })
+
+  it('removes only the folder on a press, and its rows too on a sustained hold', () => {
+    vi.useFakeTimers()
+    try {
+      open({
+        ...flat(),
+        items: flat().items.map((item, index) => index > 0 ? { ...item, folder: ['Sums'] } : item),
+        folders: [{ path: ['Sums'], collapsed: false }],
+      })
+      const remove = () => screen.getByRole('button', { name: 'Remove folder Sums' })
+      expect(remove()).toHaveAccessibleDescription('Press to remove the folder and keep its rows. Hold to remove the folder and its 2 rows.')
+      // A release before the hold completes keeps the rows.
+      fireEvent.pointerDown(remove(), { button: 0 })
+      act(() => { vi.advanceTimersByTime(CLEAR_HOLD_MS - 100) })
+      fireEvent.pointerUp(remove(), { button: 0 })
+      expect(screen.queryByRole('button', { name: /^Folder Sums/ })).not.toBeInTheDocument()
+      expect(visibleSources()).toEqual(['A = 1', 'B = 2', 'C = A + B'])
+
+      fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
+      fireEvent.pointerDown(remove(), { button: 0 })
+      expect(remove()).toHaveClass('is-holding')
+      act(() => { vi.advanceTimersByTime(CLEAR_HOLD_MS) })
+      expect(screen.queryByRole('button', { name: /^Folder Sums/ })).not.toBeInTheDocument()
+      expect(visibleSources()).toEqual(['A = 1'])
+      expect(screen.getByText('Folder Sums removed with its 2 rows.')).toBeInTheDocument()
+      // One undo brings the folder and its rows back.
+      fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
+      expect(visibleSources()).toEqual(['A = 1', 'B = 2', 'C = A + B'])
+
+      // The keyboard holds too.
+      fireEvent.keyDown(remove(), { key: 'Enter' })
+      act(() => { vi.advanceTimersByTime(CLEAR_HOLD_MS) })
+      expect(visibleSources()).toEqual(['A = 1'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('moves a folder with its rows by its handle, into another folder and out again', () => {
+    open({
+      ...flat(),
+      items: flat().items.map((item, index) => index === 0 ? { ...item, folder: ['Sums'] } : item),
+      folders: [{ path: ['Sums'], collapsed: false }, { path: ['Other'], collapsed: false }],
+    })
+    const handle = (name: string) => screen.getByRole('button', { name: `Reorder folder ${name}. Alt plus arrow keys to move.` })
+    // Sums, with A, passes B and C, then enters the empty folder Other.
+    fireEvent.keyDown(handle('Sums'), { key: 'ArrowDown', altKey: true })
+    expect(screen.getByText('Moved folder Sums to position 2 of 4.')).toBeInTheDocument()
+    expect(visibleSources()).toEqual(['B = 2', 'A = 1', 'C = A + B'])
+    fireEvent.keyDown(handle('Sums'), { key: 'End', altKey: true })
+    fireEvent.keyDown(handle('Sums'), { key: 'ArrowDown', altKey: true })
+    expect(screen.getByText('Moved folder Sums to position 1 of 1 in folder Other.')).toBeInTheDocument()
+    expect(folderButton('Sums')).toHaveAccessibleName('Folder Sums, level 2, 1 row')
+    expect(folderButton('Other')).toHaveAccessibleName('Folder Other, level 1, 1 row')
+    // The value of a row is unchanged by the move of its folder.
+    expect(within(editorOf('C = A + B').closest('.expression-item') as HTMLElement).getByText('3')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
+    expect(folderButton('Sums')).toHaveAccessibleName('Folder Sums, level 1, 1 row')
+  })
+
+  it('drags a folder onto another folder', () => {
+    open({
+      ...flat(),
+      items: flat().items.map((item, index) => index === 0 ? { ...item, folder: ['Sums'] } : item),
+      folders: [{ path: ['Sums'], collapsed: false }, { path: ['Other'], collapsed: false }],
+    })
+    const header = (name: string) => folderButton(name).closest('.folder-row') as HTMLElement
+    header('Sums').getBoundingClientRect = () => ({ top: 0, bottom: 30, height: 30 }) as DOMRect
+    screen.getAllByRole('textbox', { name: /^Expression \d+$/ }).forEach((element, index) => {
+      (element.closest('.expression-item') as HTMLElement).getBoundingClientRect = () => ({ top: 30 + index * 40, bottom: 70 + index * 40, height: 40 }) as DOMRect
+    })
+    header('Other').getBoundingClientRect = () => ({ top: 150, bottom: 180, height: 30 }) as DOMRect
+    fireEvent.pointerDown(screen.getByRole('button', { name: /^Reorder folder Sums/ }), { pointerId: 1 })
+    // Over its own row, a folder has no target.
+    fireEvent.pointerMove(window, { clientY: 40 })
+    expect(document.querySelector('.drop-before, .drop-after, .drop-into')).toBeNull()
+    fireEvent.pointerMove(window, { clientY: 175 })
+    expect(header('Other')).toHaveClass('drop-into')
+    fireEvent.pointerUp(window, { pointerId: 1 })
+    expect(folderButton('Sums')).toHaveAccessibleName('Folder Sums, level 2, 1 row')
+  })
+
+  it('fills the indent of the rows of a folder', () => {
+    open({
+      ...flat(),
+      items: flat().items.map((item, index) => index === 1 ? { ...item, folder: ['Sums'] } : item),
+      folders: [{ path: ['Sums'], collapsed: false }],
+    })
+    expect(editorOf('B = 2').closest('.folder-member')).toHaveStyle({ '--folder-depth': '1' })
+    expect(editorOf('A = 1').closest('.folder-member')).not.toHaveStyle({ '--folder-depth': '1' })
   })
 
   it('drops a dragged row into a folder', () => {

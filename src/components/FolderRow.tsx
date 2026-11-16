@@ -1,5 +1,14 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react'
 import { folderKey, type FolderPath } from '../document/folderModel'
+import { CLEAR_HOLD_MS } from './ClearExpressionsButton'
 
 type FolderRowProps = Readonly<{
   path: FolderPath
@@ -19,10 +28,21 @@ type FolderRowProps = Readonly<{
   onRename?(name: string): string | null
   /** Absent for a read-only folder. */
   onDelete?(): void
+  /**
+   * Removes the folder with everything it holds. When given, a click on the
+   * remove button keeps the entries (`onDelete`) and a sustained hold, as for
+   * clearing every expression, removes them too.
+   */
+  onDeleteContents?(): void
+  /** The handle that moves the folder by pointer and keyboard; absent when folders cannot be moved. */
+  handle?: Readonly<{
+    onPointerDown(event: ReactPointerEvent<HTMLButtonElement>): void
+    onKeyDown(event: KeyboardEvent<HTMLButtonElement>): void
+  }>
   /** Classes the panel adds, such as a drop indicator. */
   className?: string
   rowRef?(element: HTMLElement | null): void
-  /** Further actions after Rename and Remove. */
+  /** Further actions before Remove. */
   children?: ReactNode
 }>
 
@@ -35,12 +55,13 @@ let focusOnMount: string | null = null
 /**
  * The header row of a folder, shared by the expression panel (DOC-013) and the
  * library panel (STORE-016): a disclosure button that names the folder, its
- * nesting level and its size and exposes its expanded state (A11Y-011), and
- * the rename and remove actions of an editable folder. The name is plain text.
+ * nesting level and its size and exposes its expanded state (A11Y-011), the
+ * name, which is edited in place by clicking it or with F2, and the remove
+ * action, shown while the row is hovered or holds focus. The name is plain text.
  */
 export function FolderRow({
   path, name, level, expanded, entryCount, entryNoun, renaming, onRenamingChange,
-  onToggle, onRename, onDelete, className, rowRef, children,
+  onToggle, onRename, onDelete, onDeleteContents, handle, className, rowRef, children,
 }: FolderRowProps) {
   const [draft, setDraft] = useState(name)
   const [error, setError] = useState<string | null>(null)
@@ -48,7 +69,9 @@ export function FolderRow({
   const toggleRef = useRef<HTMLButtonElement>(null)
   /** Set once Enter or Escape ends the rename, so the blur that follows does not commit again. */
   const ended = useRef(false)
-  const errorId = `folder-error-${path.map(encodeURIComponent).join('/')}`
+  const idSuffix = path.map(encodeURIComponent).join('/')
+  const errorId = `folder-error-${idSuffix}`
+  const hintId = `folder-remove-hint-${idSuffix}`
 
   useEffect(() => {
     if (!renaming) return
@@ -86,13 +109,72 @@ export function FolderRow({
     requestAnimationFrame(() => toggleRef.current?.focus())
   }
 
+  // Remove: a click keeps the entries; a sustained hold removes them too.
+  const [holding, setHolding] = useState(false)
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /** Set when the hold completed, so that the release that follows removes nothing more. */
+  const held = useRef(false)
+  const cancelHold = () => {
+    if (holdTimer.current !== null) clearTimeout(holdTimer.current)
+    holdTimer.current = null
+    setHolding(false)
+  }
+  useEffect(() => cancelHold, [])
+  const beginHold = () => {
+    held.current = false
+    if (!onDeleteContents || holdTimer.current !== null) return
+    setHolding(true)
+    holdTimer.current = setTimeout(() => {
+      holdTimer.current = null
+      held.current = true
+      setHolding(false)
+      onDeleteContents()
+    }, CLEAR_HOLD_MS)
+  }
+  /** The end of a press: a short one removes the folder only. */
+  const release = () => {
+    cancelHold()
+    if (!held.current) onDelete?.()
+    held.current = false
+  }
+
   const count = `${entryCount} ${entryCount === 1 ? entryNoun[0] : entryNoun[1]}`
+  const label = `Folder ${name}, level ${level}, ${count}`
+  const toggleKeys = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key === 'F2' && onRename) { event.preventDefault(); onRenamingChange(true) }
+    else if (event.key === 'ArrowRight' && !expanded) { event.preventDefault(); onToggle() }
+    else if (event.key === 'ArrowLeft' && expanded) { event.preventDefault(); onToggle() }
+  }
   return (
     <div
       ref={rowRef}
-      className={`folder-row${expanded ? '' : ' is-collapsed'}${className ? ` ${className}` : ''}`}
+      className={`folder-row${expanded ? '' : ' is-collapsed'}${handle ? ' has-handle' : ''}${className ? ` ${className}` : ''}`}
       style={{ '--folder-level': level } as CSSProperties}
     >
+      {handle && (
+        <button
+          type="button"
+          className="reorder-handle folder-handle"
+          aria-label={`Reorder folder ${name}. Alt plus arrow keys to move.`}
+          onPointerDown={handle.onPointerDown}
+          onKeyDown={handle.onKeyDown}
+        >
+          <span aria-hidden="true">⠿</span>
+        </button>
+      )}
+      <button
+        ref={toggleRef}
+        type="button"
+        className={`folder-toggle${onRename ? '' : ' is-wide'}`}
+        aria-expanded={expanded}
+        aria-label={label}
+        onClick={onToggle}
+        onKeyDown={toggleKeys}
+      >
+        <span className="folder-chevron" aria-hidden="true">{expanded ? '▾' : '▸'}</span>
+        {/* A read-only folder has no name button: its whole header toggles it. */}
+        {!onRename && <span className="folder-name">{name}</span>}
+      </button>
       {renaming && onRename ? (
         <span className="folder-rename">
           <input
@@ -112,40 +194,57 @@ export function FolderRow({
           />
           {error && <span id={errorId} className="folder-error" role="alert">{error}</span>}
         </span>
-      ) : (
+      ) : onRename && (
         <button
-          ref={toggleRef}
           type="button"
-          className="folder-toggle"
-          aria-expanded={expanded}
-          aria-label={`Folder ${name}, level ${level}, ${count}`}
-          onClick={onToggle}
-          onKeyDown={(event) => {
-            if (event.key === 'F2' && onRename) { event.preventDefault(); onRenamingChange(true) }
-            else if (event.key === 'ArrowRight' && !expanded) { event.preventDefault(); onToggle() }
-            else if (event.key === 'ArrowLeft' && expanded) { event.preventDefault(); onToggle() }
-          }}
+          className="folder-name-button"
+          aria-label={`Rename folder ${name}`}
+          title="Click to rename (F2)"
+          onClick={() => onRenamingChange(true)}
+          onKeyDown={toggleKeys}
         >
-          <span className="folder-chevron" aria-hidden="true">{expanded ? '▾' : '▸'}</span>
           <span className="folder-name">{name}</span>
-          <span className="folder-count" aria-hidden="true">{entryCount}</span>
         </button>
       )}
-      {!renaming && (onRename || onDelete || children) && (
+      <span className="folder-count" aria-hidden="true">{entryCount}</span>
+      {!renaming && (onDelete || children) && (
         <span className="folder-actions">
-          {onRename && (
-            <button type="button" className="folder-action" aria-label={`Rename folder ${name}`} title="Rename (F2)"
-              onClick={() => onRenamingChange(true)}>
-              <span aria-hidden="true">✎</span>
-            </button>
-          )}
-          {onDelete && (
-            <button type="button" className="folder-action" aria-label={`Remove folder ${name}`} title="Remove folder"
-              onClick={onDelete}>
-              <span aria-hidden="true">×</span>
-            </button>
-          )}
           {children}
+          {onDelete && (
+            <button
+              type="button"
+              className={`folder-action folder-delete${holding ? ' is-holding' : ''}`}
+              style={onDeleteContents ? { '--hold-duration': `${CLEAR_HOLD_MS}ms` } as CSSProperties : undefined}
+              aria-label={`Remove folder ${name}`}
+              aria-describedby={onDeleteContents ? hintId : undefined}
+              title={onDeleteContents ? `Remove folder; hold to remove its ${entryNoun[1]} too` : 'Remove folder'}
+              // A pointer press is handled by its release, so that a completed hold is
+              // not followed by a click; a click without a press comes from assistive technology.
+              onClick={(event) => { if (event.detail === 0) onDelete() }}
+              onPointerDown={(event) => { if (event.button === 0) beginHold() }}
+              onPointerUp={(event) => { if (event.button === 0) release() }}
+              onPointerLeave={cancelHold}
+              onPointerCancel={cancelHold}
+              onBlur={cancelHold}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return
+                event.preventDefault()
+                if (!event.repeat) beginHold()
+              }}
+              onKeyUp={(event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return
+                event.preventDefault()
+                release()
+              }}
+            >
+              <span aria-hidden="true">×</span>
+              {onDeleteContents && (
+                <span className="visually-hidden" id={hintId}>
+                  Press to remove the folder and keep its {entryNoun[1]}. Hold to remove the folder and its {count}.
+                </span>
+              )}
+            </button>
+          )}
         </span>
       )}
     </div>

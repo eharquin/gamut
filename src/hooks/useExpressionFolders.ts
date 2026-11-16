@@ -11,13 +11,18 @@ import type { DocumentCommand } from '../document/documentCommands'
 import type { HistoryAction } from '../document/documentHistory'
 import type { ExpressionDocument } from '../document/expressionDocument'
 import {
+  applyFolderMove,
   applyItemMove,
   createFolder as createFolderEdit,
   expressionRows,
   folderPaths,
+  folderPosition,
+  folderStepPlacement,
   foldersToReveal,
   isFolderCollapsed,
+  itemFolder,
   itemPosition,
+  planFolderMove,
   planItemMove,
   renameFolder as renameFolderEdit,
   stepPlacement,
@@ -28,6 +33,7 @@ import {
   describeFolder,
   folderKey,
   folderName,
+  isWithin,
   uniqueFolderName,
   type FolderPath,
 } from '../document/folderModel'
@@ -50,7 +56,11 @@ export type ExpressionFolders = Readonly<{
   /** Renames a folder; returns why it is refused, or null. */
   renameFolder(path: FolderPath, name: string): string | null
   deleteFolder(path: FolderPath): void
+  /** Removes a folder with its subfolders and every row they hold. */
+  deleteFolderContents(path: FolderPath): void
   toggleFolder(path: FolderPath): void
+  beginFolderReorder(event: ReactPointerEvent<HTMLButtonElement>, path: FolderPath): void
+  reorderFolderWithKeyboard(event: KeyboardEvent<HTMLButtonElement>, path: FolderPath): void
   /** Moves a row one step through the visible rows; false when it cannot move. */
   moveStep(itemId: string, step: MoveStep): boolean
   beginRowReorder(event: ReactPointerEvent<HTMLButtonElement>, itemId: string): void
@@ -64,7 +74,12 @@ type Options = Readonly<{
   /** Each row's article, by item identity. */
   rowElements: RefObject<Map<string, HTMLElement>>
   announce(message: string): void
+  /** Called before rows are removed with their folder, to release what the interface holds for them. */
+  onRowsRemoved?(itemIds: readonly string[]): void
 }>
+
+/** What a drag moves: one row, or a folder with everything it holds. */
+type Dragged = Readonly<{ kind: 'item'; itemId: string }> | Readonly<{ kind: 'folder'; path: FolderPath }>
 
 function rowName(document: ExpressionDocument, itemId: string): string {
   const item = document.items.find((candidate) => candidate.id === itemId)
@@ -77,11 +92,11 @@ function rowName(document: ExpressionDocument, itemId: string): string {
  * pointer and keyboard, with one announcement per move. Every change goes
  * through a document command; collapsing is not a history step.
  */
-export function useExpressionFolders({ document, executeCommand, dispatchHistory, rowElements, announce }: Options): ExpressionFolders {
+export function useExpressionFolders({ document, executeCommand, dispatchHistory, rowElements, announce, onRowsRemoved }: Options): ExpressionFolders {
   const [renamingKey, setRenamingKey] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
   const folderRowRefs = useRef(new Map<string, HTMLElement>())
-  const drag = useRef<Readonly<{ itemId: string; pointerId: number; target: DropTarget | null }> | null>(null)
+  const drag = useRef<Readonly<{ dragged: Dragged; pointerId: number; target: DropTarget | null }> | null>(null)
 
   /** Applies a planned move, reveals its folder, and announces where the row went. */
   const moveTo = useCallback((itemId: string, placement: ItemPlacement): boolean => {
@@ -106,6 +121,46 @@ export function useExpressionFolders({ document, executeCommand, dispatchHistory
     announce(`${rowName(document, itemId)} cannot move ${step === 'up' || step === 'first' ? 'up' : 'down'}.`)
     return false
   }, [document, moveTo, announce])
+
+  /** Moves a folder with its rows, reveals its new parent, keeps focus on its handle, and announces where it went. */
+  const moveFolderTo = useCallback((path: FolderPath, placement: ItemPlacement): boolean => {
+    const move = planFolderMove(document, path, placement)
+    if (!move) return false
+    const result = applyFolderMove(document, move)
+    if (result.status !== 'applied') {
+      announce(`Folder ${folderName(path)} cannot move there. ${result.reason}`)
+      return true
+    }
+    executeCommand({ kind: 'move-folder', ...move })
+    for (const ancestor of foldersToReveal(document, move.parent))
+      dispatchHistory({ type: 'set-folder-collapsed', path: ancestor, collapsed: false })
+    const moved = [...move.parent, folderName(path)]
+    const position = folderPosition(result.document, moved)
+    if (position) {
+      announce(`Moved folder ${folderName(path)} to position ${position.position} of ${position.count}${
+        position.parent.length === 0 ? '' : ` in folder ${describeFolder(position.parent)}`}.`)
+    }
+    // A folder that changes parent gets a new row; its handle takes focus back.
+    requestAnimationFrame(() => {
+      const handle = folderRowRefs.current.get(folderKey(moved))?.querySelector<HTMLElement>('.folder-handle')
+      if (handle && window.document.activeElement !== handle) handle.focus()
+    })
+    return true
+  }, [document, executeCommand, dispatchHistory, announce])
+
+  const folderMoveStep = useCallback((path: FolderPath, step: MoveStep): boolean => {
+    const placement = folderStepPlacement(document, path, step)
+    if (placement && moveFolderTo(path, placement)) return true
+    announce(`Folder ${folderName(path)} cannot move ${step === 'up' || step === 'first' ? 'up' : 'down'}.`)
+    return false
+  }, [document, moveFolderTo, announce])
+
+  const deleteFolderContents = useCallback((path: FolderPath) => {
+    const removed = document.items.filter((item) => isWithin(itemFolder(item), path)).map(({ id }) => id)
+    onRowsRemoved?.(removed)
+    executeCommand({ kind: 'delete-folder', path, contents: true })
+    announce(`Folder ${folderName(path)} removed with its ${removed.length} ${removed.length === 1 ? 'row' : 'rows'}.`)
+  }, [document, executeCommand, announce, onRowsRemoved])
 
   const createFolder = useCallback(() => {
     const path = [uniqueFolderName(folderPaths(document), [])]
@@ -151,7 +206,7 @@ export function useExpressionFolders({ document, executeCommand, dispatchHistory
   }, [document, dispatchHistory])
 
   /** The drop target under a pointer, from the visible rows of the panel. */
-  const resolveDropTarget = useCallback((clientY: number, draggedId: string): DropTarget | null => {
+  const resolveDropTarget = useCallback((clientY: number, dragged: Dragged): DropTarget | null => {
     for (const row of expressionRows(document)) {
       const element = row.kind === 'entry'
         ? rowElements.current.get(row.entry.id)
@@ -160,8 +215,10 @@ export function useExpressionFolders({ document, executeCommand, dispatchHistory
       const rect = element.getBoundingClientRect()
       if (clientY > rect.bottom) continue
       const upper = clientY < rect.top + rect.height / 2
+      // A folder is not dropped on itself or on anything it holds.
+      if (dragged.kind === 'folder' && isWithin(row.kind === 'folder' ? row.path : row.folder, dragged.path)) return null
       if (row.kind === 'folder') return upper ? { kind: 'before-folder', path: row.path } : { kind: 'into-folder', path: row.path }
-      if (row.entry.id === draggedId) return null
+      if (dragged.kind === 'item' && row.entry.id === dragged.itemId) return null
       return { kind: upper ? 'before' : 'after', itemId: row.entry.id }
     }
     return { kind: 'end' }
@@ -181,7 +238,7 @@ export function useExpressionFolders({ document, executeCommand, dispatchHistory
     const handlePointerMove = (event: PointerEvent) => {
       const current = drag.current
       if (!current) return
-      const target = resolveDropTarget(event.clientY, current.itemId)
+      const target = resolveDropTarget(event.clientY, current.dragged)
       drag.current = { ...current, target }
       setDropTarget(target)
     }
@@ -191,7 +248,11 @@ export function useExpressionFolders({ document, executeCommand, dispatchHistory
       window.document.body.classList.remove('reordering-items')
       setDropTarget(null)
       if (!current) return
-      if (commit && current.target) moveTo(current.itemId, placementRef.current(current.target))
+      if (commit && current.target) {
+        const placement = placementRef.current(current.target)
+        if (current.dragged.kind === 'item') moveTo(current.dragged.itemId, placement)
+        else moveFolderTo(current.dragged.path, placement)
+      }
       dispatchHistory({ type: commit ? 'commit-transaction' : 'cancel-transaction' })
     }
     const handlePointerUp = () => endDrag(true)
@@ -205,30 +266,43 @@ export function useExpressionFolders({ document, executeCommand, dispatchHistory
       window.removeEventListener('pointercancel', handlePointerCancel)
       window.document.body.classList.remove('reordering-items')
     }
-  }, [resolveDropTarget, moveTo, dispatchHistory])
+  }, [resolveDropTarget, moveTo, moveFolderTo, dispatchHistory])
 
-  const beginRowReorder = useCallback((event: ReactPointerEvent<HTMLButtonElement>, itemId: string) => {
-    drag.current = { itemId, pointerId: event.pointerId, target: null }
+  const beginDrag = useCallback((event: ReactPointerEvent<HTMLButtonElement>, dragged: Dragged) => {
+    drag.current = { dragged, pointerId: event.pointerId, target: null }
     dispatchHistory({ type: 'begin-transaction' })
     window.document.body.classList.add('reordering-items')
     event.currentTarget.setPointerCapture?.(event.pointerId)
     event.preventDefault()
   }, [dispatchHistory])
+  const beginRowReorder = useCallback((event: ReactPointerEvent<HTMLButtonElement>, itemId: string) =>
+    beginDrag(event, { kind: 'item', itemId }), [beginDrag])
+  const beginFolderReorder = useCallback((event: ReactPointerEvent<HTMLButtonElement>, path: FolderPath) =>
+    beginDrag(event, { kind: 'folder', path }), [beginDrag])
 
-  const reorderRowWithKeyboard = useCallback((event: KeyboardEvent<HTMLButtonElement>, itemId: string) => {
-    if (!event.shiftKey && !event.altKey) return
-    const step: MoveStep | null = event.key === 'ArrowUp' ? 'up'
+  const keyboardStep = (event: KeyboardEvent<HTMLButtonElement>): MoveStep | null => {
+    if (!event.shiftKey && !event.altKey) return null
+    return event.key === 'ArrowUp' ? 'up'
       : event.key === 'ArrowDown' ? 'down'
         : event.key === 'Home' ? 'first'
           : event.key === 'End' ? 'last' : null
+  }
+  const reorderRowWithKeyboard = useCallback((event: KeyboardEvent<HTMLButtonElement>, itemId: string) => {
+    const step = keyboardStep(event)
     if (!step) return
     event.preventDefault()
     moveStep(itemId, step)
   }, [moveStep])
+  const reorderFolderWithKeyboard = useCallback((event: KeyboardEvent<HTMLButtonElement>, path: FolderPath) => {
+    const step = keyboardStep(event)
+    if (!step) return
+    event.preventDefault()
+    folderMoveStep(path, step)
+  }, [folderMoveStep])
 
   return {
     renamingKey, setRenamingKey, dropTarget, folderRowRefs,
-    createFolder, renameFolder, deleteFolder, toggleFolder, moveStep,
-    beginRowReorder, reorderRowWithKeyboard,
+    createFolder, renameFolder, deleteFolder, deleteFolderContents, toggleFolder, moveStep,
+    beginRowReorder, reorderRowWithKeyboard, beginFolderReorder, reorderFolderWithKeyboard,
   }
 }
