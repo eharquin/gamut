@@ -329,11 +329,10 @@ export function ExpressionRow({
                   aria-hidden="true"
                 />
               </button>
-          ) : (
+          ) : !annotation && (
+            // A note has no status: its column stays, so that its text lines up with the sources.
             <span
-              className={`expression-status-pastille${
-                annotation ? ' is-annotation' : empty ? ' is-empty' : ' is-error'
-              }`}
+              className={`expression-status-pastille${empty ? ' is-empty' : ' is-error'}`}
               aria-hidden="true"
             />
           )}
