@@ -232,7 +232,7 @@ describe('scene sharing in the application', () => {
     // that listener exists, so wait for it before dropping.
     await waitFor(() => {
       fireEvent.dragEnter(document.body, { dataTransfer: { types: ['Files'], files: [] } })
-      expect(screen.getByText('Drop a JSON document to open it')).toBeInTheDocument()
+      expect(screen.getByText('Drop a JSON document to open it, or a library .zip to import it')).toBeInTheDocument()
     })
     fireEvent.drop(document.body, { dataTransfer: { types: ['Files'], files: [file] } })
     await waitFor(

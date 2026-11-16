@@ -27,6 +27,9 @@ type Pending =
   | Readonly<{ kind: 'rename'; entry: LibraryEntry; draft: string }>
   | Readonly<{ kind: 'delete-folder'; path: FolderPath; count: number }>
 
+/** What a library export or import did: one sentence, and the entries it left out. */
+export type LibraryArchiveReport = Readonly<{ message: string; details: readonly string[] }>
+
 export type LibraryPanelProps = Readonly<{
   /** The button focus returns to on close: Library, or Save when Save asked for a name. */
   returnFocusRef: RefObject<HTMLButtonElement | null>
@@ -71,6 +74,13 @@ export type LibraryPanelProps = Readonly<{
   onAddExample(example: LibraryExample): void
   /** In a temporary session: copies the scene into the library. */
   onAddScene(): void
+  /** The outcome of the last library export or import, shown until dismissed. */
+  archiveReport: LibraryArchiveReport | null
+  onDismissArchiveReport(): void
+  /** Downloads the whole library as a `.zip` archive (STORE-017). */
+  onExportLibrary(): void
+  /** Imports a `.zip` archive into a new folder (STORE-018). */
+  onImportLibrary(file: File): void
   onClose(): void
 }>
 
@@ -107,9 +117,10 @@ export function LibraryPanel({
   returnFocusRef, overlayHost, entries, folders, folderActions, algebras, openId, naming, diagnostic,
   unsavedChanges, temporarySession, currentName,
   onSaveAs, onSaveAsNew, onNew, onOpen, onRename, onDuplicate, onDelete,
-  onOpenExample, onAddExample, onAddScene, onClose,
+  onOpenExample, onAddExample, onAddScene, archiveReport, onDismissArchiveReport, onExportLibrary, onImportLibrary, onClose,
 }: LibraryPanelProps) {
   const ref = useRef<HTMLElement>(null)
+  const archiveInputRef = useRef<HTMLInputElement>(null)
   const overlay = useMediaQuery(LIBRARY_OVERLAY_QUERY)
   const [section, setSection] = useState<Section>('mine')
   const [algebraId, setAlgebraId] = useState<string | null>(null)
@@ -384,7 +395,43 @@ export function LibraryPanel({
                 onClick={() => { setNameDraft(`${currentName} copy`); setSavingAsNew(true) }}
               >Save as new graph…</button>
             )}
+            <button type="button" className="library-archive" onClick={onExportLibrary}>Export library</button>
+            <button
+              type="button"
+              className="library-archive"
+              aria-disabled={temporarySession || undefined}
+              aria-describedby={temporarySession ? 'library-import-unavailable' : undefined}
+              onClick={() => { if (!temporarySession) archiveInputRef.current?.click() }}
+            >Import library</button>
+            <input
+              ref={archiveInputRef}
+              className="visually-hidden"
+              type="file"
+              accept=".zip,application/zip,application/x-zip-compressed"
+              aria-label="Library archive to import"
+              tabIndex={-1}
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                // The same archive can be chosen again.
+                event.target.value = ''
+                if (file) onImportLibrary(file)
+              }}
+            />
           </div>
+          {temporarySession && (
+            <p id="library-import-unavailable" className="library-archive-note">
+              Import library is unavailable in a temporary shared scene, which does not use browser storage.
+            </p>
+          )}
+          {archiveReport && (
+            <div className="library-archive-report" role="status" aria-label="Library archive">
+              <p>{archiveReport.message}</p>
+              {archiveReport.details.length > 0 && (
+                <ul>{archiveReport.details.map((detail) => <li key={detail}>{detail}</li>)}</ul>
+              )}
+              <button type="button" onClick={onDismissArchiveReport}>Dismiss</button>
+            </div>
+          )}
           {shownEntries.length === 0 && shownFolders.length === 0 ? (
             <p className="library-empty">{entries.length === 0
               ? 'No saved graphs yet. Save keeps the open graph here.'

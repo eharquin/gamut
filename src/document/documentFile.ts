@@ -40,6 +40,16 @@ export function downloadDocumentFile(canonical: CanonicalDocument, title: string
   URL.revokeObjectURL(url)
 }
 
+/** Hands bytes to the browser as a download named `fileName`. */
+export function downloadBytes(bytes: Uint8Array, fileName: string, type: string): void {
+  const url = URL.createObjectURL(new Blob([bytes as Uint8Array<ArrayBuffer>], { type }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
 /**
  * The diagnostic shown for a failed document operation: the format error's
  * code and message, or `fallback` for any other failure.

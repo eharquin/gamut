@@ -9,10 +9,12 @@ import {
   folderKey,
   isFolderPath,
   isWithin,
+  MAX_FOLDER_DEPTH,
   MAX_LIBRARY_FOLDERS,
   newFolderProblem,
   parentPath,
   replacePrefix,
+  uniqueFolderName,
   withAncestors,
   type FolderPath,
 } from './folderModel'
@@ -576,6 +578,72 @@ export type LibraryFolderWrite = Readonly<{
   entries: readonly LibraryEntry[]
   folders: readonly FolderPath[]
 }>
+
+/** One graph of an import: a validated document, its name, and its folder below the import folder. */
+export type LibraryImportGraph = Readonly<{
+  document: CanonicalDocument
+  name: string
+  folder: FolderPath
+  /** The last update the source recorded, kept when given; the import instant otherwise. */
+  updatedAt?: string
+}>
+
+/**
+ * Stores several graphs in one write, all inside a new top-level folder named
+ * `base`, or a free variant of it (STORE-018). A graph whose identity is
+ * already in the library, or repeated in the import, is stored under a fresh
+ * one, so an import never replaces a graph. Either every graph and the index
+ * are written, or the library is left as it was.
+ */
+export function importGraphsToLibrary(
+  storage: LibraryStorage | null,
+  base: string,
+  graphs: readonly LibraryImportGraph[],
+  /** Folders below the import folder, including those that hold no graph. */
+  folders: readonly FolderPath[],
+  options: LibraryOptions & Readonly<{ createId?: () => string }> = {},
+): LibraryFolderWrite & Readonly<{ folder: FolderPath }> {
+  const target = required(storage)
+  const now = options.now ?? new Date().toISOString()
+  const current = beginWrite(target, { ...options, now })
+  const root = [uniqueFolderName(current.folders, [], base)]
+  const added = withAncestors([root, ...[...folders, ...graphs.map((graph) => graph.folder)].map((path) => [...root, ...path])])
+  if (added.some((path) => path.length > MAX_FOLDER_DEPTH))
+    throw new LibraryError('LIMIT_FOLDER_DEPTH', `Folders may be nested at most ${MAX_FOLDER_DEPTH} levels deep, the import folder included.`)
+  if (current.folders.length + added.length > MAX_LIBRARY_FOLDERS)
+    throw new LibraryError('LIMIT_FOLDER_COUNT', `The library may contain at most ${MAX_LIBRARY_FOLDERS} folders.`)
+  const taken = new Set(current.entries.map((entry) => entry.id))
+  const createId = options.createId ?? (() => crypto.randomUUID())
+  const stored: { id: string; source: string }[] = []
+  const entries = [...current.entries]
+  for (const graph of graphs) {
+    let id = graph.document.id
+    while (taken.has(id) || id === '') id = createId()
+    taken.add(id)
+    entries.push({
+      id,
+      name: graph.name,
+      algebraId: graph.document.algebra.algebraId,
+      createdAt: now,
+      updatedAt: graph.updatedAt ?? now,
+      folder: [...root, ...graph.folder],
+    })
+    stored.push({
+      id,
+      source: serializeCanonicalDocument({ ...graph.document, id, metadata: { ...graph.document.metadata, title: graph.name } }),
+    })
+  }
+  const allFolders = [...current.folders, ...added]
+  try {
+    commit(target, [...migrationGraphs(current.migration), ...stored], entries, allFolders)
+  } catch (error) {
+    throw writeFailure(error, new LibraryError(
+      'LIBRARY_WRITE_FAILED',
+      'The library could not be imported because browser storage is full. Nothing was imported.',
+    ))
+  }
+  return { entries, folders: allFolders, folder: root }
+}
 
 /** Creates an empty folder in My library, inside an existing parent (STORE-016). */
 export function createLibraryFolder(

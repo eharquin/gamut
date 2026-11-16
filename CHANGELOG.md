@@ -121,7 +121,8 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   dragging it onto a folder, onto another graph, or onto the list for the top
   level; the move is announced and focus stays on the graph. Folders are
   listed by name before the graphs; the All / VGA / PGA filter stays and
-  shows only the folders that hold a graph of that algebra. Examples are in a
+  shows the folders that hold a graph of that algebra and those that hold no
+  graph. Examples are in a
   fixed, read-only tree (`VGA(2)`, `PGA(2)`), and **Add to my library** stores
   the copy under the example's folder path, creating the folders that are
   missing. Collapsed folders are remembered per browser
@@ -130,6 +131,27 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   optional `folder`, the folder names from the root, and empty folders are
   stored under `gamut.library.v1.folders`; release 0.2.0 keeps every graph,
   and a graph it saves again moves to the top level.
+- **Export library** in the library panel downloads the whole of My library
+  as `gamut-library-YYYY-MM-DD.zip`: one canonical JSON document per graph,
+  identical to its single-graph export, in directories that follow the
+  library folders, and a `manifest.json` with the export time and each
+  graph's path, name, identity, and last update. Characters that are unsafe in
+  a file name are replaced and colliding names get a suffix; the documents
+  and the manifest keep the real names. **Import library**, or dropping one
+  `.zip` on the window, imports such an archive into a new top-level folder
+  `Imported YYYY-MM-DD`, keeping its folders below it. An import never
+  replaces a graph: a graph whose identity is already in the library gets a
+  new one. Every document is validated like a single-file import; invalid
+  entries are skipped and listed with their diagnostics in the panel. The
+  archive is untrusted input: it is rejected as a whole, with a diagnostic and
+  without writing anything, when it is over 32 MiB, holds more than 2,048
+  entries, decompresses to more than 4 MiB for one document or 64 MiB in
+  total, expands more than 64:1, or holds an unsafe, undecodable, or
+  duplicate path, an encrypted entry, ZIP64, another compression method, or a
+  checksum mismatch. The manifest is only a hint and is never trusted over
+  the documents. The archive is read and written with the browser's
+  `deflate-raw` streams, without a new dependency. Export stays available in
+  a temporary shared-scene session; import does not, and says why (#268).
 - A scene opened from a link no longer shows the “Temporary session. Changes
   are not saved automatically.” banner or its **Save local copy** button
   (#287). **Save**, with the dot that shows unsaved changes, does the same: it

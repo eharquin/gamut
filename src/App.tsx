@@ -90,7 +90,9 @@ import {
   type CanonicalDocument,
   type ThemeMode,
 } from './document/canonicalDocument'
-import { documentFileDiagnostic, downloadDocumentFile, readDocumentFile } from './document/documentFile'
+import { documentFileDiagnostic, downloadBytes, downloadDocumentFile, readDocumentFile } from './document/documentFile'
+import { describeArchiveImport, exportLibraryArchive, importLibraryArchive } from './document/libraryArchive'
+import { ArchiveError } from './document/zipArchive'
 import { ACTIVE_DOCUMENT_KEY, browserDocumentStorage } from './document/documentStorage'
 import {
   addCopyToLibrary,
@@ -112,7 +114,7 @@ import {
   type LibraryEntry,
   type LibraryRead,
 } from './document/documentLibrary'
-import { LibraryPanel } from './components/LibraryPanel'
+import { LibraryPanel, type LibraryArchiveReport } from './components/LibraryPanel'
 import { useLibraryFolderActions } from './hooks/useLibraryFolderActions'
 import type { LibraryExample } from './examples'
 import { selectDroppedDocument } from './document/droppedDocument'
@@ -1854,6 +1856,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
   // into an editor and the pointer-driven reordering and viewport drags are
   // unaffected.
   const importDroppedFile = useRef(importDocumentFile)
+  const importDroppedArchive = useRef<(file: File) => void>(() => undefined)
   useEffect(() => { importDroppedFile.current = importDocumentFile })
   useEffect(() => {
     // An embedded scene opens no other document.
@@ -1887,6 +1890,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
       const dropped = selectDroppedDocument(event.dataTransfer?.files ?? [])
       if (dropped.status === 'rejected') setDocumentDiagnostic(dropped.diagnostic)
       else if (dropped.status === 'file') void importDroppedFile.current(dropped.file)
+      else if (dropped.status === 'archive') importDroppedArchive.current(dropped.file)
     }
     window.addEventListener('dragenter', enter)
     window.addEventListener('dragover', over)
@@ -2063,8 +2067,52 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
   const reportLibraryFailure = (error: unknown, fallback: string) => {
     setLibrary({
       ...readLibrary(browserLibraryStorage(), libraryOptions()),
-      diagnostic: error instanceof LibraryError ? error.diagnostic : fallback,
+      diagnostic: error instanceof LibraryError || error instanceof ArchiveError ? error.diagnostic : fallback,
     })
+  }
+  /** What the last library export or import did, shown in the panel until dismissed. */
+  const [archiveReport, setArchiveReport] = useState<LibraryArchiveReport | null>(null)
+  /** Downloads the whole library as one archive (STORE-017); it reads storage only. */
+  const exportLibrary = async () => {
+    try {
+      const exported = await exportLibraryArchive(browserLibraryStorage(), libraryOptions())
+      downloadBytes(exported.bytes, exported.fileName, 'application/zip')
+      setLibrary((current) => current && { ...current, diagnostic: null })
+      setArchiveReport({
+        message: `Exported ${exported.count} ${exported.count === 1 ? 'graph' : 'graphs'} to ${exported.fileName}.${
+          exported.skipped.length === 0 ? '' : ` ${exported.skipped.length} could not be read and ${exported.skipped.length === 1 ? 'is' : 'are'} not in the archive.`}`,
+        details: exported.skipped.map(({ name, diagnostic }) => `${name} — ${diagnostic}`),
+      })
+    } catch (error) {
+      setArchiveReport(null)
+      reportLibraryFailure(error, 'LIBRARY_EXPORT_FAILED: The library could not be exported.')
+    }
+  }
+  /**
+   * Imports a chosen or dropped library archive into a new folder
+   * (STORE-018). A temporary session writes no storage, so it imports nothing.
+   */
+  const importLibrary = async (file: File) => {
+    setArchiveReport(null)
+    if (ephemeral) {
+      reportLibraryFailure(null, 'LIBRARY_IMPORT_TEMPORARY: A library cannot be imported in a temporary shared scene, which does not use browser storage. Add the scene to your library first, or open GAMUT without a scene link.')
+      return
+    }
+    // The former active document is stored first, as before any library write.
+    if (!keepFormerDocument()) return
+    try {
+      const imported = await importLibraryArchive(browserLibraryStorage(), file, {
+        ...libraryOptions(),
+        validate: (document) => requireAvailableAlgebra(algebraRegistry, fromCanonicalDocument(document, restoreOptions).document.algebra),
+      })
+      setLibrary({ entries: imported.entries, folders: imported.folders, diagnostic: null })
+      setArchiveReport({
+        message: describeArchiveImport(imported),
+        details: [...imported.skipped.map(({ path, diagnostic }) => `${path} — ${diagnostic}`), ...imported.warnings],
+      })
+    } catch (error) {
+      reportLibraryFailure(error, 'ARCHIVE_IMPORT_FAILED: The archive could not be imported. Nothing was imported.')
+    }
   }
   const libraryFolderActions = useLibraryFolderActions({
     library,
@@ -2077,6 +2125,17 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
       setBoundId(null)
       setSavedRevision(null)
     },
+  })
+  // A dropped archive takes the path of Import library, with its summary in the panel.
+  useEffect(() => {
+    importDroppedArchive.current = (file) => {
+      if (!libraryOpen) {
+        libraryReturnFocusRef.current = libraryButtonRef.current
+        setLibraryNaming(null)
+        setLibraryOpen(true)
+      }
+      void importLibrary(file)
+    }
   })
   const closeLibrary = useCallback(() => {
     setLibraryOpen(false)
@@ -3059,6 +3118,10 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
           onOpenExample={openExample}
           onAddExample={addExampleToLibrary}
           onAddScene={() => { commitLibrarySave(expressionDoc.title.trim() || 'Untitled graph') }}
+          archiveReport={archiveReport}
+          onDismissArchiveReport={() => setArchiveReport(null)}
+          onExportLibrary={() => { void exportLibrary() }}
+          onImportLibrary={(file) => { void importLibrary(file) }}
           onClose={closeLibrary}
         />
       )}
@@ -3079,7 +3142,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
       <div className="file-drop-status" role="status">
         {fileDragActive && (
           <div className="file-drop-overlay">
-            <p>Drop a JSON document to open it</p>
+            <p>Drop a JSON document to open it, or a library .zip to import it</p>
           </div>
         )}
       </div>
