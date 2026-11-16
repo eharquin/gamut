@@ -2612,15 +2612,15 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
             </button>
             <button
               type="button"
-              className="toolbar-add"
+              className="toolbar-add is-folder"
               onClick={folders.createFolder}
               aria-label="New folder"
               title="New folder"
             >
               {/* A folder with a plus inside it. */}
-              <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-                <path d="M2.25 14.75V3.25h4.9l1.6 1.75h7v9.75z" strokeLinejoin="round" />
-                <path d="M9 7.5v5M6.5 10h5" strokeLinecap="round" />
+              <svg width="28" height="25" viewBox="0 0 28 25" aria-hidden="true">
+                <path d="M1.5 23V2.5h8l2.2 3h14.8V23z" strokeLinejoin="round" />
+                <path d="M14 8.5v11M8.5 14h11" strokeLinecap="round" />
               </svg>
             </button>
             <div className="expression-history-controls" role="group" aria-label="Expression history">

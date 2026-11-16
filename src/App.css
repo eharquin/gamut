@@ -1796,6 +1796,15 @@ body.reordering-items .reorder-handle {
   opacity: 0.85;
 }
 
+/* The kind and its detail, such as "Point at (-3.18, -1.79)", stay on one
+   line: a narrow panel cuts the line short instead of wrapping it. */
+span.object-kind {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .approximated-indicator {
   margin-left: 2px;
   font-weight: 400;
@@ -2528,6 +2537,11 @@ body.reordering-items .reorder-handle {
   border: 1px solid transparent;
   border-radius: 4px;
   cursor: pointer;
+}
+
+/* The folder is drawn around a plus of the size of the Add expression one. */
+.toolbar-add.is-folder {
+  width: 38px;
 }
 
 .toolbar-add svg {
