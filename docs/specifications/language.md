@@ -110,7 +110,9 @@ is a valid annotation. Inline trailing comments are not supported.
 The kind of an item is stored and never derived from its source. In the
 interface, a quotation mark `"` typed or pasted as the first character of an
 expression row makes the row an annotation; the quotation mark is a trigger
-and is not stored. `"` has no other meaning in the language. Backspace before
+and is not stored. `"` has no other meaning in the language. In the same way,
+a slash `/` typed or pasted as the first character of an expression row makes
+a folder of the row (DOC-013); no expression starts with a division. Backspace before
 the first character of an annotation makes it an expression again, with its
 source unchanged. Each conversion is one undoable step. Editing the source of
 an item never changes its kind: an annotation may start with `#`, and an

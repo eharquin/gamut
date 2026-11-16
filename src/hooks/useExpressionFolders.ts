@@ -7,7 +7,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type RefObject,
 } from 'react'
-import type { DocumentCommand } from '../document/documentCommands'
+import { executeDocumentCommand, type DocumentCommand } from '../document/documentCommands'
 import type { HistoryAction } from '../document/documentHistory'
 import type { ExpressionDocument } from '../document/expressionDocument'
 import {
@@ -34,6 +34,7 @@ import {
   folderKey,
   folderName,
   isWithin,
+  MAX_FOLDER_NAME_LENGTH,
   uniqueFolderName,
   type FolderPath,
 } from '../document/folderModel'
@@ -53,11 +54,15 @@ export type ExpressionFolders = Readonly<{
   dropTarget: DropTarget | null
   folderRowRefs: RefObject<Map<string, HTMLElement>>
   createFolder(): void
+  /**
+   * Makes a folder of a row, where the row is: the folder takes `name` (or a
+   * free default name) and holds the row, emptied. Folders are created at
+   * the top level, so a row inside a folder leaves it first.
+   */
+  convertRowToFolder(itemId: string, name: string): void
   /** Renames a folder; returns why it is refused, or null. */
   renameFolder(path: FolderPath, name: string): string | null
   deleteFolder(path: FolderPath): void
-  /** Removes a folder with its subfolders and every row they hold. */
-  deleteFolderContents(path: FolderPath): void
   toggleFolder(path: FolderPath): void
   beginFolderReorder(event: ReactPointerEvent<HTMLButtonElement>, path: FolderPath): void
   reorderFolderWithKeyboard(event: KeyboardEvent<HTMLButtonElement>, path: FolderPath): void
@@ -74,8 +79,6 @@ type Options = Readonly<{
   /** Each row's article, by item identity. */
   rowElements: RefObject<Map<string, HTMLElement>>
   announce(message: string): void
-  /** Called before rows are removed with their folder, to release what the interface holds for them. */
-  onRowsRemoved?(itemIds: readonly string[]): void
 }>
 
 /** What a drag moves: one row, or a folder with everything it holds. */
@@ -92,7 +95,7 @@ function rowName(document: ExpressionDocument, itemId: string): string {
  * pointer and keyboard, with one announcement per move. Every change goes
  * through a document command; collapsing is not a history step.
  */
-export function useExpressionFolders({ document, executeCommand, dispatchHistory, rowElements, announce, onRowsRemoved }: Options): ExpressionFolders {
+export function useExpressionFolders({ document, executeCommand, dispatchHistory, rowElements, announce }: Options): ExpressionFolders {
   const [renamingKey, setRenamingKey] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
   const folderRowRefs = useRef(new Map<string, HTMLElement>())
@@ -155,13 +158,6 @@ export function useExpressionFolders({ document, executeCommand, dispatchHistory
     return false
   }, [document, moveFolderTo, announce])
 
-  const deleteFolderContents = useCallback((path: FolderPath) => {
-    const removed = document.items.filter((item) => isWithin(itemFolder(item), path)).map(({ id }) => id)
-    onRowsRemoved?.(removed)
-    executeCommand({ kind: 'delete-folder', path, contents: true })
-    announce(`Folder ${folderName(path)} removed with its ${removed.length} ${removed.length === 1 ? 'row' : 'rows'}.`)
-  }, [document, executeCommand, announce, onRowsRemoved])
-
   const createFolder = useCallback(() => {
     const path = [uniqueFolderName(folderPaths(document), [])]
     const edit = createFolderEdit(document, path)
@@ -173,6 +169,59 @@ export function useExpressionFolders({ document, executeCommand, dispatchHistory
     setRenamingKey(folderKey(path))
     announce(`Folder ${path[0]} created at the end of the top level.`)
   }, [document, executeCommand, announce])
+
+  const convertRowToFolder = useCallback((itemId: string, rawName: string) => {
+    const item = document.items.find((candidate) => candidate.id === itemId)
+    if (!item) return
+    const typed = Array.from(rawName.trim()).slice(0, MAX_FOLDER_NAME_LENGTH).join('')
+    const path = [uniqueFolderName(folderPaths(document), [], typed === '' ? undefined : typed)]
+    // The commands are tried on a copy first, so that either all of them run or none.
+    let current = document
+    const commands: DocumentCommand[] = []
+    const run = (command: DocumentCommand): string | null => {
+      const result = executeDocumentCommand(current, command)
+      if (result.status !== 'applied') return result.reason
+      current = result.document
+      commands.push(command)
+      return null
+    }
+    const steps: (() => string | null)[] = [
+      () => {
+        // A row inside a folder first leaves it, to just after that folder.
+        const origin = itemFolder(item)
+        const leave = origin.length === 0 ? null : planItemMove(current, itemId, { kind: 'after-folder', path: origin.slice(0, 1) })
+        return leave ? run({ kind: 'move-item', ...leave }) : null
+      },
+      () => run({ kind: 'create-folder', path }),
+      () => {
+        // The row keeps its place in the item order, which is where its folder shows.
+        const index = current.items.findIndex((candidate) => candidate.id === itemId)
+        const previous = current.items[index - 1]
+        const next = current.items[index + 1]
+        return run({
+          kind: 'move-item', itemId, folder: path,
+          ...(previous ? { anchorId: previous.id, placement: 'after' as const } : next ? { anchorId: next.id, placement: 'before' as const } : {}),
+        })
+      },
+      // What was typed became the name: the row starts empty.
+      () => item.source === '' ? null : run({ kind: 'update-source', itemId, source: '' }),
+      () => item.positionSource ? run({ kind: 'update-position', itemId, positionSource: '' }) : null,
+      () => item.normalization ? run({ kind: 'update-normalization', itemId }) : null,
+      () => item.control ? run({ kind: 'update-control', itemId }) : null,
+    ]
+    for (const step of steps) {
+      const problem = step()
+      if (problem) {
+        announce(`The folder could not be created. ${problem}`)
+        return
+      }
+    }
+    dispatchHistory({ type: 'begin-transaction' })
+    commands.forEach((command) => executeCommand(command))
+    dispatchHistory({ type: 'commit-transaction' })
+    setRenamingKey(folderKey(path))
+    announce(`Folder ${path[0]} created with this row.`)
+  }, [document, executeCommand, dispatchHistory, announce])
 
   const renameFolder = useCallback((path: FolderPath, rawName: string): string | null => {
     const name = rawName.trim()
@@ -215,8 +264,13 @@ export function useExpressionFolders({ document, executeCommand, dispatchHistory
       const rect = element.getBoundingClientRect()
       if (clientY > rect.bottom) continue
       const upper = clientY < rect.top + rect.height / 2
-      // A folder is not dropped on itself or on anything it holds.
-      if (dragged.kind === 'folder' && isWithin(row.kind === 'folder' ? row.path : row.folder, dragged.path)) return null
+      if (dragged.kind === 'folder') {
+        // A folder is not dropped on itself or on anything it holds, and it
+        // stays at the top level: next to a top-level row, or before another folder.
+        if (isWithin(row.kind === 'folder' ? row.path : row.folder, dragged.path)) return null
+        if (row.kind === 'entry') return row.folder.length === 0 ? { kind: upper ? 'before' : 'after', itemId: row.entry.id } : null
+        return row.path.length === 1 ? { kind: 'before-folder', path: row.path } : null
+      }
       if (row.kind === 'folder') return upper ? { kind: 'before-folder', path: row.path } : { kind: 'into-folder', path: row.path }
       if (dragged.kind === 'item' && row.entry.id === dragged.itemId) return null
       return { kind: upper ? 'before' : 'after', itemId: row.entry.id }
@@ -302,7 +356,7 @@ export function useExpressionFolders({ document, executeCommand, dispatchHistory
 
   return {
     renamingKey, setRenamingKey, dropTarget, folderRowRefs,
-    createFolder, renameFolder, deleteFolder, deleteFolderContents, toggleFolder, moveStep,
+    createFolder, convertRowToFolder, renameFolder, deleteFolder, toggleFolder, moveStep,
     beginRowReorder, reorderRowWithKeyboard, beginFolderReorder, reorderFolderWithKeyboard,
   }
 }
