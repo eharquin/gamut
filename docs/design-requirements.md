@@ -274,9 +274,10 @@ They are stored in canonical format version 8.
   a teaching aid, not a protection: the values remain in the document.
 
 Moving the canonical format from version 7 to version 8 for DOC-013 and
-DOC-014 follows DOC-003: earlier documents migrate on load. An earlier
-release cannot open a version 8 document: 0.2.0 replaces a stored version 8
-active document with its example on reload and reports a version 8 library
+DOC-014, and to version 9 for annotations stored without a marker, follows
+DOC-003: earlier documents migrate on load. An earlier
+release cannot open a version 8 or 9 document: 0.2.0 replaces such a stored
+active document with its example on reload and reports such a library
 graph as unreadable when it is opened. Protecting an older
 release against a newer format is deferred to
 [#275](https://github.com/eharquin/gamut/issues/275) and accepted while GAMUT

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { MAX_SOURCE_LENGTH } from '../document/canonicalDocument'
 import {
   annotationPlainText,
-  annotationText,
   isSafeAnnotationHref,
   MAX_EMPHASIS_DEPTH,
   parseAnnotationMarkdown,
@@ -12,17 +11,6 @@ import {
 
 const text = (value: string): AnnotationSegment => ({ kind: 'text', text: value })
 const parse = (source: string) => parseAnnotationMarkdown(source)
-
-describe('annotation text', () => {
-  it('takes everything after the first # without the surrounding whitespace', () => {
-    expect(annotationText('# Triangle and its angle at A')).toBe('Triangle and its angle at A')
-    expect(annotationText('   #était sympa  ')).toBe('était sympa')
-    expect(annotationText('## not a heading # still text')).toBe('# not a heading # still text')
-    expect(annotationText('#')).toBe('')
-    // A stored annotation without # (allowed by the format) keeps its source.
-    expect(annotationText('This is prose, not an expression!')).toBe('This is prose, not an expression!')
-  })
-})
 
 describe('annotation Markdown subset', () => {
   it('keeps plain text as one segment', () => {

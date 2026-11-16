@@ -45,8 +45,8 @@ retain positions through supported list operations without a list-level
 position field; `position` and vector `head` distribute over compatible lists.
 
 The scalar functions of section 10 are implemented, including `atan2`.
-Annotations are implemented as comment rows: editing a source re-derives its
-item's kind from the first non-whitespace character, and an expression that
+Annotations are implemented as notes: a quotation mark typed first in an
+expression row makes the row an annotation, and an expression that
 becomes an annotation loses its position source, normalization, and control
 in the same undoable edit. Their text renders the Markdown subset of section
 3. The remaining properties and operators, serialization, and the
@@ -86,8 +86,10 @@ Each item contains at most one declaration, expression, or annotation.
 a = 1
 V = vector(a)
 V + e1
-# A visible annotation
 ```
+
+A fourth row may be a note, such as `A visible annotation`: an annotation is
+a kind of item, not a syntax, so its source carries no marker.
 
 Names match `[A-Za-z_][A-Za-z0-9_]*`, are case-sensitive, and shall be unique
 within a document. Reserved language names and symbols registered by the active
@@ -98,21 +100,25 @@ visualized but cannot be referenced by another expression.
 Item identity is independent of its visible name. Renaming an item does not
 rename its references in the initial scope.
 
-An item whose first non-whitespace character is `#` is an annotation. It has no
-value and no dependencies. Everything after that first `#` is annotation text,
-not expression syntax, and may contain any valid Unicode text, including further
-`#` characters, accented characters, symbols, and emoji, subject only to the
-common source-length and document-validity limits. For example, `# était sympa`
+An annotation is an item whose stored kind is `annotation`. It has no value
+and no dependencies. Its whole source is annotation text, not expression
+syntax, and may contain any valid Unicode text, including `#` and `"`
+characters, accented characters, symbols, and emoji, subject only to the
+common source-length and document-validity limits. For example, `était sympa`
 is a valid annotation. Inline trailing comments are not supported.
 
-The stored source keeps the leading `#` verbatim, and an item's kind is derived
-from its source on every source edit. A document may still store an
-annotation whose source has no `#`: its kind decides, and its whole source is
-its text until the next edit derives the kind again.
+The kind of an item is stored and never derived from its source. In the
+interface, a quotation mark `"` typed or pasted as the first character of an
+expression row makes the row an annotation; the quotation mark is a trigger
+and is not stored. `"` has no other meaning in the language. Backspace before
+the first character of an annotation makes it an expression again, with its
+source unchanged. Each conversion is one undoable step. Editing the source of
+an item never changes its kind: an annotation may start with `#`, and an
+expression that starts with `#` is an expression with a syntax diagnostic.
 
 #### Annotation text
 
-Annotation text, without the first `#` and the whitespace around the text, is
+Annotation text, without the whitespace around it, is
 displayed in a restricted Markdown subset. Annotation text is untrusted, since
 shared documents and scene links display text written by someone else, so an
 implementation builds interface elements from it and never parses or injects
