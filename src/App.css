@@ -1064,7 +1064,6 @@ body.reordering-items .reorder-handle {
 .expression-status-pastille.is-empty { background: var(--text-dim); }
 .expression-status-pastille.is-error { background: var(--error); }
 /* An annotation row is never evaluated: a hollow pastille, muted source. */
-.expression-status-pastille.is-annotation { background: transparent; border-color: var(--text-dim); }
 
 .is-annotation .expression-source {
   color: var(--muted);

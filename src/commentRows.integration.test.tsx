@@ -51,6 +51,8 @@ describe('comment rows (#187)', () => {
     expect(within(article).queryByRole('status')).not.toBeInTheDocument()
     expect(within(article).queryByText('2e1 + e2')).not.toBeInTheDocument()
     expect(within(article).queryByRole('button', { name: /menu for/ })).not.toBeInTheDocument()
+    // A note shows no status pastille.
+    expect(article.querySelector('.expression-status-pastille')).toBeNull()
     expect(within(article).queryByRole('button', { name: /^(Hide|Show) / })).not.toBeInTheDocument()
     expect(within(article).queryByRole('button', { name: /^Normalization/ })).not.toBeInTheDocument()
     expect(within(article).queryByRole('textbox', { name: 'Position 1' })).not.toBeInTheDocument()
