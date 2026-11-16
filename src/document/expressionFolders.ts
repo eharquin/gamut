@@ -396,36 +396,25 @@ export function stepPlacement(document: ExpressionDocument, itemId: string, step
 }
 
 /**
- * The keyboard move of a folder through the visible rows (A11Y-011), with the
- * rules of `stepPlacement`: up and down pass a neighbouring row of the same
- * folder, enter an expanded folder next to it, skip a collapsed one, and
- * leave the parent from its first or last place.
+ * The keyboard move of a folder among the rows of its parent (A11Y-011): up
+ * and down pass the row or the folder next to it, and first and last go to
+ * the start or the end. A folder never enters another one this way. Null
+ * when it cannot move further.
  */
 export function folderStepPlacement(document: ExpressionDocument, path: FolderPath, step: MoveStep): ItemPlacement | null {
-  const rows = expressionRows(document)
-  const index = rows.findIndex((row) => row.kind === 'folder' && samePath(row.path, path))
-  if (index < 0) return null
+  if (path.length === 0 || !hasFolder(document, path)) return null
   const parent = parentPath(path)
   if (step === 'first') return { kind: 'start', folder: parent }
   if (step === 'last') return { kind: 'end', folder: parent }
-  const container = (row: ExpressionRow) => row.kind === 'folder' ? row.path : row.folder
-  /** The folder directly inside `parent` that a row belongs to. */
-  const sibling = (row: ExpressionRow) => container(row).slice(0, parent.length + 1)
-  if (step === 'up') {
-    const previous = rows[index - 1]
-    if (!previous) return null
-    if (previous.kind === 'folder' && samePath(previous.path, parent)) return { kind: 'before-folder', path: parent }
-    if (previous.kind === 'entry' && samePath(previous.folder, parent)) return { kind: 'before', itemId: previous.entry.id }
-    const beside = sibling(previous)
-    return isFolderCollapsed(document, beside) ? { kind: 'before-folder', path: beside } : { kind: 'end', folder: beside }
-  }
-  const leave: ItemPlacement | null = parent.length === 0 ? null : { kind: 'after-folder', path: parent }
-  const next = rows.slice(index + 1).find((row) => !isWithin(container(row), path))
-  if (!next || !isWithin(container(next), parent) || (next.kind === 'folder' && samePath(next.path, parent))) return leave
-  if (next.kind === 'entry' && samePath(next.folder, parent)) return { kind: 'after', itemId: next.entry.id }
-  const beside = sibling(next)
-  if (!isFolderCollapsed(document, beside)) return { kind: 'start', folder: beside }
-  return next.kind === 'folder' && next.entryCount > 0 ? { kind: 'after-folder', path: beside } : leave
+  const tree = expressionFolderTree(document)
+  const children = parent.length === 0 ? tree : findFolderNode(tree, parent)?.children ?? []
+  const index = children.findIndex((node) => node.kind === 'folder' && samePath(node.path, path))
+  const beside = index < 0 ? undefined : children[index + (step === 'up' ? -1 : 1)]
+  if (!beside) return null
+  if (beside.kind === 'entry') return { kind: step === 'up' ? 'before' : 'after', itemId: beside.entry.id }
+  // A folder without rows holds one of the last places of its parent and cannot be passed.
+  if (beside.entryCount === 0) return null
+  return { kind: step === 'up' ? 'before-folder' : 'after-folder', path: beside.path }
 }
 
 /** The position of a folder among the rows of its parent, for announcements. */

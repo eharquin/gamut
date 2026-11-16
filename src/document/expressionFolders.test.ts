@@ -324,17 +324,19 @@ describe('moving folders', () => {
     document = stepFolder(document, ['F'], 'first')
     expect(layout(document)).toEqual(['[F]', '  b', 'a', '[H]+', 'd'])
     expect(folderStepPlacement(document, ['F'], 'up')).toBeNull()
-    // An expanded folder next to it is entered, and left again from its first place.
-    document = apply(document, { kind: 'move-folder', path: ['H'], parent: [], anchorId: 'b', placement: 'after' })
+    // An expanded folder next to it is passed too, never entered: folders stay at the same level.
     document = { ...document, folders: document.folders?.map((folder) => ({ ...folder, collapsed: false })) }
-    expect(layout(document)).toEqual(['[F]', '  b', '[H]', '  c', 'a', 'd'])
-    document = stepFolder(document, ['H'], 'up')
-    expect(layout(document)).toEqual(['[F]', '  b', '  [H]', '    c', 'a', 'd'])
-    document = stepFolder(document, ['F', 'H'], 'up')
-    expect(layout(document)).toEqual(['[F]', '  [H]', '    c', '  b', 'a', 'd'])
-    document = stepFolder(document, ['F', 'H'], 'up')
-    expect(layout(document)).toEqual(['[H]', '  c', '[F]', '  b', 'a', 'd'])
+    expect(layout(document)).toEqual(['[F]', '  b', 'a', '[H]', '  c', 'd'])
+    document = stepFolder(document, ['F'], 'down')
+    expect(layout(document)).toEqual(['a', '[F]', '  b', '[H]', '  c', 'd'])
+    document = stepFolder(document, ['F'], 'down')
+    expect(layout(document)).toEqual(['a', '[H]', '  c', '[F]', '  b', 'd'])
+    document = stepFolder(document, ['F'], 'up')
+    expect(layout(document)).toEqual(['a', '[F]', '  b', '[H]', '  c', 'd'])
     expectItemOrderMatchesRows(document)
+    // A folder without rows holds the last place and is not passed.
+    const withEmpty = apply(document, { kind: 'create-folder', path: ['E'] })
+    expect(folderStepPlacement(stepFolder(stepFolder(withEmpty, ['F'], 'down'), ['F'], 'down'), ['F'], 'down')).toBeNull()
   })
 
   it('removes a folder with its subfolders, rows, and their appearance, in one undo step', () => {

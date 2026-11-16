@@ -258,7 +258,13 @@ They are stored in canonical format version 8.
   canvas draw order, which stays the item order. Removing a folder keeps its
   items at the folder's position in its parent; removing a folder together
   with its subfolders and items is a separate action that requires the
-  sustained hold of A11Y-007 and is one undoable step. A folder moves with
+  sustained hold of A11Y-007 and is one undoable step. The document format
+  allows nested folders, and a document that holds them is displayed and
+  edited, but until nesting is designed the interface keeps every folder it
+  creates or moves at the top level. Typing `/` as the first character of an
+  expression row makes a folder of that row, in place, in one undoable step:
+  the text after the slash is the folder name, made unique at the top level,
+  and the row, emptied, is its first item. A folder moves with
   every item and subfolder it holds, between rows, into another folder, or
   out of one; a move that would give two folders of one parent the same
   name, or exceed the nesting limit, is refused. Creating, renaming, removing,

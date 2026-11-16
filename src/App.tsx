@@ -2511,6 +2511,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
     removeExpression,
     beginRowReorder: folders.beginRowReorder,
     reorderRowWithKeyboard: folders.reorderRowWithKeyboard,
+    convertRowToFolder: folders.convertRowToFolder,
     focusRow: (itemId) => setRowFocusId(itemId),
     blurRow: (itemId) => setRowFocusId((current) => current === itemId ? null : current),
     hoverRow: (itemId) => setRowHoverId(itemId),
