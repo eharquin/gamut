@@ -161,8 +161,19 @@ HTML.
   (`![alt](url)` is displayed as written), headings, lists, and other
   Markdown constructs are displayed as text.
 
+An annotation may span several lines; an expression is one line, and an
+annotation that becomes an expression has each line break replaced by a
+space. In the interface, an annotation shows its source while it is edited
+and only its rendered text otherwise: clicking the rendered text, or
+focusing the row, edits it. While it is edited, Enter adds a line, Ctrl or
+Cmd with Enter adds the next row, and Escape shows the rendered text again
+without moving focus; Enter then edits again. The up and down arrows move to
+the neighbouring row only from the first and the last position of the text.
+
 An annotation row exposes its text without delimiters to assistive
-technology, and its links are reachable with Tab in reading order.
+technology, its editor keeps its accessible name and its place in the Tab
+order while the rendered text shows, and its links are reachable with Tab in
+reading order.
 
 ## 4. Numeric literals and implicit multiplication
 

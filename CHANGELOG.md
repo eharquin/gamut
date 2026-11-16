@@ -59,6 +59,10 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   restores them. Notes are stored in canonical format version 9 with their
   kind and without a marker; a document written during the development of
   0.3.0, whose comment rows kept a leading `#`, loses that `#` on load.
+  A note is written on several lines: Enter adds a line and Ctrl or Cmd with
+  Enter adds the next row. A note shows its source only while it is edited;
+  otherwise only its rendered text shows, and a click on it, or focus, edits
+  it again. Escape shows the rendered text without leaving the row.
   The text supports `**bold**`, `*italic*`, inline `` `code` ``, backslash
   escapes, and `[links](https://…)` limited to `http`, `https`, and `mailto`,
   with their parsed destination shown (web links open in a new tab); `a*b*c`, `2*3`, and
