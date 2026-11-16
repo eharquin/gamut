@@ -1,5 +1,6 @@
 import { Fragment, useMemo, type ReactNode } from 'react'
-import { parseAnnotationMarkdown, type AnnotationSegment } from '../presentation/annotationText'
+import { parseAnnotationBlocks, type AnnotationBlock, type AnnotationList } from '../presentation/annotationBlocks'
+import type { AnnotationSegment } from '../presentation/annotationText'
 
 /**
  * Builds React elements from parsed segments. Text only ever becomes text
@@ -40,18 +41,53 @@ function renderSegments(segments: readonly AnnotationSegment[], idPrefix: string
   })
 }
 
+function renderList(list: AnnotationList, key: string): ReactNode {
+  const items = list.items.map((item, index) => (
+    <li key={`${key}-${index}`}>
+      {renderSegments(item.children, `${key}-${index}`)}
+      {item.sublist && renderList(item.sublist, `${key}-${index}-sub`)}
+    </li>
+  ))
+  return list.ordered
+    ? <ol key={key} start={list.start}>{items}</ol>
+    : <ul key={key}>{items}</ul>
+}
+
+/** The elements of blocks. A note sits below the headings of the panel, so its headings start at level 4. */
+function renderBlocks(blocks: readonly AnnotationBlock[], idPrefix: string): ReactNode[] {
+  return blocks.map((block, index) => {
+    const key = `${idPrefix}-b${index}`
+    switch (block.kind) {
+      case 'paragraph':
+        return <p key={key}>{renderSegments(block.children, key)}</p>
+      case 'heading': {
+        const Heading = (['h4', 'h5', 'h6'] as const)[block.level - 1]
+        return <Heading key={key} className={`note-heading-${block.level}`}>{renderSegments(block.children, key)}</Heading>
+      }
+      case 'list':
+        return renderList(block, key)
+      case 'quote':
+        return <blockquote key={key}>{renderBlocks(block.children, key)}</blockquote>
+      case 'code':
+        return <pre key={key}><code>{block.text}</code></pre>
+      case 'rule':
+        return <hr key={key} />
+    }
+  })
+}
+
 type AnnotationTextProps = Readonly<{
   id: string
-  /** The annotation text, after its `#` marker. */
+  /** The text of the note. */
   text: string
 }>
 
-/** The rendered text of an annotation row, in the restricted Markdown subset. */
+/** The rendered text of a note, in the restricted Markdown subset (language §3). */
 export function AnnotationText({ id, text }: AnnotationTextProps) {
-  const segments = useMemo(() => parseAnnotationMarkdown(text), [text])
+  const blocks = useMemo(() => parseAnnotationBlocks(text), [text])
   return (
-    <p id={id} className="annotation-text">
-      {renderSegments(segments, id)}
-    </p>
+    <div id={id} className="annotation-text">
+      {renderBlocks(blocks, id)}
+    </div>
   )
 }

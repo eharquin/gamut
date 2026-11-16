@@ -157,8 +157,33 @@ HTML.
   browsing context; every link has `rel="noopener noreferrer"`.
 - **Escapes.** A backslash before `*`, `` ` ``, `[`, `]`, or `\` makes that
   character literal; before any other character the backslash is literal.
+- **Blocks.** Annotation text is a sequence of blocks, separated by blank
+  lines or by the start of another block; the inline rules above apply to the
+  text of each block except code blocks.
+  - *Heading:* one to three `#` followed by a space, then text; a closing run
+    of `#` after a space is dropped. `#tag`, `####`, and a `#` without text
+    are paragraph text. The three levels are below the headings of the
+    interface.
+  - *Paragraph:* consecutive lines; their line breaks are kept.
+  - *List:* lines starting with `-`, `*`, or `+` and a space, or with up to
+    nine digits, `.` or `)`, and a space. A numbered list starts at its first
+    number. An item indented by two spaces or more belongs to a nested list
+    of the item above, one level deep; another indented line continues its
+    item. A blank line ends the list. A numbered list interrupts a paragraph
+    only when it starts at 1, so that `2026. was…` on a second line stays
+    text.
+  - *Quote:* consecutive lines starting with `>`; their text holds blocks,
+    nested at most eight deep.
+  - *Code block:* the lines between a fence of three or more backticks or
+    tildes and the next fence of the same character at least as long, or the
+    end of the text. They are displayed as written, in a fixed-width font; any
+    text after the opening fence is ignored.
+  - *Rule:* a line of three or more `-`, `*`, or `_`, optionally separated by
+    spaces.
+  A backslash also makes literal the characters that start a block: `#`, `>`,
+  `-`, `+`, `~`, and the `.` or `)` of a list number.
 - **Everything else is text.** Raw HTML, character references, images
-  (`![alt](url)` is displayed as written), headings, lists, and other
+  (`![alt](url)` is displayed as written), tables, and other
   Markdown constructs are displayed as text.
 
 An annotation may span several lines; an expression is one line, and an

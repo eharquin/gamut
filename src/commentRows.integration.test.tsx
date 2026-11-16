@@ -173,6 +173,27 @@ describe('comment rows (#187)', () => {
     expect(screen.getByRole('textbox', { name: 'Expression 3' })).toHaveValue('V = vector(2, 1)')
   })
 
+  it('renders the blocks of a note: headings, lists, quotes, code, and rules', () => {
+    openStored([{
+      id: 'note', kind: 'annotation',
+      source: '# Triangle\nIts **angles**\n\n- one\n  - inner\n- two\n\n1. first\n\n> quoted\n\n---\n\n```\nA = **raw**\n```',
+    }])
+    const rendered = row('Annotation 1').querySelector('.note-rendered') as HTMLElement
+    // Below the headings of the panel.
+    expect(within(rendered).getByRole('heading', { level: 4, name: 'Triangle' })).toBeInTheDocument()
+    expect(within(rendered).getByText('angles').tagName).toBe('STRONG')
+    const lists = within(rendered).getAllByRole('list')
+    expect(lists.map((list) => list.tagName)).toEqual(['UL', 'UL', 'OL'])
+    expect(within(lists[1]).getByText('inner')).toBeInTheDocument()
+    expect(rendered.querySelector('blockquote')).toHaveTextContent('quoted')
+    expect(within(rendered).getByRole('separator')).toBeInTheDocument()
+    // A code block shows its text as written.
+    expect(rendered.querySelector('pre')).toHaveTextContent('A = **raw**')
+    expect(rendered.querySelector('pre strong')).toBeNull()
+    // The row is described by the whole rendered text.
+    expect(screen.getByRole('textbox', { name: 'Annotation 1' })).toHaveAccessibleDescription(/^Triangle Its angles one inner two first quoted A = \*\*raw\*\*$/)
+  })
+
   it('moves between rows with the arrows only from the first and last position of a note', () => {
     openStored([
       { id: 'a', source: 'a = 1' },

@@ -5,8 +5,8 @@ import { AnnotationText } from './AnnotationText'
 
 afterEach(cleanup)
 
-const ALLOWED_ELEMENTS = ['P', 'STRONG', 'EM', 'CODE', 'A', 'SPAN']
-const ALLOWED_ATTRIBUTES = ['id', 'class', 'href', 'target', 'rel', 'title', 'aria-describedby', 'hidden']
+const ALLOWED_ELEMENTS = ['DIV', 'P', 'STRONG', 'EM', 'CODE', 'A', 'SPAN', 'H4', 'H5', 'H6', 'UL', 'OL', 'LI', 'BLOCKQUOTE', 'PRE', 'HR']
+const ALLOWED_ATTRIBUTES = ['id', 'class', 'href', 'target', 'rel', 'title', 'aria-describedby', 'hidden', 'start']
 
 describe('rendered annotation text (SEC-012)', () => {
   it.each([
@@ -20,6 +20,8 @@ describe('rendered annotation text (SEC-012)', () => {
     '[x](https://good.example@evil.example)', '[x](https://\u202eelpmaxe.org)',
     '# heading', '- list', '> quote', '***', '<script>alert(1)</script>',
     '[x](https://a.example)\u0000', '[x](mailto:a@b.example?subject=<script>)',
+    '# [x](javascript:alert(1))', '- <img src=x onerror=alert(1)>\n  - [x](data:text/html,hi)', '> <script>alert(1)</script>',
+    '```html\n<script>alert(1)</script>\n```', '```"onmouseover="alert(1)\nx', '7. <b>x</b>', '1) [x](//evil.example)',
   ])('builds only allowed elements and attributes for %j', (text) => {
     const { container } = render(<AnnotationText id="note" text={text} />)
     for (const element of container.querySelectorAll('*')) {

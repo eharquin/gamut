@@ -68,12 +68,13 @@ describe('annotation Markdown subset', () => {
     expect(parse('an `unclosed span')).toEqual([text('an `unclosed span')])
   })
 
-  it('applies backslash escapes before *, `, [, ] and \\ only', () => {
+  it('applies backslash escapes before the inline delimiters and the characters that start a block only', () => {
     expect(parse('\\*not italic\\*')).toEqual([text('*not italic*')])
     expect(parse('\\`not code\\`')).toEqual([text('`not code`')])
     expect(parse('\\[x\\](https://a.b)')).toEqual([text('[x](https://a.b)')])
     expect(parse('a \\\\ b')).toEqual([text('a \\ b')])
-    expect(parse('\\_ \\n \\#')).toEqual([text('\\_ \\n \\#')])
+    expect(parse('\\_ \\n \\$')).toEqual([text('\\_ \\n \\$')])
+    expect(parse('\\# \\> \\- \\+ 1\\. 1\\) \\~')).toEqual([text('# > - + 1. 1) ~')])
   })
 
   it('renders links with an http, https or mailto destination', () => {

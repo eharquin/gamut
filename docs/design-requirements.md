@@ -661,9 +661,10 @@ that explicitly include library archives or comment rows, starting with
   subset, specified in [language §3](specifications/language.md#3-items-names-and-annotations):
   bold and italic with delimiters that leave intraword and mathematical text
   such as `a*b*c`, `2*3`, and `x_1` literal, inline code, backslash escapes,
-  and links. Rendering shall build interface elements and never parse or
-  inject HTML (SEC-002): raw HTML, images, headings, and lists are shown as
-  text. A link is active only when its scheme is `http`, `https`, or
+  links, and the blocks of that section: headings, lists, quotes, code
+  blocks, and rules. Rendering shall build interface elements and never parse
+  or inject HTML (SEC-002): raw HTML, images, and tables are shown as
+  text. Parsing shall take time linear in the length of the text. A link is active only when its scheme is `http`, `https`, or
   `mailto`; any other destination, including `javascript:`, `data:`, and
   relative URLs, is shown as plain text. Active links open in a new browsing
   context with `rel="noopener noreferrer"`, and their destination is exposed
