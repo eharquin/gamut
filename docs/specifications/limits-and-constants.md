@@ -110,10 +110,19 @@ The import folder counts towards the folder depth: an entry may lie at most
 seven directories deep, and a deeper one is rejected with
 `LIMIT_FOLDER_DEPTH`. An entry that is not a `.json` file is skipped with
 `ARCHIVE_ENTRY_TYPE`, and an unusable manifest is ignored with
-`ARCHIVE_MANIFEST_INVALID`; neither rejects the archive. Export stores an
-entry without compression when `deflate` would shrink it past the expansion
-ratio, and shortens the written file and directory names when a path would
-exceed the path limit, so that an exported archive is always accepted.
+`ARCHIVE_MANIFEST_INVALID`; neither rejects the archive. Compressed data is
+handed to the inflater in slices of 4 KiB, so that the limits are checked
+before an entry can expand far beyond them.
+
+Export stores an entry without compression when `deflate` would shrink it
+past the expansion ratio, and shortens the written file and directory names
+when a path would exceed the path limit. It writes a directory entry only for
+a folder that holds no graph. Export warns, and still writes a complete
+archive, when the archive holds more entries than import accepts or when a
+folder is eight levels deep. Folders are imported under the names of their
+directories: a folder name with a replaced character, a shortened name, or
+one that differs from a sibling only by case does not come back as it was,
+whereas graph names always do, since they come from the documents.
 
 ## 3. Parsing and dependency analysis
 

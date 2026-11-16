@@ -31,13 +31,7 @@ export async function readDocumentFile(file: Blob): Promise<CanonicalDocument> {
  */
 export function downloadDocumentFile(canonical: CanonicalDocument, title: string): void {
   const source = serializeCanonicalDocument(canonical)
-  const blob = new Blob([source], { type: 'application/json;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = documentFileName(title)
-  link.click()
-  URL.revokeObjectURL(url)
+  downloadBytes(new TextEncoder().encode(source), documentFileName(title), 'application/json;charset=utf-8')
 }
 
 /** Hands bytes to the browser as a download named `fileName`. */

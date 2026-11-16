@@ -56,15 +56,15 @@ describe('library archives (STORE-017, STORE-018)', () => {
     saveAs('Rotation talk')
     const bytes = await exportedArchive()
     expect(openZip(bytes).map((entry) => entry.path)).toEqual(['Rotation talk.gamut.json', 'manifest.json'])
-    expect(within(panel()).getByRole('status', { name: 'Library archive' })).toHaveTextContent(/^Exported 1 graph to gamut-library-\d{4}-\d{2}-\d{2}\.zip\./)
+    expect(within(panel()).getByRole('group', { name: 'Library archive' })).toHaveTextContent(/^Exported 1 graph to gamut-library-\d{4}-\d{2}-\d{2}\.zip\./)
 
     fireEvent.change(within(panel()).getByLabelText('Library archive to import'), { target: { files: [archiveFile(bytes)] } })
     await waitFor(() => expect(index().entries).toHaveLength(2))
     expect(index().entries[1]).toMatchObject({ name: 'Rotation talk', folder: [expect.stringMatching(/^Imported \d{4}-\d{2}-\d{2}$/)] })
-    expect(within(panel()).getByRole('status', { name: 'Library archive' })).toHaveTextContent(/^Imported 1 graph into the folder Imported \d{4}-\d{2}-\d{2}\./)
+    expect(within(panel()).getByRole('group', { name: 'Library archive' })).toHaveTextContent(/^Imported 1 graph into the folder Imported \d{4}-\d{2}-\d{2}\./)
     expect(within(panel()).getByRole('button', { name: /^Folder Imported .*, level 1, 1 graph$/ })).toBeInTheDocument()
     fireEvent.click(within(panel()).getByRole('button', { name: 'Dismiss' }))
-    expect(within(panel()).queryByRole('status', { name: 'Library archive' })).not.toBeInTheDocument()
+    expect(within(panel()).queryByRole('group', { name: 'Library archive' })).not.toBeInTheDocument()
   })
 
   it('imports a .zip dropped on the window and opens the library', async () => {
@@ -74,7 +74,12 @@ describe('library archives (STORE-017, STORE-018)', () => {
     fireEvent.click(within(panel()).getByRole('button', { name: 'Close library' }))
     fireEvent.drop(document.body, { dataTransfer: { types: ['Files'], files: [archiveFile(bytes)] } })
     await waitFor(() => expect(index().entries).toHaveLength(2))
-    expect(within(panel()).getByRole('status', { name: 'Library archive' })).toHaveTextContent(/^Imported 1 graph/)
+    // Dropped while Examples is shown, the summary still appears, in My library.
+    fireEvent.click(within(panel()).getByRole('tab', { name: 'Examples' }))
+    fireEvent.drop(document.body, { dataTransfer: { types: ['Files'], files: [archiveFile(bytes)] } })
+    await waitFor(() => expect(index().entries).toHaveLength(3))
+    expect(within(panel()).getByRole('tab', { name: 'My library' })).toHaveAttribute('aria-selected', 'true')
+    expect(within(panel()).getByRole('group', { name: 'Library archive' })).toHaveTextContent(/^Imported 1 graph/)
     // The open graph is untouched.
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
   })

@@ -137,6 +137,14 @@ export function LibraryPanel({
   const collapse = useLibraryFolderCollapse(temporarySession)
   const [renamingFolder, setRenamingFolder] = useState<string | null>(null)
   const [announcement, setAnnouncement] = useState('')
+  // An export or import reports in My library, whichever section was shown, and in the live region.
+  useEffect(() => {
+    if (!archiveReport) return
+    setSection('mine')
+    setAnnouncement(archiveReport.message)
+  }, [archiveReport])
+  // A library problem is shown in My library too.
+  useEffect(() => { if (diagnostic) setSection('mine') }, [diagnostic])
 
   // Focus moves into the panel on open and returns to the button that opened it.
   useEffect(() => {
@@ -424,7 +432,7 @@ export function LibraryPanel({
             </p>
           )}
           {archiveReport && (
-            <div className="library-archive-report" role="status" aria-label="Library archive">
+            <div className="library-archive-report" role="group" aria-label="Library archive">
               <p>{archiveReport.message}</p>
               {archiveReport.details.length > 0 && (
                 <ul>{archiveReport.details.map((detail) => <li key={detail}>{detail}</li>)}</ul>

@@ -1,5 +1,7 @@
+import { deflateRawSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
 import { serializeCanonicalDocument, toCanonicalDocument, type CanonicalDocument } from './canonicalDocument'
+import { ACTIVE_DOCUMENT_KEY } from './documentStorage'
 import {
   createLibraryFolder,
   LIBRARY_INDEX_KEY,
@@ -146,6 +148,17 @@ describe('zip archives', () => {
     expect(await rejection(() => openZip(many))).toBe('LIMIT_ARCHIVE_ENTRIES')
   })
 
+  it('stops inflating at the expansion bound, whatever sizes the archive declares', async () => {
+    // A deflate stream of zeros, written as a stored entry and then declared deflated.
+    const bomb = new Uint8Array(deflateRawSync(new Uint8Array(64 * 1024 * 1024)))
+    const stored = await zip([{ path: 'bomb.json', bytes: bomb }])
+    const bytes = patched(patched(stored, 'central', 10, 8), 'local', 8, 8)
+    let counted = 0
+    expect(await rejection(() => readZipEntry(bytes, openZip(bytes)[0], (length) => { counted = length }))).toBe('LIMIT_DECOMPRESSION_RATIO')
+    // The check ran while inflating, long before the whole entry was expanded.
+    expect(counted).toBeLessThan(8 * 1024 * 1024)
+  })
+
   it('rejects a checksum mismatch and data that expands past the declared bounds', async () => {
     const bytes = await zip([{ path: 'a.json', bytes: noise(600) }])
     const damaged = patched(bytes, 'central', 16, 0x12345678, 4)
@@ -164,12 +177,12 @@ describe('library archive export (STORE-017)', () => {
     expect(exported.fileName).toBe('gamut-library-2026-11-13.zip')
     expect(exported.count).toBe(3)
     expect(exported.skipped).toEqual([])
+    expect(exported.warnings).toEqual([])
     // Export never writes.
     expect(values).toEqual(before)
     const entries = openZip(exported.bytes)
     expect(entries.map((entry) => entry.path + (entry.directory ? '/' : ''))).toEqual([
-      'Talks/',
-      'Talks/2026/',
+      // Only a folder without any graph needs its own entry.
       'Empty/',
       'Rotation.gamut.json',
       'Talks/2026/Lines- a-b.gamut.json',
@@ -197,6 +210,40 @@ describe('library archive export (STORE-017)', () => {
     const exported = await exportLibraryArchive(storage, { now: NOW, date: DATE })
     expect(exported.count).toBe(2)
     expect(exported.skipped).toEqual([{ name: 'Rotation', diagnostic: expect.stringMatching(/^LIBRARY_ENTRY_INVALID: /) }])
+  })
+
+  it('exports the former active document while it still awaits its migration into the library', async () => {
+    const active = graph('former', 'Former work')
+    const { storage, values } = memoryStorage({ [ACTIVE_DOCUMENT_KEY]: serializeCanonicalDocument(active) })
+    const exported = await exportLibraryArchive(storage, { now: NOW, date: DATE })
+    expect(exported.count).toBe(1)
+    expect(exported.skipped).toEqual([])
+    expect(openZip(exported.bytes).map((entry) => entry.path)).toEqual(['Former work.gamut.json', ARCHIVE_MANIFEST_PATH])
+    expect(values.size).toBe(1)
+  })
+
+  it('refuses to export a library it cannot read, instead of an empty archive', async () => {
+    const { storage } = library()
+    const blocked: LibraryStorage = { ...storage, get length(): number { throw new DOMException('denied', 'SecurityError') }, getItem: () => { throw new DOMException('denied', 'SecurityError') } }
+    await expect(exportLibraryArchive(blocked, { now: NOW, date: DATE })).rejects.toMatchObject({ code: 'LIBRARY_UNAVAILABLE' })
+    await expect(exportLibraryArchive(null, { now: NOW, date: DATE })).rejects.toMatchObject({ code: 'LIBRARY_UNAVAILABLE' })
+  })
+
+  it('never writes a dot segment, whatever surrounds a name', async () => {
+    const { storage } = memoryStorage()
+    for (const name of ['\u00a0..\u00a0', ' . ', '...', '.hidden']) createLibraryFolder(storage, [name], { now: NOW })
+    const exported = await exportLibraryArchive(storage, { now: NOW, date: DATE })
+    const paths = openZip(exported.bytes).map((entry) => entry.path)
+    expect(paths).toHaveLength(5)
+    for (const path of paths) expect(path).not.toMatch(/^\./)
+  })
+
+  it('warns when the archive could not be imported back as it is', async () => {
+    const { storage } = memoryStorage()
+    const deep = Array.from({ length: 8 }, (_, index) => `d${index}`)
+    for (let depth = 1; depth <= deep.length; depth += 1) createLibraryFolder(storage, deep.slice(0, depth), { now: NOW })
+    const exported = await exportLibraryArchive(storage, { now: NOW, date: DATE })
+    expect(exported.warnings).toEqual([expect.stringMatching(/^LIMIT_FOLDER_DEPTH: /)])
   })
 
   it('keeps every entry path within the limit the import enforces', async () => {

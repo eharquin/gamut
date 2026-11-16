@@ -41,6 +41,12 @@ const FLAG_MASKED_DIRECTORY = 0x2000
 const METHOD_STORED = 0
 const METHOD_DEFLATE = 8
 const VERSION = 20
+/**
+ * Compressed bytes handed to the stream at once. Deflate expands at most
+ * about 1,032 times, so a slice inflates to about 4 MiB at worst before its
+ * output is counted against the limits.
+ */
+const INPUT_SLICE_BYTES = 4 * 1024
 
 const CRC_TABLE = (() => {
   const table = new Uint32Array(256)
@@ -72,12 +78,19 @@ function compressionStream(decompress: boolean): ReadableWritablePair<Uint8Array
 /** Runs bytes through a `deflate-raw` stream, counting the output against `check` as it arrives. */
 async function transform(bytes: Uint8Array, decompress: boolean, check: (length: number) => void): Promise<Uint8Array> {
   const pair = compressionStream(decompress)
+  // The input is fed in small slices on demand: a stream inflates a whole
+  // chunk before its output can be counted, so one large chunk would expand
+  // without bound before any limit is checked.
+  let offset = 0
   const input = new ReadableStream<BufferSource>({
-    start(controller) {
-      controller.enqueue(bytes as Uint8Array<ArrayBuffer>)
-      controller.close()
+    pull(controller) {
+      if (offset < bytes.byteLength) {
+        controller.enqueue(bytes.subarray(offset, offset + INPUT_SLICE_BYTES) as Uint8Array<ArrayBuffer>)
+        offset += INPUT_SLICE_BYTES
+      }
+      if (offset >= bytes.byteLength) controller.close()
     },
-  })
+  }, { highWaterMark: 0 })
   const reader = input.pipeThrough(pair).getReader()
   const chunks: Uint8Array[] = []
   let length = 0
@@ -97,10 +110,10 @@ async function transform(bytes: Uint8Array, decompress: boolean, check: (length:
     reader.releaseLock()
   }
   const result = new Uint8Array(length)
-  let offset = 0
+  let position = 0
   for (const chunk of chunks) {
-    result.set(chunk, offset)
-    offset += chunk.byteLength
+    result.set(chunk, position)
+    position += chunk.byteLength
   }
   return result
 }

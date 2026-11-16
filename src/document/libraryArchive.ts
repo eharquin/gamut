@@ -1,6 +1,7 @@
 import {
   DocumentFormatError,
   MAX_DOCUMENT_BYTES,
+  parseCanonicalDocument,
   parseCanonicalDocumentBytes,
   serializeCanonicalDocument,
   type CanonicalDocument,
@@ -8,6 +9,7 @@ import {
 import {
   entryFolder,
   importGraphsToLibrary,
+  LIBRARY_INDEX_KEY,
   LibraryError,
   loadFromLibrary,
   readLibrary,
@@ -16,17 +18,20 @@ import {
   type LibraryOptions,
   type LibraryStorage,
 } from './documentLibrary'
+import { ACTIVE_DOCUMENT_KEY } from './documentStorage'
 import {
   describeFolder,
   folderKey,
   folderNameProblem,
   MAX_FOLDER_DEPTH,
+  MAX_FOLDER_NAME_LENGTH,
   withAncestors,
   type FolderPath,
 } from './folderModel'
 import {
   ArchiveError,
   MAX_ARCHIVE_BYTES,
+  MAX_ARCHIVE_ENTRIES,
   MAX_ARCHIVE_PATH_BYTES,
   openZip,
   readZipEntry,
@@ -47,7 +52,7 @@ export const ARCHIVE_MANIFEST_VERSION = 1
 export const MAX_ARCHIVE_MANIFEST_BYTES = 1024 * 1024
 export const MAX_ARCHIVE_DECODED_BYTES = 64 * 1024 * 1024
 const DOCUMENT_SUFFIX = '.gamut.json'
-/** Longest file or directory name written, in code points; real names stay in the documents and the manifest. */
+/** Longest file name written, in code points; real graph names stay in the documents and the manifest. */
 const MAX_WRITTEN_NAME = 100
 /** Shorter directory names, used when the folders would not fit in an entry path otherwise. */
 const SHORT_WRITTEN_NAME = 24
@@ -69,8 +74,9 @@ export const importFolderName = (now: Date): string => `Imported ${archiveDate(n
  */
 function safeSegment(name: string, fallback: string, length: number): string {
   const unsafe = (character: string) => character < ' ' || character === '\u007f' || '/\\:*?"<>|'.includes(character)
+  // Trimmed first, so that no surrounding space can leave a `.` or `..` segment.
   const cleaned = Array.from(name.normalize('NFC'), (character) => unsafe(character) ? '-' : character)
-    .slice(0, length).join('').replace(/^\.+/, '-').replace(/[. ]+$/, '').trim()
+    .slice(0, length).join('').trim().replace(/^\.+/, '-').replace(/[.\s]+$/, '')
   return cleaned === '' ? fallback : cleaned
 }
 
@@ -95,6 +101,8 @@ export type LibraryArchiveExport = Readonly<{
   count: number
   /** Graphs that could not be read from storage and are not in the archive, each with its diagnostic. */
   skipped: readonly Readonly<{ name: string; diagnostic: string }>[]
+  /** Reasons why the archive, though complete, could not be imported back as it is. */
+  warnings: readonly string[]
 }>
 
 /** Builds the archive of the whole library. It reads storage only, and never writes. */
@@ -104,15 +112,25 @@ export async function exportLibraryArchive(
 ): Promise<LibraryArchiveExport> {
   const date = options.date ?? new Date()
   const library = readLibrary(storage, options)
-  if (storage === null) throw new LibraryError('LIBRARY_UNAVAILABLE', 'Browser storage is unavailable, so the library cannot be exported.')
+  // An unreadable library must not be exported as an empty archive.
+  if (storage === null || library.diagnostic?.startsWith('LIBRARY_UNAVAILABLE'))
+    throw new LibraryError('LIBRARY_UNAVAILABLE', 'Browser storage is unavailable, so the library cannot be exported.')
+  // While the library has no index, the former active document is listed but not stored under a library key yet.
+  let pending: CanonicalDocument | null = null
+  try {
+    const source = options.migrationSource === undefined ? storage.getItem(ACTIVE_DOCUMENT_KEY) : options.migrationSource
+    if (source !== null && storage.getItem(LIBRARY_INDEX_KEY) === null) pending = parseCanonicalDocument(source)
+  } catch {
+    pending = null
+  }
   const encoder = new TextEncoder()
   const bytesOf = (path: FolderPath, length: number) =>
     path.reduce((sum, name) => sum + encoder.encode(safeSegment(name, 'folder', length)).byteLength + 1, 0)
   // Deep folders with long names would not fit in an entry path the import accepts.
   const roomForFile = MAX_WRITTEN_NAME * 4 + DOCUMENT_SUFFIX.length + 8
-  const nameLength = library.folders.some((path) => bytesOf(path, MAX_WRITTEN_NAME) + roomForFile > MAX_ARCHIVE_PATH_BYTES)
-    ? SHORT_WRITTEN_NAME : MAX_WRITTEN_NAME
-  const fileLength = nameLength
+  const nameLength = library.folders.some((path) => bytesOf(path, MAX_FOLDER_NAME_LENGTH) + roomForFile > MAX_ARCHIVE_PATH_BYTES)
+    ? SHORT_WRITTEN_NAME : MAX_FOLDER_NAME_LENGTH
+  const fileLength = Math.min(nameLength, MAX_WRITTEN_NAME)
 
   const takenIn = new Map<string, Set<string>>()
   const taken = (directory: string) => {
@@ -131,13 +149,18 @@ export async function exportLibraryArchive(
   }
 
   const files: ZipFile[] = []
-  for (const path of library.folders) files.push({ path: directoryOf(path) })
+  // A folder that holds a graph, directly or below, is implied by that graph's path.
+  const holding = new Set(withAncestors(library.entries.map(entryFolder)).map(folderKey))
+  for (const path of library.folders) {
+    const directory = directoryOf(path)
+    if (!holding.has(folderKey(path))) files.push({ path: directory })
+  }
   const manifest: ArchiveManifestEntry[] = []
   const skipped: { name: string; diagnostic: string }[] = []
   for (const entry of library.entries) {
     let document: CanonicalDocument
     try {
-      document = loadFromLibrary(storage, entry.id)
+      document = pending?.id === entry.id ? pending : loadFromLibrary(storage, entry.id)
     } catch (error) {
       skipped.push({ name: entry.name, diagnostic: error instanceof LibraryError ? error.diagnostic : 'LIBRARY_ENTRY_INVALID: This graph could not be read.' })
       continue
@@ -149,7 +172,15 @@ export async function exportLibraryArchive(
   }
   const content: ArchiveManifest = { version: ARCHIVE_MANIFEST_VERSION, exportedAt: date.toISOString(), entries: manifest }
   files.push({ path: ARCHIVE_MANIFEST_PATH, bytes: encoder.encode(`${JSON.stringify(content, null, 2)}\n`) })
-  return { bytes: await writeZip(files, date), fileName: libraryArchiveName(date), count: manifest.length, skipped }
+  const warnings: string[] = []
+  if (files.length > MAX_ARCHIVE_ENTRIES) {
+    warnings.push(`LIMIT_ARCHIVE_ENTRIES: The archive holds ${files.length.toLocaleString('en-US')} entries, more than the ${
+      MAX_ARCHIVE_ENTRIES.toLocaleString('en-US')} that Import library accepts. It is a complete backup, but must be split to be imported.`)
+  }
+  if (library.folders.some((path) => path.length >= MAX_FOLDER_DEPTH)) {
+    warnings.push(`LIMIT_FOLDER_DEPTH: Some folders are ${MAX_FOLDER_DEPTH} levels deep. Import library adds one level, so it will refuse this archive as it is.`)
+  }
+  return { bytes: await writeZip(files, date), fileName: libraryArchiveName(date), count: manifest.length, skipped, warnings }
 }
 
 export type LibraryArchiveContent = Readonly<{

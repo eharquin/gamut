@@ -2081,7 +2081,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
       setArchiveReport({
         message: `Exported ${exported.count} ${exported.count === 1 ? 'graph' : 'graphs'} to ${exported.fileName}.${
           exported.skipped.length === 0 ? '' : ` ${exported.skipped.length} could not be read and ${exported.skipped.length === 1 ? 'is' : 'are'} not in the archive.`}`,
-        details: exported.skipped.map(({ name, diagnostic }) => `${name} — ${diagnostic}`),
+        details: [...exported.skipped.map(({ name, diagnostic }) => `${name} — ${diagnostic}`), ...exported.warnings],
       })
     } catch (error) {
       setArchiveReport(null)
@@ -2098,8 +2098,6 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
       reportLibraryFailure(null, 'LIBRARY_IMPORT_TEMPORARY: A library cannot be imported in a temporary shared scene, which does not use browser storage. Add the scene to your library first, or open GAMUT without a scene link.')
       return
     }
-    // The former active document is stored first, as before any library write.
-    if (!keepFormerDocument()) return
     try {
       const imported = await importLibraryArchive(browserLibraryStorage(), file, {
         ...libraryOptions(),
