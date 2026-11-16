@@ -124,6 +124,19 @@ directories: a folder name with a replaced character, a shortened name, or
 one that differs from a sibling only by case does not come back as it was,
 whereas graph names always do, since they come from the documents.
 
+### 2.3 Annotation mathematics
+
+These bound the typesetting of mathematics in annotation text (SEC-012).
+Crossing one never fails the document: the mathematics concerned is shown as
+its TeX source.
+
+| Quantity | Limit |
+| --- | ---: |
+| Characters of TeX source per mathematics segment | 2,000 |
+| Typeset mathematics segments per annotation | 200 |
+| Macro expansions per segment | 1,000 |
+| Size a TeX command may request | 10 em |
+
 ## 3. Parsing and dependency analysis
 
 | Quantity | Limit | Diagnostic |

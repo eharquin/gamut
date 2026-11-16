@@ -1,4 +1,5 @@
-import { useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { annotationBlocksPlainText, parseAnnotationBlocks } from '../presentation/annotationBlocks'
 import { AnnotationText } from './AnnotationText'
 
 type NoteEditorProps = Readonly<{
@@ -39,6 +40,9 @@ export function NoteEditor({
   const [dismissed, setDismissed] = useState(false)
   const element = useRef<HTMLTextAreaElement | null>(null)
   const text = source.trim()
+  // What a screen reader reads for the note: no delimiters, and TeX source for mathematics.
+  const plainText = useMemo(() => annotationBlocksPlainText(parseAnnotationBlocks(text)), [text])
+  const plainTextId = `${textId}-plain`
   // A note without text has nothing to render, so its field always shows.
   const editing = text === '' || (focused && !dismissed)
 
@@ -94,7 +98,7 @@ export function NoteEditor({
         id={id}
         className={`expression-source note-source${editing ? '' : ' is-collapsed'}`}
         aria-label={`Annotation ${position}`}
-        aria-describedby={text ? textId : undefined}
+        aria-describedby={plainText ? plainTextId : undefined}
         placeholder="Note"
         rows={1}
         value={source}
@@ -131,6 +135,7 @@ export function NoteEditor({
           <AnnotationText id={textId} text={text} />
         </div>
       )}
+      {plainText && <span id={plainTextId} hidden>{plainText}</span>}
     </div>
   )
 }

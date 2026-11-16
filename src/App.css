@@ -1172,6 +1172,22 @@ body.reordering-items .reorder-handle {
   white-space: pre;
 }
 
+.note-math.is-display {
+  display: block;
+  margin: 2px 0;
+  overflow-x: auto;
+  text-align: center;
+}
+
+.note-math [hidden] {
+  display: none;
+}
+
+/* KaTeX sizes itself from the text around it; 1.21em is its default and too large in a row. */
+.annotation-text .katex {
+  font-size: 1.05em;
+}
+
 .annotation-text hr {
   width: 100%;
   border: 0;

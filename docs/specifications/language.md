@@ -157,6 +157,20 @@ HTML.
   browsing context; every link has `rel="noopener noreferrer"`.
 - **Escapes.** A backslash before `*`, `` ` ``, `[`, `]`, or `\` makes that
   character literal; before any other character the backslash is literal.
+- **Mathematics.** `$…$` is inline mathematics written in TeX and `$$…$$`
+  display mathematics, typeset when the annotation is displayed. An opening
+  `$` is followed by a character that is not whitespace; the closing `$` is
+  the next `$` without a backslash before it, and it closes only when it
+  follows a character that is not whitespace and is not followed by a digit,
+  so `It costs $5 and $10` is text. `\$` is a literal
+  dollar. Nothing between the delimiters is read as Markdown. From a line
+  that starts with `$$` to the line that holds the closing `$$`, the lines
+  are not read as other blocks, so a line of TeX may start with `-`, `>`, or
+  `#`. Mathematics that cannot be typeset shows the error in place, and
+  mathematics over the limits of the
+  [limits and interaction constants](limits-and-constants.md#23-annotation-mathematics)
+  shows as its TeX source. TeX commands that would create links, load
+  images, or set attributes are not available.
 - **Blocks.** Annotation text is a sequence of blocks, separated by blank
   lines or by the start of another block; the inline rules above apply to the
   text of each block except code blocks.

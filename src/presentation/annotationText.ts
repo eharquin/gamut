@@ -11,7 +11,11 @@
  * - links `[text](url)` whose destination is an absolute `http` or `https`
  *   URL or a `mailto` URL; any other destination leaves the whole link source
  *   as plain text;
- * - backslash escapes before `*`, `` ` ``, `[`, `]`, `\`, and the characters
+ * - mathematics in TeX: `$…$` inline, where the opening `$` is followed by a
+ *   non-space and the closing one is the next `$`, follows a non-space, and
+ *   is not followed by a digit, so that `$5 and $10` stays text; and `$$…$$` for display
+ *   mathematics. Nothing inside is parsed as Markdown;
+ * - backslash escapes before `*`, `` ` ``, `[`, `]`, `\`, `$`, and the characters
  *   that start a block: `#`, `>`, `-`, `+`, `~`, and the `.` or `)` of a
  *   list number.
  *
@@ -25,10 +29,12 @@ export type AnnotationSegment =
   | Readonly<{ kind: 'strong'; children: readonly AnnotationSegment[] }>
   | Readonly<{ kind: 'emphasis'; children: readonly AnnotationSegment[] }>
   | Readonly<{ kind: 'code'; text: string }>
+  /** TeX between `$…$`, or between `$$…$$` for display mathematics. */
+  | Readonly<{ kind: 'math'; tex: string; display: boolean }>
   | Readonly<{ kind: 'link'; href: string; children: readonly AnnotationSegment[] }>
 
 /** The characters a backslash makes literal: the inline delimiters, and those that start a block. */
-const ESCAPABLE = new Set(['*', '`', '[', ']', '\\', '#', '>', '-', '+', '.', ')', '~'])
+const ESCAPABLE = new Set(['*', '`', '[', ']', '\\', '#', '>', '-', '+', '.', ')', '~', '$'])
 
 /** Deepest emphasis nesting; further openers stay literal stars. */
 export const MAX_EMPHASIS_DEPTH = 32
@@ -172,16 +178,56 @@ function destinationEnd(text: string, start: number): number {
   return -1
 }
 
-/** Splits text into literal text, code, links, and unresolved `*` runs. */
+/**
+ * The `$` that closes the inline mathematics opened at `open`, or -1. It is
+ * the next `$` that no backslash precedes, and it closes only after a
+ * character that is not whitespace and when no digit follows it; otherwise
+ * the opener is text. Mathematics therefore never holds a bare `$`, and the
+ * stretches scanned for successive openers do not overlap.
+ */
+function closingDollar(text: string, open: number): number {
+  let close = text.indexOf('$', open + 1)
+  while (close >= 0 && text[close - 1] === '\\') close = text.indexOf('$', close + 1)
+  if (close < 0 || isWhitespace(text[close - 1])) return -1
+  const after = text[close + 1]
+  return after !== undefined && after >= '0' && after <= '9' ? -1 : close
+}
+
+/** Splits text into literal text, code, mathematics, links, and unresolved `*` runs. */
 function scan(text: string, allowLinks: boolean): Node[] {
   const runs = backtickRuns(text)
   const nodes: Node[] = []
+  /** No `$$` closes display mathematics from here on. */
+  let displayExhausted = false
   let index = 0
   while (index < text.length) {
     const character = text[index]
     if (character === '\\' && ESCAPABLE.has(text[index + 1] ?? '')) {
       pushText(nodes, text[index + 1])
       index += 2
+      continue
+    }
+    if (character === '$') {
+      if (text[index + 1] === '$') {
+        const close = displayExhausted ? -1 : text.indexOf('$$', index + 2)
+        const tex = close < 0 ? '' : text.slice(index + 2, close).trim()
+        if (close < 0) displayExhausted = true
+        if (tex !== '') {
+          nodes.push({ kind: 'math', tex, display: true })
+          index = close + 2
+          continue
+        }
+      } else if (text[index + 1] !== undefined && !isWhitespace(text[index + 1])) {
+        const close = closingDollar(text, index)
+        if (close >= 0) {
+          nodes.push({ kind: 'math', tex: text.slice(index + 1, close), display: false })
+          index = close + 1
+          continue
+        }
+      }
+      const length = runLength(text, index, '$')
+      pushText(nodes, '$'.repeat(length))
+      index += length
       continue
     }
     if (character === '`') {
@@ -294,5 +340,7 @@ export function parseAnnotationMarkdown(text: string, allowLinks = true): Annota
 /** The plain text of segments, as a screen reader reads it: without delimiters. */
 export function annotationPlainText(segments: readonly AnnotationSegment[]): string {
   return segments.map((segment) =>
-    segment.kind === 'text' || segment.kind === 'code' ? segment.text : annotationPlainText(segment.children)).join('')
+    segment.kind === 'text' || segment.kind === 'code' ? segment.text
+      // Mathematics is read as its TeX source.
+      : segment.kind === 'math' ? segment.tex : annotationPlainText(segment.children)).join('')
 }

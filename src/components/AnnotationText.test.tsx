@@ -1,4 +1,4 @@
-import { cleanup, render } from '@testing-library/react'
+import { cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { isSafeAnnotationHref } from '../presentation/annotationText'
 import { AnnotationText } from './AnnotationText'
@@ -48,5 +48,46 @@ describe('rendered annotation text (SEC-012)', () => {
     expect(mail).not.toHaveAttribute('target')
     expect(mail).toHaveAttribute('rel', 'noopener noreferrer')
     expect(mail).toHaveAccessibleDescription('mailto:a@b.example')
+  })
+
+  it('typesets mathematics with KaTeX once it has loaded, showing the source until then', async () => {
+    const { container } = render(<AnnotationText id="note" text={'Rotor $R = e^{-\\theta B/2}$\n\n$$\\frac{a}{b}$$'} />)
+    const sources = [...container.querySelectorAll('.note-math-source')]
+    expect(sources.map((source) => source.textContent)).toEqual(['R = e^{-\\theta B/2}', '\\frac{a}{b}'])
+    expect(sources[0]).not.toHaveAttribute('hidden')
+    await waitFor(() => expect(container.querySelectorAll('.katex')).toHaveLength(2))
+    expect(sources[0]).toHaveAttribute('hidden')
+    // Display mathematics is typeset in display mode, with MathML for assistive technology.
+    expect(container.querySelectorAll('.katex-display')).toHaveLength(1)
+    expect(container.querySelector('.katex math')).not.toBeNull()
+    expect(container.querySelector('.katex annotation')).toHaveTextContent('R = e^{-\\theta B/2}')
+  })
+
+  it.each([
+    '$\\href{javascript:alert(1)}{x}$', '$\\url{javascript:alert(1)}$', '$\\includegraphics{https://a.example/x.png}$',
+    '$\\htmlData{onclick=alert(1)}{x}$', '$\\htmlId{note}{x}$', '$\\htmlStyle{background:url(https://a.example)}{x}$',
+    '$\\htmlClass{library-panel}{x}$', '$<script>alert(1)</script>$', '$\\text{<img src=x onerror=alert(1)>}$',
+    '$\\def\\a{\\a\\a}\\a$', '$\\rule{9999em}{9999em}$', '$\\unknowncommand$', '$$\\begin{matrix}$$',
+  ])('typesets untrusted TeX %j without links, images, scripts, handlers, or identities', async (text) => {
+    const { container } = render(<AnnotationText id="note" text={text} />)
+    await waitFor(() => expect(container.querySelector('.note-math-rendered')?.childElementCount).toBeGreaterThan(0))
+    expect(container.querySelector('a, img, script, iframe, object, embed, link, style, form, input')).toBeNull()
+    for (const element of container.querySelectorAll('.note-math-rendered *')) {
+      for (const attribute of element.getAttributeNames()) {
+        expect(attribute).not.toMatch(/^on|^id$|^href$|^src$|^data-/)
+        if (attribute === 'style') expect(element.getAttribute('style')).not.toMatch(/url\(|expression|javascript/i)
+        if (attribute === 'class') expect(element.getAttribute('class')).not.toContain('library-panel')
+      }
+    }
+    // A size beyond the limit is clamped.
+    for (const element of container.querySelectorAll<HTMLElement>('.note-math-rendered [style]'))
+      for (const size of element.getAttribute('style')!.matchAll(/([\d.]+)em/g)) expect(Number(size[1])).toBeLessThanOrEqual(20)
+  })
+
+  it('shows mathematics past the limits of a note as its source', async () => {
+    const { container } = render(<AnnotationText id="note" text={`${'$x$ '.repeat(201)}$${'y'.repeat(2001)}$`} />)
+    await waitFor(() => expect(container.querySelectorAll('.katex')).toHaveLength(200))
+    expect(container.querySelectorAll('.note-math')).toHaveLength(200)
+    expect(container.querySelectorAll('.annotation-text > p > code.note-math-source')).toHaveLength(2)
   })
 })
