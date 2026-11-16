@@ -59,12 +59,14 @@ export function FolderRow({
     inputRef.current?.select()
   }, [renaming, name])
 
+  // The key of a mounted row never changes, so this runs once: the row that a
+  // rename just created takes focus.
+  const key = folderKey(path)
   useEffect(() => {
-    if (focusOnMount !== folderKey(path)) return
+    if (focusOnMount !== key) return
     focusOnMount = null
     toggleRef.current?.focus()
-    // Read on mount only: the row that a rename just created takes focus.
-  }, [])
+  }, [key])
 
   const finish = (commit: boolean) => {
     if (ended.current) return

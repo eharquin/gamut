@@ -13,6 +13,11 @@ describe('dropped document selection', () => {
       expect(selectDroppedDocument([dropped])).toEqual({ status: 'file', file: dropped })
   })
 
+  it('recognizes one library archive by its name or media type', () => {
+    for (const dropped of [file('gamut-library-2026-11-13.zip'), file('LIBRARY.ZIP'), file('archive', 'application/zip')])
+      expect(selectDroppedDocument([dropped])).toEqual({ status: 'archive', file: dropped })
+  })
+
   it('rejects several files and a file that is not JSON', () => {
     const several = selectDroppedDocument([file('a.json'), file('b.json')])
     expect(several).toEqual({ status: 'rejected', diagnostic: expect.stringMatching(/^DOCUMENT_DROP_MULTIPLE: 2 files were dropped/) })

@@ -90,6 +90,40 @@ archive. Browser storage quotas are usually far below the total decompressed
 limit; a quota failure during import is reported under STORE-018 rather than
 treated as a limit.
 
+Besides the limits above, the SEC-010 checks reject an archive with these
+diagnostics:
+
+| Check | Diagnostic |
+| --- | --- |
+| Not a `.zip` archive, a truncated or inconsistent directory, or an archive split over several files | `ARCHIVE_INVALID` |
+| Entry path that is empty or absolute, or contains a backslash, a control character, or an empty, `.`, or `..` segment | `ARCHIVE_PATH` |
+| Entry name that is not valid UTF-8 | `ARCHIVE_PATH_ENCODING` |
+| The same path twice, after Unicode NFC normalization and without the trailing `/` of a directory | `ARCHIVE_DUPLICATE_PATH` |
+| Encrypted entry | `ARCHIVE_ENCRYPTED` |
+| ZIP64 record or field | `ARCHIVE_ZIP64` |
+| Compression method other than stored and `deflate` | `ARCHIVE_METHOD` |
+| Compressed data that is invalid or truncated | `ARCHIVE_COMPRESSION` |
+| CRC-32 or decompressed size that differs from the directory | `ARCHIVE_CRC` |
+| Browser without `deflate-raw` streams | `ARCHIVE_UNSUPPORTED` |
+
+The import folder counts towards the folder depth: an entry may lie at most
+seven directories deep, and a deeper one is rejected with
+`LIMIT_FOLDER_DEPTH`. An entry that is not a `.json` file is skipped with
+`ARCHIVE_ENTRY_TYPE`, and an unusable manifest is ignored with
+`ARCHIVE_MANIFEST_INVALID`; neither rejects the archive. Compressed data is
+handed to the inflater in slices of 4 KiB, so that the limits are checked
+before an entry can expand far beyond them.
+
+Export stores an entry without compression when `deflate` would shrink it
+past the expansion ratio, and shortens the written file and directory names
+when a path would exceed the path limit. It writes a directory entry only for
+a folder that holds no graph. Export warns, and still writes a complete
+archive, when the archive holds more entries than import accepts or when a
+folder is eight levels deep. Folders are imported under the names of their
+directories: a folder name with a replaced character, a shortened name, or
+one that differs from a sibling only by case does not come back as it was,
+whereas graph names always do, since they come from the documents.
+
 ## 3. Parsing and dependency analysis
 
 | Quantity | Limit | Diagnostic |

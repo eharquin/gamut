@@ -3071,7 +3071,7 @@ describe('opening a document by dropping a file onto the window', () => {
     [{ id: 'dropped-vector', source: 'Dropped = vector(5, 6)' }], {}, { id: 'dropped-document', title: 'Dropped' },
   ), 'dark'))
   const fileTransfer = (files: File[]) => ({ types: ['Files'], files, dropEffect: 'none' })
-  const overlay = () => screen.queryByText('Drop a JSON document to open it')
+  const overlay = () => screen.queryByText('Drop a JSON document to open it, or a library .zip to import it')
 
   it('shows an announced overlay while a file is dragged, and hides it on leave', () => {
     render(<App />)

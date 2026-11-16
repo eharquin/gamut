@@ -31,11 +31,15 @@ export async function readDocumentFile(file: Blob): Promise<CanonicalDocument> {
  */
 export function downloadDocumentFile(canonical: CanonicalDocument, title: string): void {
   const source = serializeCanonicalDocument(canonical)
-  const blob = new Blob([source], { type: 'application/json;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
+  downloadBytes(new TextEncoder().encode(source), documentFileName(title), 'application/json;charset=utf-8')
+}
+
+/** Hands bytes to the browser as a download named `fileName`. */
+export function downloadBytes(bytes: Uint8Array, fileName: string, type: string): void {
+  const url = URL.createObjectURL(new Blob([bytes as Uint8Array<ArrayBuffer>], { type }))
   const link = document.createElement('a')
   link.href = url
-  link.download = documentFileName(title)
+  link.download = fileName
   link.click()
   URL.revokeObjectURL(url)
 }

@@ -59,7 +59,8 @@ validation, collision choice, and diagnostics; a temporary scene-link session
 stays temporary. A drop of several files (`DOCUMENT_DROP_MULTIPLE`) or of a
 file that is not JSON (`DOCUMENT_DROP_TYPE`) is rejected before any file is
 read and leaves the open document unchanged; a drag that carries no file is
-left to the page. Appearance, natural
+left to the page. One `.zip` file is a library archive and takes the path of
+**Import library** instead (STORE-018). Appearance, natural
 normalization, source, position source, document identity, metadata, and theme
 round-trip through that boundary. Numeric-control records are validated and
 preserved through the nullable `control` field and drive scalar controls without

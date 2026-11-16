@@ -3464,6 +3464,7 @@ line.manipulation-focus-ring {
 
 .library-new,
 .library-new-folder,
+.library-archive,
 .library-save-as {
   align-self: flex-start;
   padding: 4px 8px;
@@ -3897,4 +3898,48 @@ html.is-embedded body {
 .library-move:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+}
+
+/* Library archives (STORE-017, STORE-018). */
+.library-archive[aria-disabled='true'] {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.library-archive-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.library-archive-report {
+  display: grid;
+  gap: 4px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.74rem;
+}
+
+.library-archive-report p,
+.library-archive-report ul {
+  margin: 0;
+}
+
+.library-archive-report ul {
+  padding-inline-start: 1.1em;
+  color: var(--muted);
+  font: 0.7rem/1.4 var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.library-archive-report button {
+  justify-self: start;
+  padding: 2px 8px;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font: 700 0.72rem var(--font-mono);
+  cursor: pointer;
 }
