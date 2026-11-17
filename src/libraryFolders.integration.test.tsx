@@ -159,10 +159,13 @@ describe('library folders (STORE-016, A11Y-011)', () => {
     openLibrary()
     fireEvent.click(within(panel()).getByRole('tab', { name: 'Examples' }))
     const examples = within(panel()).getByRole('list', { name: 'Examples' })
-    expect(within(examples).getByRole('button', { name: /^Folder VGA\(2\), level 1, 1 graph$/ })).toBeInTheDocument()
+    expect(within(examples).getByRole('button', { name: /^Folder VGA\(2\), level 1, 3 graphs$/ })).toBeInTheDocument()
+    expect(within(examples).getAllByRole('button', { name: /^Folder Basics, level 2, / })).toHaveLength(2)
     expect(within(examples).queryByRole('button', { name: /^(Rename|Remove) folder/ })).not.toBeInTheDocument()
     fireEvent.click(within(examples).getByRole('button', { name: 'Add PGA 2D Triangle Example to my library' }))
     expect(index().entries.find((entry) => entry.name === 'PGA 2D Triangle Example')?.folder).toEqual(['PGA(2)'])
+    fireEvent.click(within(examples).getByRole('button', { name: "Add Euler's line to my library" }))
+    expect(index().entries.find((entry) => entry.name === "Euler's line")?.folder).toEqual(['PGA(2)', 'Constructions'])
   })
 
   it('shows every graph and example as a card with a drawing of its scene', () => {
