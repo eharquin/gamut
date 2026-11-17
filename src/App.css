@@ -4371,7 +4371,7 @@ body.reordering-items .folder-handle {
 /* A folder's header is the first card of its box; alone, when it holds no
    visible row, it is a card of its own. */
 .expression-panel.is-cards [data-kind='folder'] .folder-row {
-  background: var(--surface-soft);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
 }
