@@ -37,10 +37,16 @@ const visibleSources = () => screen.getAllByRole<HTMLInputElement>('textbox', { 
 const folderButton = (name: string) => screen.getByRole('button', { name: new RegExp(`^Folder ${name}, level`) })
 const stored = () => parseCanonicalDocument(window.localStorage.getItem(ACTIVE_DOCUMENT_KEY)!)
 
+/** Opens the add menu of the toolbar and chooses one of its items. */
+function openAddMenuItem(name: string) {
+  fireEvent.click(screen.getByRole('button', { name: 'More to add' }))
+  fireEvent.click(screen.getByRole('menuitem', { name }))
+}
+
 describe('expression folders (DOC-013, A11Y-011)', () => {
   it('creates and names a folder, then moves a row into and out of it by keyboard', async () => {
     open(flat())
-    fireEvent.click(screen.getByRole('button', { name: 'New folder' }))
+    openAddMenuItem('New folder')
     const name = screen.getByRole('textbox', { name: 'Name of folder New folder' })
     expect(name).toHaveFocus()
     fireEvent.change(name, { target: { value: '  Sums  ' } })
