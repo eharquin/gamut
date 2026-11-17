@@ -255,6 +255,24 @@ describe('expression folders (DOC-013, A11Y-011)', () => {
     expect(editorOf('A = 1').closest('.folder-member')).not.toHaveStyle({ '--folder-depth': '1' })
   })
 
+  it('renders bold, code, and mathematics in a folder name, and edits the name as written', async () => {
+    open({ ...flat(), folders: [{ path: ['Rotor **R** $R_\\theta$'], collapsed: false }] })
+    expect(screen.getByRole('button', { name: /^Folder Rotor R R_\\theta, level 1/ })).toBeInTheDocument()
+    const nameButton = screen.getByRole('button', { name: 'Rename folder Rotor R R_\\theta' })
+    expect(within(nameButton).getByText('R', { selector: 'strong' })).toBeInTheDocument()
+    await waitFor(() => expect(nameButton.querySelector('.katex')).not.toBeNull())
+    // A folder name holds no link: a click on it edits the name.
+    cleanup()
+    window.localStorage.clear()
+    open({ ...flat(), folders: [{ path: ['See [x](https://example.org)'], collapsed: false }] })
+    expect(document.querySelector('.folder-name a')).toBeNull()
+    cleanup()
+    window.localStorage.clear()
+    open({ ...flat(), folders: [{ path: ['Rotor **R** $R_\\theta$'], collapsed: false }] })
+    fireEvent.click(screen.getByRole('button', { name: 'Rename folder Rotor R R_\\theta' }))
+    expect(screen.getByRole('textbox', { name: 'Name of folder Rotor R R_\\theta' })).toHaveValue('Rotor **R** $R_\\theta$')
+  })
+
   it('drops a dragged row into a folder', () => {
     open({ ...flat(), folders: [{ path: ['Sums'], collapsed: true }] })
     const rows = screen.getAllByRole('textbox', { name: /^Expression \d+$/ })

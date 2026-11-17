@@ -3,6 +3,8 @@ import type { ExpressionDocument } from '../document/expressionDocument'
 import { expressionFolderTree, isFolderCollapsed, itemFolder } from '../document/expressionFolders'
 import { flattenFolderTree, folderKey, isWithin } from '../document/folderModel'
 import type { ExpressionFolders } from '../hooks/useExpressionFolders'
+import { folderPlainName } from '../presentation/annotationText'
+import { InlineMarkdown } from './AnnotationText'
 import { FolderRow } from './FolderRow'
 
 type ExpressionTreeProps = Readonly<{
@@ -54,6 +56,10 @@ export function ExpressionTree({ document, folders, renderItem }: ExpressionTree
           expanded={!isFolderCollapsed(document, row.path)}
           entryCount={row.entryCount}
           entryNoun={['row', 'rows']}
+          display={{
+            name: <InlineMarkdown id={`folder-name-${encodeURIComponent(key)}`} text={row.name} />,
+            plainName: folderPlainName(row.name),
+          }}
           renaming={folders.renamingKey === key}
           onRenamingChange={(renaming) => folders.setRenamingKey(renaming ? key : null)}
           onToggle={() => folders.toggleFolder(row.path)}

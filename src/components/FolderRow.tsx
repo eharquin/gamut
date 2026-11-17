@@ -37,6 +37,12 @@ type FolderRowProps = Readonly<{
     onPointerDown(event: ReactPointerEvent<HTMLButtonElement>): void
     onKeyDown(event: KeyboardEvent<HTMLButtonElement>): void
   }>
+  /**
+   * The name as displayed, such as Markdown rendered from it, and the plain
+   * text that names the folder to assistive technology; the name as written
+   * by default. The name field always shows the name as written.
+   */
+  display?: Readonly<{ name: ReactNode; plainName: string }>
   /** Classes the panel adds, such as a drop indicator. */
   className?: string
   rowRef?(element: HTMLElement | null): void
@@ -59,7 +65,7 @@ let focusOnMount: string | null = null
  */
 export function FolderRow({
   path, name, level, expanded, entryCount, entryNoun, renaming, onRenamingChange,
-  onToggle, onRename, onNameEntered, onDelete, handle, className, rowRef, children,
+  onToggle, onRename, onNameEntered, onDelete, handle, display, className, rowRef, children,
 }: FolderRowProps) {
   const [draft, setDraft] = useState(name)
   const [error, setError] = useState<string | null>(null)
@@ -115,7 +121,10 @@ export function FolderRow({
   }
 
   const count = `${entryCount} ${entryCount === 1 ? entryNoun[0] : entryNoun[1]}`
-  const label = `Folder ${name}, level ${level}, ${count}`
+  // The folder is named by its plain text; the name field shows the name as written.
+  const plain = display?.plainName ?? name
+  const shown = display?.name ?? name
+  const label = `Folder ${plain}, level ${level}, ${count}`
   const toggleKeys = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key === 'F2' && onRename) { event.preventDefault(); onRenamingChange(true) }
     else if (event.key === 'ArrowRight' && !expanded) { event.preventDefault(); onToggle() }
@@ -131,7 +140,7 @@ export function FolderRow({
         <button
           type="button"
           className="reorder-handle folder-handle"
-          aria-label={`Reorder folder ${name}. Alt plus arrow keys to move.`}
+          aria-label={`Reorder folder ${plain}. Alt plus arrow keys to move.`}
           onPointerDown={handle.onPointerDown}
           onKeyDown={handle.onKeyDown}
         >
@@ -149,14 +158,14 @@ export function FolderRow({
       >
         <span className="folder-chevron" aria-hidden="true">{expanded ? '▾' : '▸'}</span>
         {/* A read-only folder has no name button: its whole header toggles it. */}
-        {!onRename && <span className="folder-name">{name}</span>}
+        {!onRename && <span className="folder-name">{shown}</span>}
       </button>
       {renaming && onRename ? (
         <span className="folder-rename">
           <input
             ref={inputRef}
             className="folder-name-input"
-            aria-label={`Name of folder ${name}`}
+            aria-label={`Name of folder ${plain}`}
             aria-invalid={error !== null}
             aria-describedby={error ? errorId : undefined}
             value={draft}
@@ -174,12 +183,12 @@ export function FolderRow({
         <button
           type="button"
           className="folder-name-button"
-          aria-label={`Rename folder ${name}`}
+          aria-label={`Rename folder ${plain}`}
           title="Click to rename (F2)"
           onClick={() => onRenamingChange(true)}
           onKeyDown={toggleKeys}
         >
-          <span className="folder-name">{name}</span>
+          <span className="folder-name">{shown}</span>
         </button>
       )}
       <span className="folder-count" aria-hidden="true">{entryCount}</span>
@@ -190,7 +199,7 @@ export function FolderRow({
             <button
               type="button"
               className="folder-action folder-delete"
-              aria-label={`Remove folder ${name}`}
+              aria-label={`Remove folder ${plain}`}
               title="Remove folder"
               onClick={onDelete}
             >

@@ -272,7 +272,11 @@ They are stored in canonical format version 8.
   changing it counts as an unsaved change, but it creates no history entry.
   Collapsing a folder hides its rows in the expression panel only. A folder
   name is never empty, and two folders with the same parent never share a
-  name. Folders do not count towards the 1,000 items per document and have
+  name. An expression folder name is displayed with the inline subset of
+  annotation text without links (SEC-012) and is edited and stored as
+  written; uniqueness, limits, and paths apply to the name as written, and
+  assistive technology reads its plain text. Library folder names are plain
+  text. Folders do not count towards the 1,000 items per document and have
   their own limits. The same folder
   model, and where possible the same interface component, serves the library
   folders of STORE-016 and the archive directories of STORE-017.
