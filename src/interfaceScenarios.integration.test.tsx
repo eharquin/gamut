@@ -293,10 +293,12 @@ describe('interface scenarios', () => {
     // Escape gives up the new name.
     key(field, 'Escape')
     expect(panel()).toContain('[Old]')
-    // A free name is accepted.
+    // A free name is accepted; Enter then opens a new first row in the folder.
     fireEvent.click(screen.getByRole('button', { name: 'Rename folder Old' }))
     type(screen.getByRole('textbox', { name: 'Name of folder Old' }), 'New')
     key(screen.getByRole('textbox', { name: 'Name of folder Old' }), 'Enter')
+    expect(panel()).toEqual(['A = 1', '[New]', '  ', '  B = 2', 'C = 3', '[Taken]'])
+    undo()
     expect(panel()).toEqual(['A = 1', '[New]', '  B = 2', 'C = 3', '[Taken]'])
 
     // The remove button removes the folder only.
@@ -306,6 +308,31 @@ describe('interface scenarios', () => {
     expect(panel()).toEqual(['A = 1', '[New]', '  B = 2', 'C = 3', '[Taken]'])
     undo()
     expect(panel()).toEqual(['A = 1', '[Old]', '  B = 2', 'C = 3', '[Taken]'])
+  })
+
+  it('opens a row in a folder with Enter after its name, whether the folder is empty, collapsed, or holds rows', async () => {
+    open(doc(['A = 1', 'B = 2'], [{ path: ['Full'], collapsed: true }], { 1: ['Full'] }))
+    // A folder with rows, collapsed: it opens, and a new first row takes the focus.
+    fireEvent.click(screen.getByRole('button', { name: 'Rename folder Full' }))
+    key(screen.getByRole('textbox', { name: 'Name of folder Full' }), 'Enter')
+    expect(panel()).toEqual(['A = 1', '[Full]', '  ', '  B = 2'])
+    await waitFor(() => expect(editor('')).toHaveFocus())
+    type(editor(''), 'C = A + B')
+    expect(panel()).toEqual(['A = 1', '[Full]', '  C = A + B', '  B = 2'])
+
+    // A new empty folder: the row is created where the folder shows.
+    fireEvent.click(screen.getByRole('button', { name: 'New folder' }))
+    const name = screen.getByRole('textbox', { name: 'Name of folder New folder' })
+    type(name, 'Empty')
+    key(name, 'Enter')
+    expect(panel()).toEqual(['A = 1', '[Full]', '  C = A + B', '  B = 2', '[Empty]', '  '])
+    await waitFor(() => expect(editor('')).toHaveFocus())
+
+    // After a slash, the folder's first row is already empty: it takes the focus, no second row is made.
+    type(editor('A = 1'), '/Third')
+    key(screen.getByRole('textbox', { name: 'Name of folder Third' }), 'Enter')
+    expect(panel().filter((line) => line === '  ')).toHaveLength(2)
+    expect(panel().slice(0, 2)).toEqual(['[Third]', '  '])
   })
 
   it('keeps a long session of folder and note edits through a reload', async () => {
