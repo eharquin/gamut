@@ -918,6 +918,13 @@ h2 {
   padding-bottom: 4px;
 }
 
+/* A note has no kind or value line below its text: it is as tall as its text. */
+.expression-item.is-annotation .expression-input-row {
+  min-height: 0;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
 .expression-item.is-empty-expression .expression-actions {
   height: 25px;
   justify-content: center;
