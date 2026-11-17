@@ -75,7 +75,6 @@
 }
 
 .app-title:focus-visible,
-.toolbar-add:focus-visible,
 .folder-toggle:focus-visible,
 .folder-action:focus-visible,
 .history-command:focus-visible,
@@ -434,6 +433,14 @@
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.history-command svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .history-command {
@@ -918,11 +925,13 @@ h2 {
   padding-bottom: 4px;
 }
 
-/* A note has no kind or value line below its text: it is as tall as its text. */
+/* A note has no kind or value line below its text. A one-line note is as
+   tall as an empty expression row and a folder header, so that typing ", /,
+   or Backspace at the start of a row never changes its height. */
 .expression-item.is-annotation .expression-input-row {
   min-height: 0;
-  padding-top: 6px;
-  padding-bottom: 6px;
+  padding-top: 4px;
+  padding-bottom: 4px;
 }
 
 .expression-item.is-empty-expression .expression-actions {
@@ -1088,6 +1097,7 @@ body.reordering-items .reorder-handle {
 }
 
 .note-source {
+  box-sizing: border-box;
   width: 100%;
   resize: none;
   overflow: hidden;
@@ -1108,6 +1118,8 @@ body.reordering-items .reorder-handle {
 }
 
 .note-rendered {
+  /* The same line box as the source field: 2 px above and below one line. */
+  padding: 2px 0;
   cursor: text;
   border-radius: 3px;
 }
@@ -1124,9 +1136,9 @@ body.reordering-items .reorder-handle {
 /* Annotation text in the Markdown subset (#187): prose, not code. */
 .annotation-text {
   margin: 0;
-  padding: 0 4px 2px 0;
+  padding: 0 4px 0 0;
   color: var(--text);
-  font: 0.875rem/1.45 var(--font-sans);
+  font: 0.875rem/1.5 var(--font-sans);
   overflow-wrap: anywhere;
   display: grid;
   gap: 4px;
@@ -2533,38 +2545,121 @@ span.object-kind {
   line-height: 1.4;
 }
 
-.toolbar-add {
-  width: 30px;
+.add-menu {
+  position: relative;
+}
+
+/* The + adds an expression; the arrow beside it opens the menu. */
+.add-menu-split {
+  display: flex;
+  overflow: hidden;
+  border: 1px solid var(--accent-border);
+  border-radius: 8px;
+}
+
+.add-menu-main,
+.add-menu-toggle {
   height: 30px;
-  display: inline-grid;
+  display: grid;
   place-items: center;
   padding: 0;
   color: var(--accent);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 4px;
+  border: 0;
   cursor: pointer;
 }
 
-/* The folder is drawn around a plus of the size of the Add expression one. */
-.toolbar-add.is-folder {
-  width: 38px;
-}
-
-.toolbar-add svg {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
-}
-
-.toolbar-add:hover:not(:disabled) {
+.add-menu-main {
+  width: 32px;
   background: var(--accent-soft);
-  border-color: var(--accent-border);
 }
 
-.toolbar-add:disabled {
+.add-menu-toggle {
+  width: 22px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  border-left: 1px solid var(--accent-border);
+}
+
+.add-menu-main:hover:not(:disabled),
+.add-menu-toggle:hover,
+.add-menu-toggle[aria-expanded='true'] {
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface));
+}
+
+.add-menu-main:disabled {
   opacity: 0.45;
   cursor: default;
+}
+
+.add-menu-main:focus-visible,
+.add-menu-toggle:focus-visible,
+.add-menu-list button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.add-menu-icon,
+.add-menu-toggle svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+}
+
+.add-menu-icon.is-filled {
+  fill: currentColor;
+  stroke: none;
+}
+
+.add-menu-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  width: 220px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(30 36 51 / 14%);
+}
+
+.add-menu-list button {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  font: 500 0.8125rem var(--font-sans);
+  text-align: left;
+  cursor: pointer;
+}
+
+.add-menu-list button:hover:not(:disabled),
+.add-menu-list button:focus {
+  background: var(--accent-soft);
+}
+
+.add-menu-list button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.add-menu-list .add-menu-icon {
+  color: var(--accent);
+}
+
+.add-menu-label {
+  flex: 1;
+}
+
+.add-menu-list kbd {
+  color: var(--muted);
+  font: 0.6875rem var(--font-mono);
 }
 
 .source-location {

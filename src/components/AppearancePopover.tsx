@@ -304,14 +304,14 @@ export function AppearancePopover({
           <label className="appearance-switch">
             <span>Overwrite appearance</span>
             <input type="checkbox" role="switch" checked={folder.overwrite}
-              aria-describedby="appearance-overwrite-note"
+              aria-describedby={folder.overwrite ? 'appearance-overwrite-note' : undefined}
               onChange={(event) => folder.onOverwriteChange(event.target.checked)} />
           </label>
-          <p id="appearance-overwrite-note" className="appearance-note">
-            {folder.overwrite
-              ? 'Every row of the folder is drawn with these settings; its own come back when this is off.'
-              : 'Off: these settings are kept but the rows keep their own.'}
-          </p>
+          {folder.overwrite && (
+            <p id="appearance-overwrite-note" className="appearance-note">
+              Every row of the folder is drawn with these settings; its own come back when this is off.
+            </p>
+          )}
         </div>
       )}
       {section('Color', <>

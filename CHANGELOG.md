@@ -55,6 +55,11 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   ground, the rows of one folder are joined in one box under the folder's
   name, and notes outside folders lie on the ground. The choice is kept per
   browser, and a temporary shared scene keeps the default.
+- The expression toolbar has one add control: **+** adds an expression, and
+  the arrow beside it opens a menu that adds an expression, a comment (a
+  note), or a folder, each shown with the key that does the same in a row
+  (Enter, `"`, `/`). The menu is keyboard operable. Undo and redo are drawn
+  as arrows.
 
 - Notes: typing `"` first in an expression row makes the row a note, an
   annotation shown as text and never evaluated, drawn, or referenced. The
@@ -93,11 +98,13 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   documents open with their values shown. Release 0.2.0 cannot open a version
   8 document (#191).
 - Expression folders: **New folder** in the expression toolbar creates a
-  folder at the end, and typing `/` first in an expression row makes a folder
-  of that row, where the row is: what follows the slash is its name, and the
-  row, emptied, is its first row. Enter after the name of a folder opens
-  a new first row in it, or goes to its first row when that one is empty,
-  as after `/`; a collapsed folder opens. Either way the folder is
+  folder at the end, and typing `/` first in an expression row turns that row
+  into a folder, where the row was: what follows the slash is its name, and
+  the folder holds no row until Enter opens one. Backspace at the start of
+  the name of an empty folder turns it back into a row written with the name,
+  as Backspace does for a note. Enter after the name of a folder opens
+  a new first row in it, or goes to its first row when that one is empty; a
+  collapsed folder opens. Either way the folder is
   named in place; its name may hold **bold**, *italic*, `code`, and
   mathematics between `$…$`, rendered like a note but without links, and is
   edited as written. A folder is renamed by clicking its name (or F2),

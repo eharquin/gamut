@@ -109,6 +109,12 @@ const folderToggle = (name: string) => screen.getByRole('button', { name: new Re
 const type = (field: HTMLElement, value: string) => fireEvent.change(field, { target: { value } })
 const key = (field: HTMLElement, name: string, options: Record<string, unknown> = {}) => fireEvent.keyDown(field, { key: name, ...options })
 
+/** Opens the add menu of the toolbar and chooses one of its items. */
+function openAddMenuItem(name: string) {
+  fireEvent.click(screen.getByRole('button', { name: 'More to add' }))
+  fireEvent.click(screen.getByRole('menuitem', { name }))
+}
+
 describe('interface scenarios', () => {
   it('writes a whole document from the keyboard with " for notes and / for folders', async () => {
     open(doc(['']))
@@ -174,8 +180,8 @@ describe('interface scenarios', () => {
     // A slash in a row inside Left creates a folder at the margin, just after Left.
     type(editor('B = 2'), '/Inner')
     key(screen.getByRole('textbox', { name: 'Name of folder Inner' }), 'Escape')
-    expect(panel()).toEqual(['[Left]', '  A = 1', '[Inner]', '  ', '[Right]', '  C = 3', 'D = 4'])
-    expect(folderToggle('Inner')).toHaveAccessibleName('Folder Inner, level 1, 1 row')
+    expect(panel()).toEqual(['[Left]', '  A = 1', '[Inner]', '[Right]', '  C = 3', 'D = 4'])
+    expect(folderToggle('Inner')).toHaveAccessibleName('Folder Inner, level 1, 0 rows')
     undo()
     expect(panel()).toEqual(['[Left]', '  A = 1', '  B = 2', '[Right]', '  C = 3', 'D = 4'])
 
@@ -321,17 +327,17 @@ describe('interface scenarios', () => {
     expect(panel()).toEqual(['A = 1', '[Full]', '  C = A + B', '  B = 2'])
 
     // A new empty folder: the row is created where the folder shows.
-    fireEvent.click(screen.getByRole('button', { name: 'New folder' }))
+    openAddMenuItem('New folder')
     const name = screen.getByRole('textbox', { name: 'Name of folder New folder' })
     type(name, 'Empty')
     key(name, 'Enter')
     expect(panel()).toEqual(['A = 1', '[Full]', '  C = A + B', '  B = 2', '[Empty]', '  '])
     await waitFor(() => expect(editor('')).toHaveFocus())
 
-    // After a slash, the folder's first row is already empty: it takes the focus, no second row is made.
+    // After a slash the row is the folder, which holds nothing: Enter opens its first row.
     type(editor('A = 1'), '/Third')
+    expect(panel().slice(0, 2)).toEqual(['[Third]', '[Full]'])
     key(screen.getByRole('textbox', { name: 'Name of folder Third' }), 'Enter')
-    expect(panel().filter((line) => line === '  ')).toHaveLength(2)
     expect(panel().slice(0, 2)).toEqual(['[Third]', '  '])
   })
 
@@ -359,6 +365,38 @@ describe('interface scenarios', () => {
     cleanup()
     render(<App />)
     expect(panelElement()).toHaveClass('is-cards')
+  it('adds an expression, a comment, or a folder from the add menu, by pointer and keyboard', async () => {
+    open(doc(['A = 1']))
+    const toggle = screen.getByRole('button', { name: 'More to add' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    // + adds an expression directly.
+    fireEvent.click(screen.getByRole('button', { name: 'Add expression' }))
+    expect(panel()).toEqual(['A = 1', ''])
+    // The menu adds a comment, which is a note to write in.
+    openAddMenuItem('Add comment')
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(panel()).toEqual(['A = 1', '', '"'])
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Annotation 3' })).toHaveFocus())
+    // Each item shows the key that does the same in a row.
+    fireEvent.click(toggle)
+    const menu = screen.getByRole('menu', { name: 'Add' })
+    expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['ExpressionEnter', 'Comment"', 'Folder/'])
+    // The first item takes focus; the arrows move through the items, Escape closes and returns to the arrow.
+    expect(within(menu).getByRole('menuitem', { name: 'Add expression' })).toHaveFocus()
+    key(menu, 'ArrowUp')
+    expect(within(menu).getByRole('menuitem', { name: 'New folder' })).toHaveFocus()
+    key(menu, 'Escape')
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    expect(toggle).toHaveFocus()
+    // ArrowDown on the arrow opens the menu too.
+    key(toggle, 'ArrowDown')
+    fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'New folder' }))
+    expect(screen.getByRole('textbox', { name: 'Name of folder New folder' })).toHaveFocus()
+    // A press outside closes an open menu.
+    key(screen.getByRole('textbox', { name: 'Name of folder New folder' }), 'Escape')
+    fireEvent.click(toggle)
+    fireEvent.pointerDown(document.body)
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   })
 
   it('keeps a long session of folder and note edits through a reload', async () => {
@@ -402,7 +440,7 @@ describe('interface scenarios', () => {
 
   it('moves an empty folder by its handle, with the keyboard and by dragging', () => {
     open(doc(['A = 1', 'B = 2', 'C = 3'], [{ path: ['Box'], collapsed: false }], { 1: ['Box'] }))
-    fireEvent.click(screen.getByRole('button', { name: 'New folder' }))
+    openAddMenuItem('New folder')
     key(screen.getByRole('textbox', { name: 'Name of folder New folder' }), 'Escape')
     expect(panel()).toEqual(['A = 1', '[Box]', '  B = 2', 'C = 3', '[New folder]'])
     // By keyboard, up past a row and past a folder.

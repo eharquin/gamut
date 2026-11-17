@@ -180,7 +180,7 @@ export function generalReference(examples: Readonly<{ regressive: ReferenceExamp
  */
 export const COMMENT_REFERENCE: readonly ReferenceTopic[] = [
   topic('Note', '" text', 'typing " first in a row makes it a note, shown as text and never evaluated; Backspace at its start makes it an expression again'),
-  topic('Folder', '/ name', 'typing / first in a row makes a folder of it, named by what follows'),
+  topic('Folder', '/ name', 'typing / first in a row turns it into a folder named by what follows; Backspace at the start of the name turns it back'),
   topic('Lines', 'Enter', 'a new line in the note; Ctrl or Cmd with Enter adds the next row, Escape shows the rendered note'),
   topic('Emphasis', '**bold**, *italic*', 'a*b*c, 2*3 and x_1 stay literal'),
   topic('Code', '`code`'),

@@ -27,6 +27,7 @@ import { EmbedControls, EmbeddedSceneUnavailable } from './components/EmbedContr
 import { isFramed, resolveEmbedMode, type EmbedOptions } from './application/embedMode'
 import type { ReferenceExample } from './language/expressionReference'
 import type { PanelStyle } from './components/SettingsMenu'
+import { AddMenu } from './components/AddMenu'
 import { ClearExpressionsButton } from './components/ClearExpressionsButton'
 import { ExpressionRow, type ExpressionRowActions, type ExpressionRowRefs } from './components/ExpressionRow'
 import { isSourceEditor, type SourceEditor } from './components/sourceEditor'
@@ -1803,7 +1804,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
   const insertExpression = (
     anchorId?: string,
     placement: 'before' | 'after' = 'after',
-    content: Readonly<{ source: string; positionSource?: string; folder?: FolderPath }> = { source: '' },
+    content: Readonly<{ source: string; positionSource?: string; folder?: FolderPath; kind?: 'annotation' }> = { source: '' },
   ) => {
     if (expressionDoc.items.length >= MAX_EXPRESSION_ITEMS) return
     let id = `item-${nextId.current++}`
@@ -1850,6 +1851,28 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
     const before = documentFolders(expressionDoc).find((folder) => samePath(folder.path, path))?.before
     const anchor = before !== undefined && expressionDoc.items.some((item) => item.id === before) ? before : undefined
     insertExpression(anchor, anchor === undefined ? 'after' : 'before', { source: '', folder: renamed })
+  }
+
+  /**
+   * Turns an empty folder back into a row, where the folder shows, written
+   * `source`, as Backspace turns a note back into an expression: one step.
+   */
+  const folderToRow = (path: FolderPath, source: string) => {
+    if (expressionDoc.items.length >= MAX_EXPRESSION_ITEMS) return
+    const before = documentFolders(expressionDoc).find((folder) => samePath(folder.path, path))?.before
+    const anchor = before !== undefined && expressionDoc.items.some((item) => item.id === before) ? before : undefined
+    let id = `item-${nextId.current++}`
+    while (expressionDoc.items.some((item) => item.id === id)) id = `item-${nextId.current++}`
+    dispatchHistory({ type: 'begin-transaction' })
+    executeCommand({ kind: 'insert-item', item: { id, source }, anchorId: anchor, placement: anchor === undefined ? 'after' : 'before' })
+    executeCommand({ kind: 'delete-folder', path })
+    dispatchHistory({ type: 'commit-transaction' })
+    // The caret goes before the text, where the slash was.
+    requestAnimationFrame(() => {
+      const editor = inputRefs.current.get(id)
+      editor?.focus()
+      editor?.setSelectionRange(0, 0)
+    })
   }
 
   /** Adds a reference example as a new expression at the end of the list (#259). */
@@ -2805,34 +2828,13 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
           inert={panelHidden}
         >
           <div className="expression-toolbar">
-            <button
-              ref={addButtonRef}
-              type="button"
-              className="toolbar-add"
-              onClick={() => insertExpression()}
-              disabled={
-                expressionDoc.items.length >= MAX_EXPRESSION_ITEMS
-              }
-              aria-label="Add expression"
-              title="Add expression"
-            >
-              <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-                <path d="M9 3.5v11M3.5 9h11" strokeLinecap="round" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              className="toolbar-add is-folder"
-              onClick={folders.createFolder}
-              aria-label="New folder"
-              title="New folder"
-            >
-              {/* A folder with a plus inside it. */}
-              <svg width="28" height="25" viewBox="0 0 28 25" aria-hidden="true">
-                <path d="M1.5 23V2.5h8l2.2 3h14.8V23z" strokeLinejoin="round" />
-                <path d="M14 8.5v11M8.5 14h11" strokeLinecap="round" />
-              </svg>
-            </button>
+            <AddMenu
+              addButtonRef={addButtonRef}
+              full={expressionDoc.items.length >= MAX_EXPRESSION_ITEMS}
+              onAddExpression={() => insertExpression()}
+              onAddComment={() => insertExpression(undefined, 'after', { source: '', kind: 'annotation' })}
+              onAddFolder={folders.createFolder}
+            />
             <div className="expression-history-controls" role="group" aria-label="Expression history">
               <button
                 type="button"
@@ -2842,7 +2844,10 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
                 title="Undo (Ctrl/Cmd+Z)"
                 onClick={() => dispatchHistoryWithFocus('undo')}
               >
-                <span aria-hidden="true">↶</span>
+                <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+                  <path d="M6.5 3.5L3 7l3.5 3.5" />
+                  <path d="M3.5 7h7.25a4.25 4.25 0 0 1 0 8.5H8" />
+                </svg>
               </button>
               <button
                 type="button"
@@ -2852,7 +2857,10 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
                 title="Redo (Ctrl/Cmd+Shift+Z)"
                 onClick={() => dispatchHistoryWithFocus('redo')}
               >
-                <span aria-hidden="true">↷</span>
+                <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+                  <path d="M11.5 3.5L15 7l-3.5 3.5" />
+                  <path d="M14.5 7H7.25a4.25 4.25 0 0 0 0 8.5H10" />
+                </svg>
               </button>
             </div>
             {noViz && <>
@@ -2891,7 +2899,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
           </div>
 
           <div className="expression-list">
-            <ExpressionTree document={expressionDoc} folders={folders} folderActions={renderFolderActions} onEnterFolder={enterFolder} renderItem={(itemId) => {
+            <ExpressionTree document={expressionDoc} folders={folders} folderActions={renderFolderActions} onEnterFolder={enterFolder} onFolderToRow={folderToRow} renderItem={(itemId) => {
               const index = evaluatedItems.findIndex((candidate) => candidate.item.id === itemId)
               const entry = evaluatedItems[index]
               if (!entry) return null

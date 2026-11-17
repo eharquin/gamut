@@ -31,6 +31,12 @@ type FolderRowProps = Readonly<{
    * leave focus on the folder itself.
    */
   onNameEntered?(name: string): boolean
+  /**
+   * Backspace before the first character of the name field: turns the folder
+   * back into a row written `name`, as Backspace does for a note, and returns
+   * true; returns false, or is absent, when the folder cannot become a row.
+   */
+  onNameBackspace?(name: string): boolean
   /** Absent for a read-only folder. */
   onDelete?(): void
   /** The handle that moves the folder by pointer and keyboard; absent when folders cannot be moved. */
@@ -66,7 +72,7 @@ let focusOnMount: string | null = null
  */
 export function FolderRow({
   path, name, level, expanded, entryCount, entryNoun, renaming, onRenamingChange,
-  onToggle, onRename, onNameEntered, onDelete, handle, display, className, rowRef, children,
+  onToggle, onRename, onNameEntered, onNameBackspace, onDelete, handle, display, className, rowRef, children,
 }: FolderRowProps) {
   const [draft, setDraft] = useState(name)
   const [error, setError] = useState<string | null>(null)
@@ -174,6 +180,14 @@ export function FolderRow({
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter') { event.preventDefault(); finish(true, true) }
+              else if (event.key === 'Backspace' && onNameBackspace &&
+                event.currentTarget.selectionStart === 0 && event.currentTarget.selectionEnd === 0) {
+                if (!onNameBackspace(draft)) return
+                event.preventDefault()
+                ended.current = true
+                setError(null)
+                onRenamingChange(false)
+              }
               else if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); finish(false) }
             }}
             onBlur={() => { if (!error) finish(true) }}

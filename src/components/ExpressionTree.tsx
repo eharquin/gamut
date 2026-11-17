@@ -17,6 +17,8 @@ type ExpressionTreeProps = Readonly<{
    * folder had `path` before the name was validated and has `renamed` now.
    */
   onEnterFolder?(path: FolderPath, renamed: FolderPath): void
+  /** Backspace at the start of the name of an empty folder: the folder becomes a row written `source`. */
+  onFolderToRow?(path: FolderPath, source: string): void
   /** The actions of a folder before its remove button, such as its eye and its appearance. */
   folderActions?(path: FolderPath, plainName: string): ReactNode
 }>
@@ -41,7 +43,7 @@ const indent = (depth: number): CSSProperties | undefined =>
  * flat, so that a row moved between folders keeps its element and its focus;
  * the rows of a collapsed folder are hidden, not removed.
  */
-export function ExpressionTree({ document, folders, renderItem, folderActions, onEnterFolder }: ExpressionTreeProps) {
+export function ExpressionTree({ document, folders, renderItem, folderActions, onEnterFolder, onFolderToRow }: ExpressionTreeProps) {
   const target = folders.dropTarget
   const rows = treeRows(document)
   const kindOf = (itemId: string) => document.items.find((item) => item.id === itemId)?.kind === 'annotation' ? 'note' : 'expression'
@@ -101,6 +103,10 @@ export function ExpressionTree({ document, folders, renderItem, folderActions, o
             onEnterFolder(row.path, [...row.path.slice(0, -1), name])
             return true
           }}
+          onNameBackspace={onFolderToRow && row.entryCount === 0 && row.childCount === 0 ? (name) => {
+            onFolderToRow(row.path, name)
+            return true
+          } : undefined}
           onDelete={() => folders.deleteFolder(row.path)}
           handle={{
             onPointerDown: (event) => folders.beginFolderReorder(event, row.path),
