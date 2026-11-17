@@ -1,57 +1,48 @@
 import { describe, expect, it } from 'vitest'
 import { evaluateDocument } from '../application/evaluateDocument'
-import { expressionDocument, showcaseItems, vga2FoundationExampleDocument } from '../document/expressionDocument'
-import { executeDocumentCommand } from '../document/documentCommands'
-import { showcaseMetadata } from './algebraDefinition'
-import { createBuiltinAlgebraRegistry } from './builtinAlgebras'
+import { expressionDocument } from '../document/expressionDocument'
+import { fromCanonicalDocument } from '../document/canonicalDocument'
+import { readExamples } from '../examples'
+import { createBuiltinAlgebraRegistry, DEFAULT_ALGEBRA_ID } from './builtinAlgebras'
 import { OPAQUE_INTERPRETATION } from '../geometry/interpretation'
+
+/** The triangle of the PGA(2) showcase, as first shipped. */
+const TRIANGLE = [
+  'A = point(-2, 1)', 'B = point(2, 2)', 'C = point(1, -2)', 'L = A & B', 'M = A & C',
+  'dAB = norm(A & B)', 'dBC = norm(B & C)', 'alpha = atan2((L ^ M).e12, L | M)', 'deg = alpha * 180 / pi',
+  'hC = (L ^ C).e012 / L.norm', 'area = (A & B & C) / 2', 'N = line(1, 0, -1)', 'beta = atan2((L ^ N).e12, L | N)',
+  'R = sqrt(M * L / (M.norm * L.norm))', 't = 0.5', 'S = exp(t * log(R)) >>> B',
+]
+const triangleItems = (sources: readonly string[]) => sources.map((source, index) => ({ id: `item-${index + 1}`, source }))
 
 describe('definition showcases', () => {
   const registry = createBuiltinAlgebraRegistry()
 
   for (const definition of registry.definitions()) {
-    it(`${definition.badge}: every showcase row evaluates and the spatial ones draw`, () => {
-      const validation = definition.validateParameters({})
-      if (validation.status !== 'valid') throw new Error('invalid default parameters')
-      const selected = executeDocumentCommand(expressionDocument([]), {
-        kind: 'select-algebra',
-        algebra: {
-          algebraId: definition.algebraId,
-          definitionVersion: definition.definitionVersion,
-          conventionVersion: definition.conventionVersions[0],
-          parameters: validation.parameters,
-        },
-        interpretation: { interpretationId: definition.standardInterpretationId, interpretationVersion: 1 },
-        visualizerId: definition.standardVisualizerId,
-        ...showcaseMetadata(definition),
-      })
-      const document = { ...selected.document, items: showcaseItems(definition.showcase) }
+    it(`${definition.badge}: its showcase example evaluates every row and draws`, () => {
+      const example = readExamples().examples.find((candidate) => candidate.id === definition.showcaseExampleId)!
+      const document = fromCanonicalDocument(example.document).document
       const resolution = registry.resolve(document.algebra)
       const interpretation = registry.resolveInterpretation(document.interpretation)
       if (resolution.status !== 'resolved' || interpretation.status !== 'resolved') throw new Error('unresolved')
       const evaluated = evaluateDocument(document, { engine: resolution.engine, interpretation: interpretation.interpretation })
-      const invalid = evaluated.filter((item) => item.evaluation?.status !== 'valid')
+      const invalid = evaluated.filter((item) => item.item.kind !== 'annotation' && item.evaluation?.status !== 'valid')
       expect(invalid.map((item) => item.item.source)).toEqual([])
       const drawn = evaluated.filter((item) => item.evaluation?.status === 'valid' && item.evaluation.valueType === 'single' && item.evaluation.primitive)
       expect(drawn.length).toBeGreaterThanOrEqual(2)
     })
   }
 
-  it('titles each showcase, and falls back to a neutral title naming the algebra', () => {
-    const titles = Object.fromEntries(registry.definitions().map((definition) =>
-      [definition.algebraId, showcaseMetadata(definition)]))
-    const firstRun = vga2FoundationExampleDocument()
-    expect(titles['org.multivector.vga']).toEqual({ title: firstRun.title, description: firstRun.description })
-    expect(titles['org.multivector.pga'].title).toBe('PGA 2D Triangle Example')
-    expect(showcaseMetadata({ badge: 'PGA · 2D' })).toEqual({ title: 'PGA · 2D example', description: '' })
+  it('makes the default algebra an explicit, registered choice', () => {
+    expect(registry.definitions().map((definition) => definition.algebraId)).toContain(DEFAULT_ALGEBRA_ID)
   })
 
-  it('PGA showcase classifies its rows as the documented kinds', () => {
-    const definition = registry.definitions().find((candidate) => candidate.algebraId === 'org.multivector.pga')!
+  // The triangle formulas, kept here as written, check the PGA(2) engine whatever the shipped example becomes.
+  it('PGA triangle classifies its rows as the documented kinds', () => {
     const resolution = registry.resolve({ algebraId: 'org.multivector.pga', definitionVersion: 1, conventionVersion: 1, parameters: {} })
     const interpretation = registry.resolveInterpretation({ interpretationId: 'org.multivector.pga-2d', interpretationVersion: 1 })
     if (resolution.status !== 'resolved' || interpretation.status !== 'resolved') throw new Error('unresolved')
-    const document = { ...expressionDocument(showcaseItems(definition.showcase)), algebra: { algebraId: 'org.multivector.pga', definitionVersion: 1, conventionVersion: 1, parameters: { dimension: 2 } } }
+    const document = { ...expressionDocument(triangleItems(TRIANGLE)), algebra: { algebraId: 'org.multivector.pga', definitionVersion: 1, conventionVersion: 1, parameters: { dimension: 2 } } }
     const kinds = evaluateDocument(document, { engine: resolution.engine, interpretation: interpretation.interpretation })
       .map((item) => item.evaluation?.status === 'valid' && item.evaluation.valueType === 'single'
         ? interpretation.interpretation.describe(item.evaluation.entity) : '?')
@@ -61,12 +52,11 @@ describe('definition showcases', () => {
     ])
   })
 
-  it('PGA showcase reads the documented distances, angles, height, and area', () => {
-    const definition = registry.definitions().find((candidate) => candidate.algebraId === 'org.multivector.pga')!
+  it('PGA triangle reads the documented distances, angles, height, and area', () => {
     const resolution = registry.resolve({ algebraId: 'org.multivector.pga', definitionVersion: 1, conventionVersion: 1, parameters: {} })
     const interpretation = registry.resolveInterpretation({ interpretationId: 'org.multivector.pga-2d', interpretationVersion: 1 })
     if (resolution.status !== 'resolved' || interpretation.status !== 'resolved') throw new Error('unresolved')
-    const document = { ...expressionDocument(showcaseItems(definition.showcase)), algebra: { algebraId: 'org.multivector.pga', definitionVersion: 1, conventionVersion: 1, parameters: { dimension: 2 } } }
+    const document = { ...expressionDocument(triangleItems(TRIANGLE)), algebra: { algebraId: 'org.multivector.pga', definitionVersion: 1, conventionVersion: 1, parameters: { dimension: 2 } } }
     const scalars = new Map(evaluateDocument(document, { engine: resolution.engine, interpretation: interpretation.interpretation })
       .flatMap((item) => item.evaluation?.status === 'valid' && item.evaluation.valueType === 'single'
         ? [[item.item.source.split(' = ')[0], item.evaluation.value.coefficients[0]] as const] : []))
@@ -83,14 +73,13 @@ describe('definition showcases', () => {
     expect(scalars.get('beta')).toBeCloseTo(Math.atan2(-4, -1), 12)
   })
 
-  it('PGA showcase turns B about A onto the side AC through exp(t log R)', () => {
-    const definition = registry.definitions().find((candidate) => candidate.algebraId === 'org.multivector.pga')!
+  it('PGA triangle turns B about A onto the side AC through exp(t log R)', () => {
     const resolution = registry.resolve({ algebraId: 'org.multivector.pga', definitionVersion: 1, conventionVersion: 1, parameters: {} })
     if (resolution.status !== 'resolved') throw new Error('unresolved')
     const engine = resolution.engine
     const at = (t: string) => {
-      const rows = definition.showcase.map((row) => (row.source.startsWith('t = ') ? { source: `t = ${t}` } : row))
-      const document = { ...expressionDocument(showcaseItems(rows)), algebra: { algebraId: 'org.multivector.pga', definitionVersion: 1, conventionVersion: 1, parameters: { dimension: 2 } } }
+      const rows = TRIANGLE.map((source) => (source.startsWith('t = ') ? `t = ${t}` : source))
+      const document = { ...expressionDocument(triangleItems(rows)), algebra: { algebraId: 'org.multivector.pga', definitionVersion: 1, conventionVersion: 1, parameters: { dimension: 2 } } }
       const values = new Map(evaluateDocument(document, { engine, interpretation: OPAQUE_INTERPRETATION })
         .flatMap((item) => item.evaluation?.status === 'valid' && item.evaluation.valueType === 'single'
           ? [[item.item.source.split(' = ')[0], item.evaluation.value] as const] : []))

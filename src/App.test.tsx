@@ -3171,13 +3171,15 @@ describe('PGA 2D foundation workflow', () => {
     fireEvent.click(within(screen.getByRole('menu')).getAllByRole('menuitemradio')[1])
     expect(screen.getByRole('button', { name: 'PGA · 2D. Change algebra' })).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    // Every showcase row evaluates; the tests below start from a single blank row.
+    // Every showcase row evaluates; the tests below start from a single new
+    // row, without the appearance the showcase example gives its rows.
     expect(screen.queryByText(/^(LANG|ALG)_/)).not.toBeInTheDocument()
-    for (const textbox of screen.getAllByRole('textbox', { name: /^Expression \d+$/ }).slice(1)) {
+    fireEvent.click(screen.getByRole('button', { name: 'Add expression' }))
+    for (const textbox of screen.getAllByRole('textbox', { name: /^(Expression|Annotation) \d+$/ }).slice(0, -1)) {
       fireEvent.change(textbox, { target: { value: '' } })
       fireEvent.keyDown(textbox, { key: 'Backspace' })
     }
-    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: '' } })
+    expect(screen.getAllByRole('textbox', { name: /^(Expression|Annotation) \d+$/ })).toHaveLength(1)
   }
 
   it('reads position and head on a list of ideal points without crashing', () => {

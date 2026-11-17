@@ -24,18 +24,6 @@ export type AlgebraReference = Readonly<{
   parameters: AlgebraParameters
 }>
 
-/**
- * One row of the definition's showcase document: the expressions loaded when
- * the algebra is selected, so a first session and an algebra switch both
- * land on a working example of that algebra's workflow.
- */
-export type ShowcaseItem = Readonly<{
-  source: string
-  positionSource?: string
-  /** A looping slider control on a scalar declaration. */
-  slider?: Readonly<{ minimumSource: string; maximumSource: string; stepSource: string; durationSeconds: number }>
-}>
-
 export type ParameterValidation =
   | Readonly<{ status: 'valid'; parameters: AlgebraParameters }>
   | Readonly<{ status: 'invalid'; message: string }>
@@ -58,7 +46,12 @@ export type AlgebraDefinition = Readonly<{
   info(parameters: AlgebraParameters): AlgebraInfo
   standardInterpretationId: string
   standardVisualizerId: string
-  showcase: readonly ShowcaseItem[]
+  /**
+   * The identifier of the example that shows this algebra (#217): a first run
+   * in the default algebra and a switch to this one both open it, as listed
+   * in Examples.
+   */
+  showcaseExampleId: string
   /** The expression reference shown for documents of this algebra: shared sections plus its own syntax. */
   /** The general expressions, shared by every algebra; built with `generalReference`. */
   generalReference: readonly ReferenceSection[]
@@ -69,22 +62,4 @@ export type AlgebraDefinition = Readonly<{
    * algebra with how it is written and one short line, then normalization.
    */
   algebraReference: readonly ReferenceTopic[]
-  /** Title of the showcase document; `showcaseMetadata` supplies a neutral one when absent. */
-  showcaseTitle?: string
-  /** Description of the showcase document. */
-  showcaseDescription?: string
 }>
-
-/**
- * The title and description a document takes when an algebra switch loads
- * this definition's showcase, so neither the title nor the exported file name
- * keeps describing the previous algebra's example.
- */
-export function showcaseMetadata(
-  definition: Pick<AlgebraDefinition, 'badge' | 'showcaseTitle' | 'showcaseDescription'>,
-): Readonly<{ title: string; description: string }> {
-  return {
-    title: definition.showcaseTitle ?? `${definition.badge} example`,
-    description: definition.showcaseDescription ?? '',
-  }
-}

@@ -136,6 +136,13 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Library
 
+- The first run and the algebra switch open the algebra's showcase example,
+  exactly as listed in **Examples**: each algebra definition names its
+  showcase by identifier, the default algebra is an explicit choice, and the
+  showcase rows that the definitions and the first-run document duplicated
+  are gone. A switch now also takes the colours, labels, and folders of the
+  example (#217).
+
 - The library is a gallery: each graph of **My library** and each example is
   a card with a drawing of its scene (points, vectors, lines, areas, and
   connected point lists in their colours, framed on the objects), its name,

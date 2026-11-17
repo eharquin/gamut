@@ -6,6 +6,12 @@ import { createAlgebraRegistry, type AlgebraRegistry } from './registry'
 import { PGA_DEFINITION } from './pgaDefinition'
 import { VGA_DEFINITION } from './vgaDefinition'
 
+/**
+ * The algebra of a first run (#217): an explicit choice, not a consequence of
+ * the first-run document, which is this algebra's showcase example.
+ */
+export const DEFAULT_ALGEBRA_ID = VGA_DEFINITION.algebraId
+
 /** The registry of definitions shipped with this runtime. */
 export function createBuiltinAlgebraRegistry(): AlgebraRegistry {
   const registry = createAlgebraRegistry()

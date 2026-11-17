@@ -20,9 +20,9 @@ import type { FolderPath } from '../document/folderModel'
  * STORE-016): the Examples tree is read-only, and **Add to my library** keeps
  * the folder path.
  *
- * The first two are the algebra showcases. Until the showcase becomes an
- * example (#217), `examples.test.ts` keeps them equal to the first-run
- * document and to the definitions' showcase rows.
+ * The first two are the algebra showcases: each algebra definition names
+ * its own by identifier (`showcaseExampleId`), which a first run and an
+ * algebra switch open (#217).
  */
 export type ShippedExample = Readonly<{ id: string; source: string; folder?: FolderPath }>
 
@@ -88,4 +88,9 @@ export function readExamples(sources: readonly ShippedExample[] = SHIPPED_EXAMPL
   }
   if (sources === SHIPPED_EXAMPLES) shipped = read
   return read
+}
+
+/** The example an algebra definition names as its showcase (#217), or null when it is not shipped. */
+export function showcaseExample(definition: Readonly<{ showcaseExampleId: string }>): LibraryExample | null {
+  return readExamples().examples.find((example) => example.id === definition.showcaseExampleId) ?? null
 }

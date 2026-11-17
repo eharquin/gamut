@@ -10,32 +10,9 @@ import {
   updateExpressionAppearance,
   updateExpressionPosition,
   updateExpressionNormalization,
-  vga2FoundationExampleDocument,
 } from './expressionDocument'
 
 describe('expression document', () => {
-  it('provides the documented VGA 2D graph for a new session', () => {
-    const document = vga2FoundationExampleDocument()
-
-    expect(document.id).toBe('vga2-foundation-example')
-    expect(document.items).toEqual([
-      { id: 'item-1', source: 'V1 = vector(0.66, 3.042)' },
-      {
-        id: 'item-2', source: 'a = 0',
-        control: {
-          mode: 'slider', minimumSource: '0', maximumSource: 'tau',
-          stepSource: '0.01',
-          animation: {
-            mode: 'loop', direction: 'forward', durationSeconds: 2,
-          },
-        },
-      },
-      { id: 'item-3', source: 'R = exp(0.5*a*e12)' },
-      { id: 'item-4', source: 'V2 = R>>>V1' },
-      { id: 'item-5', source: 'B = V1 ^ V2' },
-    ])
-  })
-
   it('inserts an expression before a stable sibling identity', () => {
     const document = expressionDocument([
       { id: 'item-1', source: '1' },
