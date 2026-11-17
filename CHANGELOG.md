@@ -136,6 +136,11 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Library
 
+- The library is a gallery: each graph of **My library** and each example is
+  a card with a drawing of its scene (points, vectors, lines, areas, and
+  connected point lists in their colours, framed on the objects), its name,
+  and its actions; the cards of a folder sit under its header, two per row in
+  the docked panel.
 - **Examples** has eight more scenes after the PGA(2) samples of ganja.js,
   each opening with a note: VGA(2) *Vectors and products* and *Reflections
   and rotations*; PGA(2) *Points and lines*, *Distances and angles*,

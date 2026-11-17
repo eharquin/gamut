@@ -93,7 +93,8 @@ describe('scene sharing in the application', () => {
   it('saves a temporary session into the library as a local copy (#212)', async () => {
     await openSharedScene()
     expect(screen.getByRole('textbox', { name: 'Open graph name' })).toHaveValue('Shared scene (temporary)')
-    expect(document.title).toBe('Shared scene (temporary) · GAMUT')
+    // The page title is set by an effect after the scene opens.
+    await waitFor(() => expect(document.title).toBe('Shared scene (temporary) · GAMUT'))
     fireEvent.click(screen.getByRole('button', { name: 'Save (unsaved changes)' }))
     const menu = screen.getByRole('region', { name: 'Library' })
     expect(within(menu).getByRole('textbox', { name: 'Graph name' })).toHaveValue('A shared scene')
