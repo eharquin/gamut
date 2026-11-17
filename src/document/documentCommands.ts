@@ -8,7 +8,7 @@ import {
   mergeAppearance,
 } from './expressionDocument'
 import { directScalarEdit, formatScalarSource } from '../language/directScalarEdit'
-import { applyFolderMove, applyItemMove, createFolder, deleteFolder, itemFolder, renameFolder, updateFolderAppearance } from './expressionFolders'
+import { applyFolderMove, applyItemMove, createFolder, deleteFolder, itemFolder, renameFolder, updateFolderAppearance, deleteItem } from './expressionFolders'
 import type { FolderPath } from './folderModel'
 
 export type DocumentCommand =
@@ -18,7 +18,7 @@ export type DocumentCommand =
    * given (the empty path is the top level); without it the item keeps its
    * folder (DOC-013).
    */
-  | Readonly<{ kind: 'move-item'; itemId: string; anchorId?: string; placement?: 'before' | 'after'; folder?: FolderPath }>
+  | Readonly<{ kind: 'move-item'; itemId: string; anchorId?: string; placement?: 'before' | 'after'; folder?: FolderPath; emptiedFolderAbove?: boolean }>
   | Readonly<{ kind: 'create-folder'; path: FolderPath }>
   | Readonly<{ kind: 'rename-folder'; path: FolderPath; name: string }>
   /** Removes a folder and keeps its items and subfolders in its parent. */
@@ -159,6 +159,7 @@ export function executeDocumentCommand(
       folder: command.folder ?? itemFolder(item),
       anchorId: command.anchorId,
       placement: command.placement,
+      emptiedFolderAbove: command.emptiedFolderAbove,
     })
     return edit.status === 'applied' ? edit : invalid(document, edit.reason)
   }
@@ -191,17 +192,7 @@ export function executeDocumentCommand(
   if (index < 0) return invalid(document, `Item “${command.itemId}” does not exist.`)
   const item = document.items[index]
 
-  if (command.kind === 'delete-item') {
-    return {
-      status: 'applied',
-      document: {
-        ...document,
-        items: document.items.filter(({ id }) => id !== command.itemId),
-        appearance: Object.fromEntries(Object.entries(document.appearance)
-          .filter(([id]) => id !== command.itemId)),
-      },
-    }
-  }
+  if (command.kind === 'delete-item') return { status: 'applied', document: deleteItem(document, command.itemId) }
   if (command.kind === 'update-position' && item.kind === 'annotation')
     return { status: 'unsupported', document, reason: 'Annotations do not own position source.' }
   if ((command.kind === 'update-normalization' || command.kind === 'update-control') && item.kind === 'annotation')

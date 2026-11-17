@@ -111,7 +111,11 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   settings; the menu shows a section for each kind of object the folder
   holds, the rows' own menus are replaced by a note, and their own settings
   come back when the switch is off. Labels stay those of each row. Stored in
-  canonical format version 10.
+  canonical format version 10. An empty folder keeps its place among the
+  rows and moves like any other, by its handle or by dragging; a folder
+  emptied by moving or deleting its rows stays where it was, and a row
+  walked down out of a folder shows below it. Stored in canonical format
+  version 11 (`Folder.before`).
   Folders are structural only: values, appearance, and the draw order are
   unchanged, and forward references stay valid. Folders are stored in
   canonical format version 8 (`Item.folder`, the folder names from the root,

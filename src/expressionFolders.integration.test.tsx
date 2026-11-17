@@ -83,7 +83,7 @@ describe('expression folders (DOC-013, A11Y-011)', () => {
     expect(folderButton('Sums')).toHaveAttribute('aria-expanded', 'false')
     expect(visibleSources()).toEqual(['A = 1'])
     expect(undo).toBeDisabled()
-    await waitFor(() => expect(stored().folders).toEqual([{ path: ['Sums'], collapsed: true, overwriteAppearance: false, appearance: null }]))
+    await waitFor(() => expect(stored().folders).toEqual([{ path: ['Sums'], collapsed: true, overwriteAppearance: false, appearance: null, before: null }]))
 
     // Plain arrows skip the hidden rows.
     fireEvent.click(folderButton('Sums'))
@@ -167,11 +167,15 @@ describe('expression folders (DOC-013, A11Y-011)', () => {
     expect(within(editorOf('C = A + B').closest('.expression-item') as HTMLElement).getByText('3')).toBeInTheDocument()
     fireEvent.keyDown(handle('Sums'), { key: 'End', altKey: true })
     expect(visibleSources()).toEqual(['B = 2', 'C = A + B', 'A = 1'])
-    // The folder next to it is not entered: every folder stays at the top level.
+    // The folder next to it is passed, not entered: every folder stays at the top level.
+    fireEvent.keyDown(handle('Sums'), { key: 'ArrowDown', altKey: true })
+    expect(visibleSources()).toEqual(['B = 2', 'C = A + B', 'A = 1'])
+    expect(screen.getByRole('button', { name: /^Folder Other, level 1/ }).compareDocumentPosition(screen.getByRole('button', { name: /^Folder Sums, level 1/ })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     fireEvent.keyDown(handle('Sums'), { key: 'ArrowDown', altKey: true })
     expect(screen.getByText('Folder Sums cannot move down.')).toBeInTheDocument()
     expect(folderButton('Sums')).toHaveAccessibleName('Folder Sums, level 1, 1 row')
     expect(folderButton('Other')).toHaveAccessibleName('Folder Other, level 1, 0 rows')
+    fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
     fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
     expect(visibleSources()).toEqual(['B = 2', 'A = 1', 'C = A + B'])
   })
