@@ -136,6 +136,13 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Library
 
+- **Examples** has eight more scenes after the PGA(2) samples of ganja.js,
+  each opening with a note: VGA(2) *Vectors and products* and *Reflections
+  and rotations*; PGA(2) *Points and lines*, *Distances and angles*,
+  *Projection and rejection*, *Rotors and translators*, *Euler's line*, and
+  *Desargues' theorem*. They are sorted by algebra, then by topic (Basics,
+  Transformations, Constructions) (#270).
+
 - The library is a panel docked on the right, opened and closed by
   **Library**, instead of a popover; the viewport resizes beside it. Below a
   window width of 720 pixels it opens over the viewport and closes on Escape.
