@@ -253,9 +253,16 @@ They are stored in canonical format version 8.
 
 - **DOC-013:** A document may organize its items in named, nestable,
   collapsible expression folders stored in the canonical document. Folders
-  are structural only: they have no value, name binding, or dependency, do
-  not override appearance or position, and do not change evaluation or the
-  canvas draw order, which stays the item order. Removing a folder keeps its
+  have no value, name binding, or dependency, do not change position,
+  evaluation, or the canvas draw order, which stays the item order, and never
+  change the stored appearance of their items. A folder has an eye, which hides every
+  item it holds while their own eyes are kept, and an appearance of its own
+  with an **Overwrite appearance** switch, off by default: while it is on,
+  the items of the folder are drawn with the folder's colour, opacity, and
+  stroke, point, bivector, and ideal-point settings, those of the nearest
+  overwriting folder winning, and their own settings come back when it is
+  off; labels stay those of each item. The folder's menu shows a section for
+  each kind of object it holds. Removing a folder keeps its
   items at the folder's position in its parent. The document format
   allows nested folders, and a document that holds them is displayed and
   edited, but until nesting is designed the interface keeps every folder it

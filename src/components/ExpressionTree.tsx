@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import type { ExpressionDocument } from '../document/expressionDocument'
 import { expressionFolderTree, isFolderCollapsed, itemFolder } from '../document/expressionFolders'
-import { flattenFolderTree, folderKey, isWithin } from '../document/folderModel'
+import { flattenFolderTree, folderKey, isWithin, type FolderPath } from '../document/folderModel'
 import type { ExpressionFolders } from '../hooks/useExpressionFolders'
 import { folderPlainName } from '../presentation/annotationText'
 import { InlineMarkdown } from './AnnotationText'
@@ -12,6 +12,8 @@ type ExpressionTreeProps = Readonly<{
   folders: ExpressionFolders
   /** One expression row. */
   renderItem(itemId: string): ReactNode
+  /** The actions of a folder before its remove button, such as its eye and its appearance. */
+  folderActions?(path: FolderPath, plainName: string): ReactNode
 }>
 
 /** Every row with the collapsed folder state that hides it, in folder order. */
@@ -34,7 +36,7 @@ const indent = (depth: number): CSSProperties | undefined =>
  * flat, so that a row moved between folders keeps its element and its focus;
  * the rows of a collapsed folder are hidden, not removed.
  */
-export function ExpressionTree({ document, folders, renderItem }: ExpressionTreeProps) {
+export function ExpressionTree({ document, folders, renderItem, folderActions }: ExpressionTreeProps) {
   const target = folders.dropTarget
   return treeRows(document).map(({ row, hidden }) => {
     if (row.kind === 'entry') {
@@ -77,6 +79,7 @@ export function ExpressionTree({ document, folders, renderItem }: ExpressionTree
             onKeyDown: (event) => folders.reorderFolderWithKeyboard(event, row.path),
           }}
           className={dropClass}
+          children={folderActions?.(row.path, folderPlainName(row.name))}
           rowRef={(element) => {
             if (element) folders.folderRowRefs.current.set(key, element)
             else folders.folderRowRefs.current.delete(key)

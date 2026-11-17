@@ -104,6 +104,14 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the top level: the interface does not put a folder inside another one. The **×** of a folder, shown with its number of
   rows while the folder's row is hovered or holds focus, removes the folder
   and keeps its rows, which move to the level above. Enter inserts the new row in the same folder.
+  A folder has an eye, which hides all its rows without changing their own
+  eyes, and an appearance menu with an **Overwrite appearance** switch, off
+  by default. While it is on, every row of the folder is drawn with the
+  folder's colour, opacity, and stroke, point, bivector, and ideal-point
+  settings; the menu shows a section for each kind of object the folder
+  holds, the rows' own menus are replaced by a note, and their own settings
+  come back when the switch is off. Labels stay those of each row. Stored in
+  canonical format version 10.
   Folders are structural only: values, appearance, and the draw order are
   unchanged, and forward references stay valid. Folders are stored in
   canonical format version 8 (`Item.folder`, the folder names from the root,

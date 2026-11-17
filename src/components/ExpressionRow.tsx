@@ -88,7 +88,10 @@ type ExpressionRowProps = Readonly<{
   evaluatedItems: readonly EvaluatedDocumentItem[]
   /** The evaluation of the item's stored control, absent when it has none. */
   scalarControlEvaluation: ScalarControlEvaluation | undefined
+  /** The appearance the row is drawn with: its own, or the one a folder overwrites. */
   appearance: ExpressionAppearance | undefined
+  /** The folder whose appearance overwrites that of the row, which then has no menu of its own. */
+  appearanceSetBy?: string
   appearanceSources: ItemAppearanceSources
   engine: AlgebraEngine
   interpretation: AnyInterpretation
@@ -122,6 +125,7 @@ export function ExpressionRow({
   evaluatedItems,
   scalarControlEvaluation,
   appearance,
+  appearanceSetBy,
   appearanceSources,
   engine,
   interpretation,
@@ -312,6 +316,12 @@ export function ExpressionRow({
               // without a canvas: the swatch only shows the color.
               <span className="appearance-swatch is-dormant" aria-hidden="true">
                 <span className="appearance-swatch-fill" style={{ backgroundColor: color }} />
+              </span>
+          ) : valid && appearanceSetBy !== undefined ? (
+              // The folder overwrites the appearance: it is changed in the folder's menu.
+              <span className="appearance-swatch is-dormant" title={`Appearance set by the folder ${appearanceSetBy}`}>
+                <span className="appearance-swatch-fill" style={{ backgroundColor: color }} />
+                <span className="visually-hidden">Appearance set by the folder {appearanceSetBy}</span>
               </span>
           ) : valid ? (
               <button

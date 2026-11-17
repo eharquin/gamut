@@ -3,6 +3,7 @@ import type {
   ExpressionControl,
   ExpressionDocument,
   ExpressionItem,
+  ExpressionAppearance,
   ItemNormalization,
   LabelAnchor,
   LinePrimitiveStyle,
@@ -23,7 +24,7 @@ export const MAX_DOCUMENT_BYTES = 4 * 1024 * 1024
 export const MAX_SOURCE_LENGTH = 65_536
 export const MAX_MIGRATION_STEPS = 32
 export type ThemeMode = 'system' | 'light' | 'dark'
-export const CURRENT_FORMAT_VERSION = 9
+export const CURRENT_FORMAT_VERSION = 10
 export type CanonicalPrimitiveStyles = Readonly<{ points: PointPrimitiveStyle; lines: LinePrimitiveStyle }>
 export type CanonicalAppearance = Readonly<{
   visible: boolean
@@ -48,7 +49,8 @@ export type CanonicalAppearance = Readonly<{
 type Appearance = CanonicalAppearance
 /** `folder` is present only for an item inside a folder (DOC-013, §2.4). */
 type Item = Readonly<{ id: string; kind: 'expression' | 'annotation'; source: string; positionSource: string | null; normalization: ItemNormalization | null; control: ExpressionControl | null; folder?: FolderPath }>
-export type CanonicalFolder = Readonly<{ path: FolderPath; collapsed: boolean }>
+/** A folder with its collapsed state, and its own appearance, which it may overwrite on its rows (§2.4). */
+export type CanonicalFolder = Readonly<{ path: FolderPath; collapsed: boolean; overwriteAppearance: boolean; appearance: Appearance | null }>
 export type CanonicalViewport = Readonly<{ kind: 'none' }> | Readonly<{ kind: 'two-dimensional'; centerX: number; centerY: number; zoom: number }>
 
 export type CanonicalDocument = Readonly<{
@@ -322,6 +324,19 @@ export function migrateDocument(value: unknown): unknown {
       }
       continue
     }
+    if (version === 9) {
+      current = {
+        ...document,
+        formatVersion: 10,
+        // Version 9 folders had no appearance of their own and overwrote nothing.
+        folders: Array.isArray(document.folders)
+          ? document.folders.map((folder: unknown) => folder !== null && typeof folder === 'object' && !Array.isArray(folder)
+            ? { ...folder, overwriteAppearance: false, appearance: null }
+            : folder)
+          : document.folders,
+      }
+      continue
+    }
     fail('DOCUMENT_FORMAT_VERSION', 'Unsupported format version ' + String(version) + '.')
   }
   fail('DOCUMENT_FORMAT_VERSION', 'Migration exceeded the maximum number of steps.')
@@ -479,10 +494,15 @@ function folderList(value: unknown): CanonicalFolder[] {
     fail('LIMIT_FOLDER_COUNT', 'A document may contain at most ' + MAX_EXPRESSION_FOLDERS + ' folders.')
   const folders = value.map((entry, index): CanonicalFolder => {
     const path = 'folders[' + index + ']'
-    const folder = record(entry, path, ['path', 'collapsed'])
+    const folder = record(entry, path, ['path', 'collapsed', 'overwriteAppearance', 'appearance'])
     const parsed = folderPath(folder.path, path + '.path')
     if (parsed.length === 0) fail('DOCUMENT_FOLDER_NAME', path + '.path cannot be empty.')
-    return { path: parsed, collapsed: truth(folder.collapsed, path + '.collapsed') }
+    return {
+      path: parsed,
+      collapsed: truth(folder.collapsed, path + '.collapsed'),
+      overwriteAppearance: truth(folder.overwriteAppearance, path + '.overwriteAppearance'),
+      appearance: folder.appearance === null ? null : appearanceRecord(folder.appearance, path + '.appearance'),
+    }
   })
   const keys = new Set<string>()
   for (const { path } of folders) {
@@ -614,23 +634,19 @@ function canonicalJson(value: unknown): string {
   ).join(',') + '}'
 }
 
-export function toCanonicalDocument(
-  document: ExpressionDocument,
-  theme: ThemeMode,
-  resolvedStyles: Readonly<Record<string, string>> = {},
-  /** Orientation of items that store none, from their kind: a new line starts without it. */
-  resolvedOrientation: Readonly<Record<string, boolean>> = {},
-): CanonicalDocument {
-  const appearance = Object.fromEntries(document.items.map((item) => {
-    const stored = document.appearance[item.id]
-    const orientationVisible = stored?.orientationVisible ?? resolvedOrientation[item.id] ?? true
+/**
+ * A complete appearance record from a sparse one: what is not stored takes
+ * `style` and `orientation` when given, else the defaults of the format.
+ */
+function canonicalAppearance(stored: ExpressionAppearance | undefined, style?: string, orientation?: boolean): Appearance {
+    const orientationVisible = stored?.orientationVisible ?? orientation ?? true
     const points = stored?.primitiveStyles?.points
     const lines = stored?.primitiveStyles?.lines
     const canonical: Appearance = {
       visible: stored?.visible ?? true,
       labelVisible: stored?.labelVisible ?? false,
       label: stored?.label ?? '',
-      style: stored?.style ?? resolvedStyles[item.id] ?? defaultStyleForKind('Object'),
+      style: stored?.style ?? style ?? defaultStyleForKind('Object'),
       borderVisible: stored?.borderVisible ?? false,
       orientationVisible,
       bivectorShape: stored?.bivectorShape ?? 'from-vectors',
@@ -663,8 +679,20 @@ export function toCanonicalDocument(
         },
       },
     }
-    return [item.id, canonical]
-  }))
+  return canonical
+}
+
+export function toCanonicalDocument(
+  document: ExpressionDocument,
+  theme: ThemeMode,
+  resolvedStyles: Readonly<Record<string, string>> = {},
+  /** Orientation of items that store none, from their kind: a new line starts without it. */
+  resolvedOrientation: Readonly<Record<string, boolean>> = {},
+): CanonicalDocument {
+  const appearance = Object.fromEntries(document.items.map((item) => [
+    item.id,
+    canonicalAppearance(document.appearance[item.id], resolvedStyles[item.id], resolvedOrientation[item.id]),
+  ]))
   return validateCanonicalDocument({
     id: document.id, formatVersion: CURRENT_FORMAT_VERSION, languageVersion: document.languageVersion,
     algebra: document.algebra,
@@ -675,7 +703,12 @@ export function toCanonicalDocument(
       ...(item.folder && item.folder.length > 0 ? { folder: item.folder } : {}),
     })),
     appearance,
-    folders: document.folders ?? [],
+    folders: (document.folders ?? []).map((folder) => ({
+      path: folder.path,
+      collapsed: folder.collapsed,
+      overwriteAppearance: folder.overwriteAppearance ?? false,
+      appearance: folder.appearance ? canonicalAppearance(folder.appearance) : null,
+    })),
     view: {
       ...document.view,
       display: { ...document.view.display, theme },
@@ -721,7 +754,11 @@ export function fromCanonicalDocument(
       view: { ...document.view, display, positionEnabled: document.view.visualizerId !== null || document.view.positionEnabled },
       items,
       appearance: document.appearance,
-      folders: document.folders,
+      folders: document.folders.map(({ path, collapsed, overwriteAppearance, appearance }) => ({
+        path, collapsed,
+        ...(overwriteAppearance ? { overwriteAppearance } : {}),
+        ...(appearance ? { appearance } : {}),
+      })),
     },
     theme,
     recoveryDiagnostic: document.view.viewport.kind === 'none' && document.view.visualizerId === null

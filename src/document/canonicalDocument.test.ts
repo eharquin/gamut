@@ -141,7 +141,7 @@ describe('canonical document format', () => {
       )),
     }
     const migrated = parseCanonicalDocument(JSON.stringify(legacy))
-    expect(migrated.formatVersion).toBe(9)
+    expect(migrated.formatVersion).toBe(10)
     expect(migrated.appearance.v.borderVisible).toBe(false)
     expect(migrated.appearance.v.orientationVisible).toBe(true)
     expect(migrated.appearance.v.bivectorShape).toBe('from-vectors')
@@ -156,7 +156,7 @@ describe('canonical document format', () => {
       view: { ...current.view, display: legacyDisplay },
     }
     const migrated = parseCanonicalDocument(JSON.stringify(legacy))
-    expect(migrated.formatVersion).toBe(9)
+    expect(migrated.formatVersion).toBe(10)
     // Preserves the pre-existing document's prior appearance: version 3 had
     // no toggle, so it always behaved as if residue were shown.
     expect(migrated.view.display.showApproximatedResidue).toBe(true)
@@ -173,7 +173,7 @@ describe('canonical document format', () => {
       })),
     }
     const migrated = parseCanonicalDocument(JSON.stringify(legacy))
-    expect(migrated.formatVersion).toBe(9)
+    expect(migrated.formatVersion).toBe(10)
     expect(migrated.appearance.v.idealPointDisplay).toBe('vector')
     expect(migrated.appearance.v.primitiveStyles.points.connection).toBe('none')
     expect(errorCode(() => parseCanonicalDocument(JSON.stringify({
@@ -192,7 +192,7 @@ describe('canonical document format', () => {
       })),
     }
     const migrated = parseCanonicalDocument(JSON.stringify(legacy))
-    expect(migrated.formatVersion).toBe(9)
+    expect(migrated.formatVersion).toBe(10)
     expect(migrated.appearance.v.primitiveStyles.points.connection).toBe('none')
     expect(migrated.appearance.v.primitiveStyles.points.visible).toBe(true)
     expect(errorCode(() => parseCanonicalDocument(JSON.stringify({
@@ -231,7 +231,7 @@ describe('canonical document format', () => {
     const legacy = version7(sample())
     expect('valuesVisible' in legacy.view.display).toBe(false)
     const migrated = parseCanonicalDocument(JSON.stringify(legacy))
-    expect(migrated.formatVersion).toBe(9)
+    expect(migrated.formatVersion).toBe(10)
     // Version 7 had no setting, so it always showed the values.
     expect(migrated.view.display.valuesVisible).toBe(true)
     // Nothing else changes.
@@ -269,7 +269,7 @@ describe('canonical document format', () => {
       { id: 'd', source: 'V = vector(2, 1)' },
     ]), 'light'))) as Record<string, unknown>
     const migrated = parseCanonicalDocument(JSON.stringify({ ...current, formatVersion: 8 }))
-    expect(migrated.formatVersion).toBe(9)
+    expect(migrated.formatVersion).toBe(10)
     expect(migrated.items.map(({ kind, source }) => [kind, source])).toEqual([
       ['annotation', 'Titre **gras**'],
       // Only the first # was the marker; what follows is the text version 8 showed.
@@ -286,7 +286,7 @@ describe('canonical document format', () => {
   })
 
   it('selects the version boundary before complete schema validation', () => {
-    expect(errorCode(() => parseCanonicalDocument('{"formatVersion":10,"future":true}'))).toBe('DOCUMENT_FORMAT_VERSION')
+    expect(errorCode(() => parseCanonicalDocument('{"formatVersion":11,"future":true}'))).toBe('DOCUMENT_FORMAT_VERSION')
   })
 
   it('rejects unknown fields and unregistered styles', () => {
@@ -457,7 +457,7 @@ describe('canonical document format version 7', () => {
     const legacy = legacyListDocument()
     expect(legacy.appearance['hidden-unconnected']).toEqual(expect.objectContaining({ pointListDisplay: 'none', pointMarkersVisible: false }))
     const migrated = parseCanonicalDocument(JSON.stringify(legacy))
-    expect(migrated.formatVersion).toBe(9)
+    expect(migrated.formatVersion).toBe(10)
     expect(migrated.items[0].normalization).toBe('natural')
     expect(migrated.appearance.plain).toEqual({
       visible: true, labelVisible: true, label: 'p', style: 'blue-4', borderVisible: false,
@@ -481,7 +481,7 @@ describe('canonical document format version 7', () => {
 
   it('migrates byte-stably: a migrated document serializes and reparses unchanged', () => {
     const encoded = serializeCanonicalDocument(parseCanonicalDocument(JSON.stringify(legacyListDocument())))
-    expect(encoded).toContain('"formatVersion":9')
+    expect(encoded).toContain('"formatVersion":10')
     expect(encoded).not.toContain('pointListDisplay')
     expect(encoded).not.toContain('pointMarkersVisible')
     expect(serializeCanonicalDocument(parseCanonicalDocument(encoded))).toBe(encoded)

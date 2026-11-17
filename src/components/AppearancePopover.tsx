@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { paletteEntry, RAMP_ORDER, STUDIO_COLORS } from './appearancePalette'
 import { popoverPosition } from './popoverPosition'
@@ -41,6 +41,16 @@ type AppearancePopoverProps = Readonly<{
   /** The evaluated appearance sources, whose errors show under their fields. */
   sources?: ItemAppearanceSources
   colorOnly?: boolean
+  /**
+   * The menu of a folder (DOC-013): one section for each kind of object the
+   * folder holds, and no label or animation, which belong to each row.
+   */
+  folder?: Readonly<{
+    kinds: readonly string[]
+    /** Whether the folder overwrites the appearance of its rows. */
+    overwrite: boolean
+    onOverwriteChange(overwrite: boolean): void
+  }>
   control?: ExpressionControl
   reducedMotion?: boolean
   anchorRef: RefObject<HTMLButtonElement | null>
@@ -59,6 +69,14 @@ type AppearancePopoverProps = Readonly<{
   onControlChange?(control: ExpressionControl): void
   onClose(): void
 }>
+
+/** The section of a folder menu for each kind of object it holds. */
+const FOLDER_SECTION_TITLES: Readonly<Record<string, string>> = {
+  Vector: 'Vectors', Line: 'Lines', Bivector: 'Bivectors', Point: 'Points', 'Ideal point': 'Ideal points',
+}
+
+/** The kinds whose style a folder menu shows, in this order. */
+export const FOLDER_STYLE_KINDS = ['Point', 'Ideal point', 'Vector', 'Line', 'Bivector'] as const
 
 export function AppearancePopover({
   kind,
@@ -79,6 +97,7 @@ export function AppearancePopover({
   linesOrientationVisible = false,
   sources = DEFAULT_APPEARANCE_SOURCES,
   colorOnly = false,
+  folder,
   control,
   reducedMotion = false,
   anchorRef,
@@ -167,7 +186,7 @@ export function AppearancePopover({
     }
   }, [anchorRef, onClose])
 
-  const title = kind.startsWith('List') ? 'List' : kind
+  const title = folder ? kind : kind.startsWith('List') ? 'List' : kind
   const list = kind.startsWith('List')
   const selected = paletteEntry(styleId) ?? paletteEntry('blue-4')!
   const shade = Number(selected.id.slice(selected.ramp.length + 1))
@@ -188,7 +207,7 @@ export function AppearancePopover({
       onChange: (strokeWidthSource) => change({ strokeWidthSource }, 'strokeWidth'),
     }]} />
   )
-  const styleContent = kind === 'Bivector' ? (
+  const styleFor = (kind: string) => kind === 'Bivector' ? (
     <>
       {onBivectorShapeChange && <>
         <Segmented label="Bivector shape" value={bivectorShape === 'from-vectors' && !parallelogramAvailable ? 'disk' : bivectorShape} onChange={onBivectorShapeChange} options={[
@@ -244,6 +263,7 @@ export function AppearancePopover({
       }]} />
     </>
   ) : null
+  const styleContent = folder ? null : styleFor(kind)
   const pointsBlock = appearance.primitiveStyles?.points
   const markersShown = pointMarkersVisible || !connected
 
@@ -279,6 +299,21 @@ export function AppearancePopover({
         <button ref={closeRef} type="button" className="appearance-close" onClick={onClose}
           aria-label={`Close ${title} menu`} title="Close">×</button>
       </header>
+      {folder && (
+        <div className="appearance-overwrite">
+          <label className="appearance-switch">
+            <span>Overwrite appearance</span>
+            <input type="checkbox" role="switch" checked={folder.overwrite}
+              aria-describedby="appearance-overwrite-note"
+              onChange={(event) => folder.onOverwriteChange(event.target.checked)} />
+          </label>
+          <p id="appearance-overwrite-note" className="appearance-note">
+            {folder.overwrite
+              ? 'Every row of the folder is drawn with these settings; its own come back when this is off.'
+              : 'Off: these settings are kept but the rows keep their own.'}
+          </p>
+        </div>
+      )}
       {section('Color', <>
         <div className="appearance-hues" role="group" aria-label="Hue">
           {RAMP_ORDER.map((ramp) => (
@@ -318,6 +353,10 @@ export function AppearancePopover({
         }]} />}
       </>)}
       {styleContent && section('Style', styleContent)}
+      {folder?.kinds.map((each) => {
+        const content = styleFor(each)
+        return content && <Fragment key={each}>{section(FOLDER_SECTION_TITLES[each] ?? each, content)}</Fragment>
+      })}
       {list && listPrimitives?.points && onPointMarkersVisibleChange && section('Points', (pointListDisplayAvailable && onPointListDisplayChange) || onAppearanceChange ? <>
         {pointListDisplayAvailable && onPointListDisplayChange &&
           <Segmented label="Point list display" value={pointListDisplay} onChange={onPointListDisplayChange} options={[
@@ -408,7 +447,7 @@ export function AppearancePopover({
           : { ...control, mode: 'number' }),
       })}
       {/* A list has no label. The text is edited under the expression (#226). */}
-      {!colorOnly && !list && section('Label', labelVisible && onAppearanceChange ? <>
+      {!colorOnly && !list && !folder && section('Label', labelVisible && onAppearanceChange ? <>
         <SourceFields fields={[{
           setting: 'labelAngle',
           label: 'Angle',

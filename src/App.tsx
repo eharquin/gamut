@@ -31,10 +31,12 @@ import { ExpressionRow, type ExpressionRowActions, type ExpressionRowRefs } from
 import { isSourceEditor, type SourceEditor } from './components/sourceEditor'
 import { ExpressionTree } from './components/ExpressionTree'
 import { useExpressionFolders } from './hooks/useExpressionFolders'
-import { documentFolders, expressionRows } from './document/expressionFolders'
+import { documentFolders, drawnAppearances, expressionRows, itemFolder, overwritingFolder, rowAppearance } from './document/expressionFolders'
+import { folderKey, folderName, isWithin, samePath, type FolderPath } from './document/folderModel'
+import { AppearancePopover, FOLDER_STYLE_KINDS } from './components/AppearancePopover'
 import { ZoomLevelField } from './components/ZoomLevelField'
 import type { DisplaySettings } from './components/SettingsMenu'
-import { resolveItemAppearance } from './components/appearancePalette'
+import { defaultStyleForKind, resolveItemAppearance, studioColor } from './components/appearancePalette'
 import { OPAQUE_INTERPRETATION, type InterpretedEntity, type Point2d } from './geometry/interpretation'
 import type { VisualizationPrimitive } from './visualization/primitives'
 import {
@@ -42,6 +44,7 @@ import {
   MAX_EXPRESSION_ITEMS,
   showcaseItems,
   vga2FoundationExampleDocument,
+  type ExpressionAppearance,
   type ExpressionDocument,
   type ExpressionItem,
 } from './document/expressionDocument'
@@ -514,6 +517,9 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
     height: defaultViewport.height,
   })
   const [appearanceItemId, setAppearanceItemId] = useState<string | null>(null)
+  /** The folder whose appearance menu is open (DOC-013). */
+  const [folderMenuPath, setFolderMenuPath] = useState<FolderPath | null>(null)
+  const folderMenuAnchorRef = useRef<HTMLButtonElement | null>(null)
   /** The row whose normalization choice is open under its expression. */
   const [normalizationChoiceId, setNormalizationChoiceId] = useState<string | null>(null)
   // The popover closes itself on a choice, Escape, or a click outside; it is
@@ -1437,9 +1443,15 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
       : [])),
     [evaluatedItems],
   )
+  // Rows are drawn with the appearance their folders overwrite and hidden
+  // with their folders; the stored appearance of each row is unchanged (DOC-013).
+  const drawnDocument = useMemo(() => {
+    const appearance = drawnAppearances(expressionDoc)
+    return appearance === expressionDoc.appearance ? expressionDoc : { ...expressionDoc, appearance }
+  }, [expressionDoc])
   const appearanceSources = useMemo(
-    () => evaluateAppearanceSources(expressionDoc, evaluatedItems, engine),
-    [evaluatedItems, expressionDoc, engine],
+    () => evaluateAppearanceSources(drawnDocument, evaluatedItems, engine),
+    [evaluatedItems, drawnDocument, engine],
   )
 
   const playback = useScalarPlayback({
@@ -1535,7 +1547,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
   const { rendered: renderedPrimitives, connections: renderedConnections, omitted: omittedRenderElements } = noViz
     ? { rendered: [], connections: [], omitted: 0 }
     : collectRenderedPrimitives(
-        evaluatedItems, expressionDoc.appearance, interpretation, declaredName, appearanceSources,
+        evaluatedItems, drawnDocument.appearance, interpretation, declaredName, appearanceSources,
       )
   const renderedVectors = renderedPrimitives.flatMap((entry) =>
     entry.primitive.kind === 'oriented-segment'
@@ -2505,6 +2517,99 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
     appearanceAnchorRef,
     normalizationAnchorRef,
   }
+  /** The kinds of objects a folder holds, which its appearance menu shows a section for. */
+  const folderKinds = (path: FolderPath): string[] => {
+    const kinds = new Set<string>()
+    for (const { item, evaluation } of evaluatedItems) {
+      if (!isWithin(itemFolder(item), path) || evaluation?.status !== 'valid' || evaluation.valueType !== 'single') continue
+      kinds.add(interpretation.describe(evaluation.entity))
+    }
+    return FOLDER_STYLE_KINDS.filter((kind) => kinds.has(kind))
+  }
+  /** The eye and the appearance swatch of a folder, before its remove button. */
+  const renderFolderActions = (path: FolderPath, name: string) => {
+    const folder = documentFolders(expressionDoc).find((candidate) => samePath(candidate.path, path))
+    const visible = folder?.appearance?.visible ?? true
+    const style = folder?.appearance?.style ?? defaultStyleForKind('Object')
+    const menuOpen = folderMenuPath !== null && samePath(folderMenuPath, path)
+    return <>
+      <button
+        type="button"
+        className="folder-action folder-visibility"
+        aria-label={`${visible ? 'Hide' : 'Show'} folder ${name}`}
+        aria-pressed={visible}
+        title={visible ? 'Hide the rows of the folder' : 'Show the rows of the folder'}
+        onClick={() => executeCommand({ kind: 'update-folder-appearance', path, appearance: { visible: !visible } })}
+      >
+        <svg className="visibility-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8z" />
+          <circle cx="8" cy="8" r="2" />
+          {!visible && <path className="visibility-icon-slash" d="M2.5 13.5 13.5 2.5" />}
+        </svg>
+      </button>
+      {!noViz && (
+        <button
+          type="button"
+          className={`appearance-swatch folder-swatch${folder?.overwriteAppearance ? '' : ' is-inactive'}`}
+          aria-label={`Open appearance menu for folder ${name}`}
+          aria-haspopup="dialog"
+          aria-expanded={menuOpen}
+          title={folder?.overwriteAppearance ? 'Appearance of the folder, overwriting its rows' : 'Appearance of the folder'}
+          onClick={(event) => {
+            folderMenuAnchorRef.current = event.currentTarget
+            setFolderMenuPath(menuOpen ? null : path)
+          }}
+        >
+          <span className="appearance-swatch-fill" style={{ backgroundColor: studioColor(style) }} aria-hidden="true" />
+        </button>
+      )}
+    </>
+  }
+  const folderMenu = (() => {
+    if (folderMenuPath === null || noViz) return null
+    const folder = documentFolders(expressionDoc).find((candidate) => samePath(candidate.path, folderMenuPath))
+    if (!folder) return null
+    const path = folder.path
+    const appearance = folder.appearance ?? {}
+    const style = appearance.style ?? defaultStyleForKind('Object')
+    const update = (change: ExpressionAppearance, coalesceKey?: string) =>
+      executeCommand({ kind: 'update-folder-appearance', path, appearance: change }, coalesceKey ? `folder-appearance:${folderKey(path)}:${coalesceKey}` : undefined)
+    return (
+      <AppearancePopover
+        kind={`Folder ${folderName(path)}`}
+        styleId={style}
+        visible={appearance.visible ?? true}
+        labelVisible={false}
+        borderVisible={appearance.borderVisible ?? false}
+        orientationVisible={appearance.orientationVisible ?? true}
+        bivectorShape={appearance.bivectorShape ?? 'from-vectors'}
+        parallelogramAvailable
+        idealPointDisplay={appearance.idealPointDisplay ?? 'vector'}
+        appearance={appearance}
+        reducedMotion={reducedMotion}
+        anchorRef={folderMenuAnchorRef}
+        folder={{
+          kinds: folderKinds(path),
+          overwrite: folder.overwriteAppearance ?? false,
+          // Turning it on fixes the colour shown, so that every row takes it.
+          onOverwriteChange: (overwriteAppearance) => executeCommand({
+            kind: 'update-folder-appearance', path, overwriteAppearance,
+            ...(overwriteAppearance && appearance.style === undefined ? { appearance: { style } } : {}),
+          }),
+        }}
+        onStyleChange={(style) => update({ style })}
+        onVisibleChange={(visible) => update({ visible })}
+        onLabelVisibleChange={() => undefined}
+        onBorderVisibleChange={(borderVisible) => update({ borderVisible })}
+        onOrientationVisibleChange={(orientationVisible) => update({ orientationVisible })}
+        onBivectorShapeChange={(bivectorShape) => update({ bivectorShape })}
+        onIdealPointDisplayChange={(idealPointDisplay) => update({ idealPointDisplay })}
+        onAppearanceChange={(change, coalesceKey) => update(change, coalesceKey)}
+        onClose={() => setFolderMenuPath(null)}
+      />
+    )
+  })()
+
   const expressionRowActions: ExpressionRowActions = {
     executeCommand,
     dispatchHistory,
@@ -2685,7 +2790,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
           </div>
 
           <div className="expression-list">
-            <ExpressionTree document={expressionDoc} folders={folders} renderItem={(itemId) => {
+            <ExpressionTree document={expressionDoc} folders={folders} folderActions={renderFolderActions} renderItem={(itemId) => {
               const index = evaluatedItems.findIndex((candidate) => candidate.item.id === itemId)
               const entry = evaluatedItems[index]
               if (!entry) return null
@@ -2696,7 +2801,11 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
                 index={index}
                 evaluatedItems={evaluatedItems}
                 scalarControlEvaluation={scalarControlEvaluations.get(entry.item.id)}
-                appearance={expressionDoc.appearance[entry.item.id]}
+                appearance={rowAppearance(expressionDoc, entry.item)}
+                appearanceSetBy={(() => {
+                  const setBy = overwritingFolder(expressionDoc, entry.item)
+                  return setBy ? folderName(setBy.path) : undefined
+                })()}
                 appearanceSources={appearanceSources.get(entry.item.id) ?? DEFAULT_APPEARANCE_SOURCES}
                 engine={engine}
                 interpretation={interpretation}
@@ -3138,6 +3247,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
         />
       )}
       </div>
+      {folderMenu}
       {infoDialog === 'algebra' && (
         <AlgebraInfoDialog
           info={algebraDefinition.info(algebraResolution.parameters)}

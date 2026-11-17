@@ -8,7 +8,7 @@ import {
   mergeAppearance,
 } from './expressionDocument'
 import { directScalarEdit, formatScalarSource } from '../language/directScalarEdit'
-import { applyFolderMove, applyItemMove, createFolder, deleteFolder, itemFolder, renameFolder } from './expressionFolders'
+import { applyFolderMove, applyItemMove, createFolder, deleteFolder, itemFolder, renameFolder, updateFolderAppearance } from './expressionFolders'
 import type { FolderPath } from './folderModel'
 
 export type DocumentCommand =
@@ -23,6 +23,8 @@ export type DocumentCommand =
   | Readonly<{ kind: 'rename-folder'; path: FolderPath; name: string }>
   /** Removes a folder and keeps its items and subfolders in its parent. */
   | Readonly<{ kind: 'delete-folder'; path: FolderPath }>
+  /** Changes the appearance of a folder, or whether it overwrites that of its rows (DOC-013). */
+  | Readonly<{ kind: 'update-folder-appearance'; path: FolderPath; appearance?: ExpressionAppearance; overwriteAppearance?: boolean }>
   /** Moves a folder, with everything it holds, into `parent` and next to the anchor, or to the end. */
   | Readonly<{ kind: 'move-folder'; path: FolderPath; parent: FolderPath; anchorId?: string; placement?: 'before' | 'after' }>
   | Readonly<{ kind: 'delete-item'; itemId: string }>
@@ -110,6 +112,11 @@ export function executeDocumentCommand(
       : command.kind === 'rename-folder'
         ? renameFolder(document, command.path, command.name)
         : deleteFolder(document, command.path)
+    return edit.status === 'applied' ? edit : invalid(document, edit.reason)
+  }
+
+  if (command.kind === 'update-folder-appearance') {
+    const edit = updateFolderAppearance(document, command.path, command)
     return edit.status === 'applied' ? edit : invalid(document, edit.reason)
   }
 
