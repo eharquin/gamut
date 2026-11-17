@@ -26,6 +26,7 @@ import { ExpressionReference } from './components/ExpressionReference'
 import { EmbedControls, EmbeddedSceneUnavailable } from './components/EmbedControls'
 import { isFramed, resolveEmbedMode, type EmbedOptions } from './application/embedMode'
 import type { ReferenceExample } from './language/expressionReference'
+import type { PanelStyle } from './components/SettingsMenu'
 import { ClearExpressionsButton } from './components/ClearExpressionsButton'
 import { ExpressionRow, type ExpressionRowActions, type ExpressionRowRefs } from './components/ExpressionRow'
 import { isSourceEditor, type SourceEditor } from './components/sourceEditor'
@@ -261,6 +262,25 @@ function restoredReferenceHeight(): number {
     return Number.isFinite(stored) ? clampedReferenceHeight(stored) : DEFAULT_REFERENCE_HEIGHT
   } catch {
     return DEFAULT_REFERENCE_HEIGHT
+  }
+}
+
+/** Per-browser preference: how the rows of the expression panel are drawn. */
+const PANEL_STYLE_STORAGE_KEY = 'gamut.panelStyle'
+
+function restoredPanelStyle(): PanelStyle {
+  try {
+    return window.localStorage.getItem(PANEL_STYLE_STORAGE_KEY) === 'cards' ? 'cards' : 'lines'
+  } catch {
+    return 'lines'
+  }
+}
+
+function persistPanelStyle(style: PanelStyle): void {
+  try {
+    window.localStorage.setItem(PANEL_STYLE_STORAGE_KEY, style)
+  } catch {
+    // The style still applies for this visit when browser storage is unavailable.
   }
 }
 
@@ -592,6 +612,12 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
   const [infoDialog, setInfoDialog] = useState<'algebra' | null>(null)
   const [referenceOpen, setReferenceOpen] = useState(false)
   const [referenceHeight, setReferenceHeight] = useState(() => temporary ? DEFAULT_REFERENCE_HEIGHT : restoredReferenceHeight())
+  // A temporary session reads no browser storage and writes none.
+  const [panelStyle, setPanelStyle] = useState<PanelStyle>(() => temporary ? 'lines' : restoredPanelStyle())
+  const changePanelStyle = (style: PanelStyle) => {
+    setPanelStyle(style)
+    if (!ephemeral) persistPanelStyle(style)
+  }
   const closeInfoDialog = useCallback(() => setInfoDialog(null), [])
   const closeAppearance = useCallback(() => {
     setAppearanceItemId(null)
@@ -2724,6 +2750,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
     copyLink: () => void copyScene(),
     changeTheme: setTheme,
     changeDisplay: updateDisplay,
+    changePanelStyle,
   }
   return (
     <div className={`app-shell${embed ? ' is-embedded' : ''}`}>
@@ -2744,6 +2771,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
         sharing={sharing}
         theme={theme}
         display={expressionDoc.view.display}
+        panelStyle={panelStyle}
         renderingSettings={!noViz}
         refs={documentHeaderRefs}
         actions={documentHeaderActions}
@@ -2771,7 +2799,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
           ref={expressionPanelRef}
           id="expression-panel"
           tabIndex={-1}
-          className={`expression-panel${panelHidden ? ' is-collapsed' : ''}${noViz ? ' is-full-width' : ''}${referenceOpen ? ' has-reference' : ''}`}
+          className={`expression-panel${panelStyle === 'cards' ? ' is-cards' : ''}${panelHidden ? ' is-collapsed' : ''}${noViz ? ' is-full-width' : ''}${referenceOpen ? ' has-reference' : ''}`}
           aria-label="Expressions"
           style={noViz ? undefined : { width: panelWidth, '--panel-width': `${panelWidth}px` } as CSSProperties}
           inert={panelHidden}

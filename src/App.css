@@ -4306,3 +4306,83 @@ body.reordering-items .folder-handle {
 .library-tree .library-move {
   max-width: 100%;
 }
+
+/* The cards style of the expression panel, a per-browser preference: the rows
+   keep their content and sit in rounded boxes on the grey ground; the rows of
+   one folder are joined in one box under the folder's name, and notes outside
+   folders lie on the ground. */
+.expression-panel.is-cards .expression-list {
+  padding: 10px;
+  background: var(--background);
+}
+
+.expression-panel.is-cards .folder-member {
+  border-inline-start: 0;
+}
+
+.expression-panel.is-cards .folder-member:not([data-group]):not([hidden]),
+.expression-panel.is-cards .folder-member[data-group='last'],
+.expression-panel.is-cards .folder-member[data-group='only'] {
+  margin-bottom: 8px;
+}
+
+.expression-panel.is-cards .expression-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+/* The rows of a folder form one box: square inner corners, a hairline between rows. */
+.expression-panel.is-cards [data-group] .expression-item {
+  border-top-color: var(--border-subtle);
+  border-bottom: 0;
+  border-radius: 0;
+}
+
+.expression-panel.is-cards [data-group='first'] .expression-item,
+.expression-panel.is-cards [data-group='only'] .expression-item {
+  border-top-color: var(--border);
+  border-top-left-radius: 10px;
+  border-top-right-radius: 10px;
+}
+
+.expression-panel.is-cards [data-group='last'] .expression-item,
+.expression-panel.is-cards [data-group='only'] .expression-item {
+  border-bottom: 1px solid var(--border);
+  border-bottom-left-radius: 10px;
+  border-bottom-right-radius: 10px;
+}
+
+/* A note outside a folder is text on the ground. */
+.expression-panel.is-cards [data-kind='note']:not([data-group]) .expression-item {
+  background: transparent;
+  border-color: transparent;
+}
+
+/* Without a swatch, its text lines up with the names of the folders. */
+.expression-panel.is-cards [data-kind='note']:not([data-group]) .expression-actions {
+  display: none;
+}
+
+/* A folder's name heads its box, on the ground. */
+.expression-panel.is-cards [data-kind='folder'] {
+  margin-bottom: 4px;
+}
+
+.expression-panel.is-cards [data-kind='folder'] .folder-row {
+  background: transparent;
+  border-bottom: 0;
+}
+
+.expression-panel.is-cards .expression-item:focus-within {
+  position: relative;
+  z-index: 1;
+  background: var(--surface);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* The eye and the swatch sit in the middle of the row's height. */
+.expression-panel.is-cards .expression-actions {
+  align-self: center;
+}

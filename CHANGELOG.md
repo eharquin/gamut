@@ -50,6 +50,12 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Settings** › Theme › **Panel style** offers *Cards* besides the default
+  *Lines*: the rows keep their content and sit in rounded boxes on a grey
+  ground, the rows of one folder are joined in one box under the folder's
+  name, and notes outside folders lie on the ground. The choice is kept per
+  browser, and a temporary shared scene keeps the default.
+
 - Notes: typing `"` first in an expression row makes the row a note, an
   annotation shown as text and never evaluated, drawn, or referenced. The
   quotation mark is a trigger and is not stored, so a note may start with any

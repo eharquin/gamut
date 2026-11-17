@@ -335,6 +335,27 @@ describe('interface scenarios', () => {
     expect(panel().slice(0, 2)).toEqual(['[Third]', '  '])
   })
 
+  it('draws the panel as cards when chosen in the settings, joining the rows of a folder, and remembers it', () => {
+    open(doc(['"A note', 'A = 1', 'B = 2', 'C = 3', 'D = 4'], [{ path: ['F'], collapsed: false }], { 2: ['F'], 3: ['F'] }))
+    const panelElement = () => document.querySelector('.expression-panel')!
+    expect(panelElement()).not.toHaveClass('is-cards')
+    fireEvent.click(screen.getByRole('button', { name: /^Settings/ }))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Panel style' }), { target: { value: 'cards' } })
+    expect(panelElement()).toHaveClass('is-cards')
+    expect(window.localStorage.getItem('gamut.panelStyle')).toBe('cards')
+    // The rows of F are marked as one block; the others stand alone.
+    const member = (source: string) => editor(source).closest('.folder-member')!
+    expect(member('B = 2')).toHaveAttribute('data-group', 'first')
+    expect(member('C = 3')).toHaveAttribute('data-group', 'last')
+    expect(member('A = 1')).not.toHaveAttribute('data-group')
+    expect(member('A = 1')).toHaveAttribute('data-kind', 'expression')
+    expect(member('D = 4')).not.toHaveAttribute('data-group')
+    // The style is a preference of this browser, kept after a reload.
+    cleanup()
+    render(<App />)
+    expect(panelElement()).toHaveClass('is-cards')
+  })
+
   it('keeps a long session of folder and note edits through a reload', async () => {
     open(doc(['A = vector(1, 0)', 'B = vector(0, 1)', 'S = A + B']))
     type(editor('B = vector(0, 1)'), '/Basis')

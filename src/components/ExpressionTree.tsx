@@ -43,10 +43,24 @@ const indent = (depth: number): CSSProperties | undefined =>
  */
 export function ExpressionTree({ document, folders, renderItem, folderActions, onEnterFolder }: ExpressionTreeProps) {
   const target = folders.dropTarget
-  return treeRows(document).map(({ row, hidden }) => {
+  const rows = treeRows(document)
+  const kindOf = (itemId: string) => document.items.find((item) => item.id === itemId)?.kind === 'annotation' ? 'note' : 'expression'
+  /** Where a row of a folder sits in the folder's block, for the cards style, which joins them. */
+  const groupOf = (index: number): 'first' | 'middle' | 'last' | 'only' | undefined => {
+    const { row } = rows[index]
+    if (row.kind !== 'entry' || row.depth === 0) return undefined
+    const inSameFolder = (other: (typeof rows)[number] | undefined) =>
+      other !== undefined && other.row.kind === 'entry' && folderKey(other.row.folder) === folderKey(row.folder)
+    const before = inSameFolder(rows[index - 1])
+    const after = inSameFolder(rows[index + 1])
+    return before ? after ? 'middle' : 'last' : after ? 'first' : 'only'
+  }
+  return rows.map(({ row, hidden }, index) => {
+    const group = groupOf(index)
     if (row.kind === 'entry') {
       return (
-        <div key={row.entry.id} className="folder-member" hidden={hidden} style={indent(row.depth)}>
+        <div key={row.entry.id} className="folder-member" hidden={hidden} style={indent(row.depth)}
+          data-group={group} data-kind={kindOf(row.entry.id)}>
           {renderItem(row.entry.id)}
         </div>
       )
@@ -55,7 +69,7 @@ export function ExpressionTree({ document, folders, renderItem, folderActions, o
     const dropClass = target?.kind === 'before-folder' && folderKey(target.path) === key ? 'drop-before'
       : target?.kind === 'into-folder' && folderKey(target.path) === key ? 'drop-into' : undefined
     return (
-      <div key={`folder:${key}`} className="folder-member" hidden={hidden} style={indent(row.depth)}>
+      <div key={`folder:${key}`} className="folder-member" hidden={hidden} style={indent(row.depth)} data-kind="folder">
         <FolderRow
           path={row.path}
           name={row.name}

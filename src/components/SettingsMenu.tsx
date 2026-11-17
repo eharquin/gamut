@@ -18,11 +18,16 @@ export type DisplaySettings = Readonly<{
 export const MIN_OBJECT_SCALE = 0.25
 export const MAX_OBJECT_SCALE = 4
 
+export type PanelStyle = 'lines' | 'cards'
+
 type SettingsMenuProps = Readonly<{
   display: DisplaySettings
   theme: ThemeMode
   onDisplayChange(change: Partial<DisplaySettings>): void
   onThemeChange(theme: ThemeMode): void
+  /** How the rows of the expression panel are drawn: plain lines, or cards on a grey ground. */
+  panelStyle: PanelStyle
+  onPanelStyleChange(style: PanelStyle): void
   /**
    * Whether the settings that only affect rendering (grid, axes,
    * graduations, object size) are shown; false in NoViz, where nothing is drawn.
@@ -68,6 +73,8 @@ export function SettingsMenu({
   theme,
   onDisplayChange,
   onThemeChange,
+  panelStyle,
+  onPanelStyleChange,
   renderingSettings = true,
 }: SettingsMenuProps) {
   const [open, setOpen] = useState(false)
@@ -229,6 +236,17 @@ export function SettingsMenu({
                 <option value="system">System</option>
                 <option value="light">Light</option>
                 <option value="dark">Dark</option>
+              </select>
+            </label>
+            <label className="settings-row">
+              <span className="settings-row-label">Panel style</span>
+              <select
+                className="settings-select"
+                value={panelStyle}
+                onChange={(event) => onPanelStyleChange(event.target.value as PanelStyle)}
+              >
+                <option value="lines">Lines</option>
+                <option value="cards">Cards</option>
               </select>
             </label>
           </section>
