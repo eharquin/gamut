@@ -344,3 +344,8 @@ export function annotationPlainText(segments: readonly AnnotationSegment[]): str
       // Mathematics is read as its TeX source.
       : segment.kind === 'math' ? segment.tex : annotationPlainText(segment.children)).join('')
 }
+
+/** The plain text of an expression folder name, as a screen reader reads it (DOC-013). */
+export function folderPlainName(name: string): string {
+  return annotationPlainText(parseAnnotationMarkdown(name, false))
+}

@@ -9,7 +9,22 @@ export type EmbedOptions = Readonly<{
   theme: 'light' | 'dark' | null
   /** `lock=1` opens with the viewport locked: objects stay draggable. */
   viewportLocked: boolean
+  /**
+   * `bg=transparent` lets the page around the frame show through the canvas;
+   * `bg=rrggbb` or `bg=rgb`, hexadecimal digits without `#`, paints it in that
+   * colour. Null keeps the background of the theme.
+   */
+  background: string | null
 }>
+
+const HEX_COLOR = /^(?:[0-9a-f]{3}|[0-9a-f]{6})$/i
+
+/** The CSS background a `bg` value asks for, or null when the value is not one. */
+export function embedBackground(value: string | undefined): string | null {
+  if (value === undefined) return null
+  if (value.toLowerCase() === 'transparent') return 'transparent'
+  return HEX_COLOR.test(value) ? `#${value.toLowerCase()}` : null
+}
 
 /**
  * Whether the page runs inside a frame. Reading `top` across origins may
@@ -48,6 +63,7 @@ export function resolveEmbedMode(fragment: string, framed: boolean): EmbedOption
   return {
     theme: theme === 'light' || theme === 'dark' ? theme : null,
     viewportLocked: options.get('lock') === '1',
+    background: embedBackground(options.get('bg')),
   }
 }
 

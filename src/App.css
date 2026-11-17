@@ -3772,6 +3772,13 @@ html.is-embedded body {
   min-width: 0;
 }
 
+/* bg= in the link: the page and the canvas take that background; the grid,
+   axes, and objects keep the colours of the theme. */
+html.has-embed-background,
+html.has-embed-background .canvas-frame {
+  background: var(--embed-background);
+}
+
 .app-shell.is-embedded .workspace {
   overflow: hidden;
 }
@@ -3981,6 +3988,21 @@ body.reordering-items .folder-handle {
 .folder-chevron {
   width: 12px;
   color: var(--muted);
+}
+
+/* Mathematics in a folder name stays within the height of the row. */
+.folder-name .katex {
+  font-size: 1em;
+  line-height: 1;
+}
+
+.folder-name .note-math-source,
+.folder-name code {
+  padding: 0 3px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  background: var(--surface-code);
+  border-radius: 3px;
 }
 
 .folder-name {

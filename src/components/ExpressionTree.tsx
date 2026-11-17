@@ -3,6 +3,8 @@ import type { ExpressionDocument } from '../document/expressionDocument'
 import { expressionFolderTree, isFolderCollapsed, itemFolder } from '../document/expressionFolders'
 import { flattenFolderTree, folderKey, isWithin, type FolderPath } from '../document/folderModel'
 import type { ExpressionFolders } from '../hooks/useExpressionFolders'
+import { folderPlainName } from '../presentation/annotationText'
+import { InlineMarkdown } from './AnnotationText'
 import { FolderRow } from './FolderRow'
 
 type ExpressionTreeProps = Readonly<{
@@ -56,6 +58,10 @@ export function ExpressionTree({ document, folders, renderItem, folderActions }:
           expanded={!isFolderCollapsed(document, row.path)}
           entryCount={row.entryCount}
           entryNoun={['row', 'rows']}
+          display={{
+            name: <InlineMarkdown id={`folder-name-${encodeURIComponent(key)}`} text={row.name} />,
+            plainName: folderPlainName(row.name),
+          }}
           renaming={folders.renamingKey === key}
           onRenamingChange={(renaming) => folders.setRenamingKey(renaming ? key : null)}
           onToggle={() => folders.toggleFolder(row.path)}
@@ -73,7 +79,7 @@ export function ExpressionTree({ document, folders, renderItem, folderActions }:
             onKeyDown: (event) => folders.reorderFolderWithKeyboard(event, row.path),
           }}
           className={dropClass}
-          children={folderActions?.(row.path, row.name)}
+          children={folderActions?.(row.path, folderPlainName(row.name))}
           rowRef={(element) => {
             if (element) folders.folderRowRefs.current.set(key, element)
             else folders.folderRowRefs.current.delete(key)

@@ -288,8 +288,17 @@ function App() {
   // The page-level minimum width would overflow a small frame.
   useEffect(() => {
     if (!embed) return
-    document.documentElement.classList.add('is-embedded')
-    return () => document.documentElement.classList.remove('is-embedded')
+    const root = document.documentElement
+    root.classList.add('is-embedded')
+    // The background is a validated colour or `transparent`, never text from the link as written.
+    if (embed.background) {
+      root.classList.add('has-embed-background')
+      root.style.setProperty('--embed-background', embed.background)
+    }
+    return () => {
+      root.classList.remove('is-embedded', 'has-embed-background')
+      root.style.removeProperty('--embed-background')
+    }
   }, [embed])
   if (hasSceneFragment(window.location.hash)) return <SharedScene embed={embed} />
   // Without a scene, embed mode shows the default example and stores nothing.
