@@ -365,6 +365,8 @@ describe('interface scenarios', () => {
     cleanup()
     render(<App />)
     expect(panelElement()).toHaveClass('is-cards')
+  })
+
   it('adds an expression, a comment, or a folder from the add menu, by pointer and keyboard', async () => {
     open(doc(['A = 1']))
     const toggle = screen.getByRole('button', { name: 'More to add' })
