@@ -4311,9 +4311,16 @@ body.reordering-items .folder-handle {
    keep their content and sit in rounded boxes on the grey ground; the rows of
    one folder are joined in one box under the folder's name, and notes outside
    folders lie on the ground. */
+/* A row's content keeps the width and the place it has in the lines style:
+   the ground's margin and the card's border are taken from the row's own
+   left padding, so that nothing wraps differently. */
 .expression-panel.is-cards .expression-list {
-  padding: 10px;
+  padding: 6px;
   background: var(--background);
+}
+
+.expression-panel.is-cards .expression-input-row {
+  padding-left: 1px;
 }
 
 .expression-panel.is-cards .folder-member {
@@ -4390,7 +4397,3 @@ body.reordering-items .folder-handle {
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-/* The eye and the swatch sit in the middle of the row's height. */
-.expression-panel.is-cards .expression-actions {
-  align-self: center;
-}
