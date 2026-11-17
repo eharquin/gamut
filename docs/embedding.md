@@ -39,9 +39,9 @@ To change any of these, change them in GAMUT, then copy the link again.
 | Light or dark colors | **Settings** › Theme (*System*, *Light*, *Dark*) |
 | Framing: center and zoom of the view | Pan and zoom the canvas before copying |
 
-For example, a scene with only the objects and no background is made by
-turning off **Grid**, **Axes and labels** and **Graduations** before copying
-the link.
+For example, a scene with only the objects is made by turning off **Grid**,
+**Axes and labels** and **Graduations** before copying the link. The colour
+behind them is set by the `bg` option of section 3.
 
 ## 3. Options added at the end of the link
 
@@ -67,6 +67,28 @@ Example, a dark scene with a fixed view:
 
 ```text
 https://eharquin.github.io/gamut/#scene=1.deflate-raw.…&theme=dark&lock=1
+```
+
+Example, a scene drawn straight on the slide, without a background of its
+own, for a light presentation:
+
+```text
+https://eharquin.github.io/gamut/#scene=1.deflate-raw.…&bg=transparent&theme=light
+```
+
+In HTML, nothing else is needed: an iframe has no background of its own, so
+the page shows through.
+
+```html
+<iframe src="https://eharquin.github.io/gamut/#scene=1.deflate-raw.…&bg=transparent&theme=light"
+        width="960" height="540" style="border:0"
+        allow="fullscreen" title="GAMUT scene"></iframe>
+```
+
+Example, a scene on the cream background of a slide theme:
+
+```text
+https://eharquin.github.io/gamut/#scene=1.deflate-raw.…&bg=f5f0e6&theme=light
 ```
 
 Options can come in any order. An unknown option or value is ignored.
