@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { showcaseMetadata } from '../algebra/algebraDefinition'
 import { createBuiltinAlgebraRegistry } from '../algebra/builtinAlgebras'
 import { requireAvailableAlgebra } from '../application/algebraAvailability'
 import { evaluateDocument } from '../application/evaluateDocument'
@@ -9,7 +8,6 @@ import {
   parseCanonicalDocument,
   serializeCanonicalDocument,
 } from '../document/canonicalDocument'
-import { showcaseItems, vga2FoundationExampleDocument } from '../document/expressionDocument'
 import { readExamples, SHIPPED_EXAMPLES } from '.'
 
 const registry = createBuiltinAlgebraRegistry()
@@ -64,21 +62,14 @@ describe('shipped examples (#266, STORE-015)', () => {
     })
   }
 
-  // Until the showcase becomes an example (#217), the first run and the
-  // algebra switch still read their own sources; these examples must match.
-  it('matches the first-run document and each algebra showcase', () => {
-    const items = (id: string) => readExamples().examples.find((example) => example.id === id)!.document
-    const vga = items('vga2-rotation')
-    const firstRun = vga2FoundationExampleDocument()
-    expect(vga.metadata).toEqual({ title: firstRun.title, description: firstRun.description })
-    expect(vga.items.map(({ id, source, control }) => ({ id, source, ...(control ? { control } : {}) })))
-      .toEqual(firstRun.items)
+  // Each algebra opens its showcase example on a first run and on a switch (#217).
+  it('ships the showcase example of every algebra, in that algebra and its standard view', () => {
     for (const definition of registry.definitions()) {
-      const example = readExamples().examples.find((candidate) => candidate.algebraId === definition.algebraId)!.document
-      expect(example.metadata).toEqual(showcaseMetadata(definition))
-      expect(example.view.visualizerId).toBe(definition.standardVisualizerId)
-      expect(example.items.map(({ id, source, control }) => ({ id, source, ...(control ? { control } : {}) })))
-        .toEqual(showcaseItems(definition.showcase))
+      const example = readExamples().examples.find((candidate) => candidate.id === definition.showcaseExampleId)
+      expect(example, definition.algebraId).toBeDefined()
+      expect(example!.algebraId).toBe(definition.algebraId)
+      expect(example!.document.view.visualizerId).toBe(definition.standardVisualizerId)
+      expect(example!.document.interpretation?.interpretationId).toBe(definition.standardInterpretationId)
     }
   })
 })

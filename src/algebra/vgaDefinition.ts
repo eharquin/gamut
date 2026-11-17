@@ -47,13 +47,5 @@ export const VGA_DEFINITION: AlgebraDefinition = Object.freeze({
   generalReference: VGA_2_GENERAL_REFERENCE,
   expressionReference: VGA_2_REFERENCE,
   algebraReference: VGA_2_ALGEBRA_REFERENCE,
-  showcaseTitle: 'VGA 2D Rotation Example',
-  showcaseDescription: 'A vector, a looping angle, its rotor, the rotated vector, and their bivector.',
-  showcase: [
-    { source: 'V1 = vector(0.66, 3.042)' },
-    { source: 'a = 0', slider: { minimumSource: '0', maximumSource: 'tau', stepSource: '0.01', durationSeconds: 2 } },
-    { source: 'R = exp(0.5*a*e12)' },
-    { source: 'V2 = R>>>V1' },
-    { source: 'B = V1 ^ V2' },
-  ],
+  showcaseExampleId: 'vga2-rotation',
 })

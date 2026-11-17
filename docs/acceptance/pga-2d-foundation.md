@@ -13,7 +13,7 @@ and deployed evidence is complete where the milestone requires it.
 
 | Criterion | Current evidence | Remaining evidence | Status |
 | --- | --- | --- | --- |
-| P2D-001 — Registered boundary | Registry resolving definition, interpretation, and visualizer (#148, #150, #151); no production import of a VGA or PGA module outside `src/algebra`, `src/geometry`, and `src/visualization` registrations; ALG-005 gate on restore and import (`algebraAvailability.test.ts`); `App.tsx` review on `047cd05` (see below): no algebra-specific branch, one deferred first-run default (#217) | Repeat the review on the accepted commit | Review complete; deferral linked |
+| P2D-001 — Registered boundary | Registry resolving definition, interpretation, and visualizer (#148, #150, #151); no production import of a VGA or PGA module outside `src/algebra`, `src/geometry`, and `src/visualization` registrations; ALG-005 gate on restore and import (`algebraAvailability.test.ts`); `App.tsx` review on `047cd05` (see below): no algebra-specific branch, the first-run default now the default algebra's showcase example (#217) | Repeat the review on the accepted commit | Review complete; deferral resolved |
 | P2D-002 — Convention conformance | Every reference fixture replayed through the engine (`pgaEngine.test.ts`); PGA-004 parameterization cases (`pgaDefinition.test.ts`) | — | Automated evidence ready |
 | P2D-003 — Language and diagnostics | Constructors, `inorm`, permuted blades, `ps`, operators, arity and domain diagnostics, VGA(2) unaffected (`pgaDefinition.test.ts`, `evaluateSource.test.ts`) | — | Automated evidence ready |
 | P2D-004 — Interpretation | Entity identifiers, tolerance boundaries, projective descriptions, reflected weight, versor parity (`pga2Interpretation.test.ts`) | — | Automated evidence ready |
@@ -36,11 +36,14 @@ through the registered definition, interpretation, and visualizer.
   `unbounded-line`, `ideal-point`, `line-at-infinity`, `oriented-segment`,
   `oriented-area`), the algebra-independent boundary, and on the generic
   `scalar` entity for numeric controls.
-- **Deferred:** the first-run document is built with
-  `vga2FoundationExampleDocument()`, which duplicates the VGA definition's
-  showcase. It is a default document, not an algebra branch; building it from
-  the default definition's showcase is tracked by
-  [#217](https://github.com/eharquin/multivector/issues/217).
+- **Resolved by [#217](https://github.com/eharquin/gamut/issues/217):** the
+  first-run document was built with `vga2FoundationExampleDocument()`, which
+  duplicated the VGA definition's showcase. Each definition now names its
+  showcase example (`showcaseExampleId`); the first run opens the showcase
+  example of the explicit default algebra (`DEFAULT_ALGEBRA_ID`), and an
+  algebra switch loads the example of the selected algebra. `App.tsx`
+  imports no algebra-specific document or module; the showcase content lives
+  only in `src/examples/`.
 
 ## Blocking issues
 
@@ -133,6 +136,5 @@ confirmed by the maintainer at acceptance.
 
 ### Deferred
 
-- Building the first-run document from the default definition (#217).
 - An algebra-aware expression reference documenting PGA(2) (#209).
 - Making a coordinate tuple the active algebra's constructor (#180).

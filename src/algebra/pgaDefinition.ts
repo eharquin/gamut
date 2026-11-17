@@ -54,34 +54,8 @@ export const PGA_DEFINITION: AlgebraDefinition = Object.freeze({
   },
   standardInterpretationId: 'org.multivector.pga-2d',
   standardVisualizerId: 'org.multivector.pga-2d',
-  showcaseTitle: 'PGA 2D Triangle Example',
-  showcaseDescription:
-    'A triangle of points and its joined sides, with distances, angles, height, area, a movable line, and a motor sweeping a vertex.',
-  // A triangle whose sides are joins: distances are norms of joins, the
-  // angle at A comes from the inner product and the meet of two sides, the
-  // height from the outer product of a side and the opposite vertex, and the
-  // area from the triple join. N is a literal line, movable from the viewport.
-  // R, the square root of the product of the two unit sides through A, turns
-  // L onto M about A; S interpolates it with exp(t log R) and sweeps B onto M.
+  showcaseExampleId: 'pga2-triangle',
   generalReference: PGA_2_GENERAL_REFERENCE,
   expressionReference: PGA_2_REFERENCE,
   algebraReference: PGA_2_ALGEBRA_REFERENCE,
-  showcase: [
-    { source: 'A = point(-2, 1)' },
-    { source: 'B = point(2, 2)' },
-    { source: 'C = point(1, -2)' },
-    { source: 'L = A & B' },
-    { source: 'M = A & C' },
-    { source: 'dAB = norm(A & B)' },
-    { source: 'dBC = norm(B & C)' },
-    { source: 'alpha = atan2((L ^ M).e12, L | M)' },
-    { source: 'deg = alpha * 180 / pi' },
-    { source: 'hC = (L ^ C).e012 / L.norm' },
-    { source: 'area = (A & B & C) / 2' },
-    { source: 'N = line(1, 0, -1)' },
-    { source: 'beta = atan2((L ^ N).e12, L | N)' },
-    { source: 'R = sqrt(M * L / (M.norm * L.norm))' },
-    { source: 't = 0.5', slider: { minimumSource: '0', maximumSource: '1', stepSource: '0.01', durationSeconds: 3 } },
-    { source: 'S = exp(t * log(R)) >>> B' },
-  ],
 })

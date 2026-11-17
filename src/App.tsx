@@ -12,8 +12,8 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactElement,
 } from 'react'
-import { showcaseMetadata } from './algebra/algebraDefinition'
-import { createBuiltinAlgebraRegistry } from './algebra/builtinAlgebras'
+import { createBuiltinAlgebraRegistry, DEFAULT_ALGEBRA_ID } from './algebra/builtinAlgebras'
+import type { AlgebraDefinition } from './algebra/algebraDefinition'
 import { declarationDependsOn, evaluateDocument } from './application/evaluateDocument'
 import { AlgebraInfoDialog } from './components/AlgebraInfoDialog'
 import {
@@ -42,8 +42,6 @@ import type { VisualizationPrimitive } from './visualization/primitives'
 import {
   expressionDocument,
   MAX_EXPRESSION_ITEMS,
-  showcaseItems,
-  vga2FoundationExampleDocument,
   type ExpressionAppearance,
   type ExpressionDocument,
   type ExpressionItem,
@@ -121,7 +119,7 @@ import {
 import { LibraryPanel, type LibraryArchiveReport } from './components/LibraryPanel'
 import { SceneThumbnail } from './components/SceneThumbnail'
 import { useLibraryFolderActions } from './hooks/useLibraryFolderActions'
-import type { LibraryExample } from './examples'
+import { showcaseExample, type LibraryExample } from './examples'
 import { selectDroppedDocument } from './document/droppedDocument'
 import { createSceneLink, decodeSceneFragment, hasSceneFragment, SHARE_URL_WARNING_LENGTH } from './document/sceneLink'
 import { formatDisplayNumber } from './presentation/formatNumber'
@@ -149,6 +147,26 @@ import './App.css'
 const algebraRegistry = createBuiltinAlgebraRegistry()
 const restoreOptions = {
   visualizerAvailable: (visualizerId: string) => algebraRegistry.resolveVisualizer(visualizerId) !== null,
+}
+
+/**
+ * The showcase example of an algebra as a new document, unbound from the
+ * library like any opened example (#217), or null when it is not shipped.
+ */
+function showcaseDocument(definition: AlgebraDefinition): ExpressionDocument | null {
+  const example = showcaseExample(definition)
+  if (!example) return null
+  try {
+    return fromCanonicalDocument({ ...example.document, id: crypto.randomUUID() }, restoreOptions).document
+  } catch {
+    return null
+  }
+}
+
+/** The document of a first run: the showcase example of the default algebra. */
+function firstRunDocument(): ExpressionDocument {
+  const definition = algebraRegistry.definitions().find((candidate) => candidate.algebraId === DEFAULT_ALGEBRA_ID)
+  return (definition && showcaseDocument(definition)) ?? expressionDocument([{ id: 'item-1', source: '' }])
 }
 /** How far, in CSS pixels, a pressed handle must move before its drag starts. */
 const DRAG_DEAD_ZONE = 3
@@ -331,7 +349,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
     const fallback = {
       document: import.meta.env.MODE === 'test'
         ? expressionDocument([{ id: 'item-1', source: 'vector(2, 1)' }])
-        : vga2FoundationExampleDocument(),
+        : firstRunDocument(),
       theme: 'system' as ThemeMode,
       diagnostic: (sceneDiagnostic ?? null) as string | null,
     }
@@ -2431,6 +2449,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
     const conventionVersion = definition.conventionVersions[definition.conventionVersions.length - 1]
     const validation = definition.validateParameters({})
     if (validation.status !== 'valid') return
+    const showcase = showcaseDocument(definition)
     const clearing = hasContent(expressionDoc)
     if (clearing && !window.confirm(
       `Switching to ${definition.badge} replaces every expression of this document with its example. Continue?`,
@@ -2451,11 +2470,22 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
       interpretation: { interpretationId: definition.standardInterpretationId, interpretationVersion: 1 },
       // A NoViz document stays a calculator in the new algebra.
       visualizerId: noViz ? null : definition.standardVisualizerId,
-      ...showcaseMetadata(definition),
+      title: showcase?.title ?? `${definition.badge} example`,
+      description: showcase?.description ?? '',
     })
-    // The algebra's showcase makes the switch land on a working example.
-    showcaseItems(definition.showcase).forEach((item) => executeCommand({ kind: 'insert-item', item }))
-    nextId.current = definition.showcase.length + 1
+    // The switch lands on the algebra's showcase example, as listed in Examples (#217).
+    if (showcase) {
+      for (const folder of documentFolders(showcase)) executeCommand({ kind: 'create-folder', path: folder.path })
+      for (const item of showcase.items) executeCommand({ kind: 'insert-item', item })
+      for (const [itemId, appearance] of Object.entries(showcase.appearance))
+        if (appearance) executeCommand({ kind: 'update-appearance', itemId, appearance })
+      for (const folder of documentFolders(showcase)) {
+        if (folder.collapsed) dispatchHistory({ type: 'set-folder-collapsed', path: folder.path, collapsed: true })
+        if (folder.appearance || folder.overwriteAppearance)
+          executeCommand({ kind: 'update-folder-appearance', path: folder.path, appearance: folder.appearance, overwriteAppearance: folder.overwriteAppearance })
+      }
+    }
+    nextId.current = (showcase?.items.length ?? 0) + 1
     dispatchHistory({ type: 'commit-transaction' })
     setViewportAnnouncement(`${definition.badge} selected; its example document was loaded.`)
   }
