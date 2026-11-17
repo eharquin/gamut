@@ -50,6 +50,12 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- The expression toolbar has one add control: **+** adds an expression, and
+  the arrow beside it opens a menu that adds an expression, a comment (a
+  note), or a folder, each shown with the key that does the same in a row
+  (Enter, `"`, `/`). The menu is keyboard operable. Undo and redo are drawn
+  as arrows.
+
 - Notes: typing `"` first in an expression row makes the row a note, an
   annotation shown as text and never evaluated, drawn, or referenced. The
   quotation mark is a trigger and is not stored, so a note may start with any
