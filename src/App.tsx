@@ -31,7 +31,7 @@ import { ExpressionRow, type ExpressionRowActions, type ExpressionRowRefs } from
 import { isSourceEditor, type SourceEditor } from './components/sourceEditor'
 import { ExpressionTree } from './components/ExpressionTree'
 import { useExpressionFolders } from './hooks/useExpressionFolders'
-import { documentFolders, drawnAppearances, expressionRows, itemFolder, overwritingFolder, rowAppearance } from './document/expressionFolders'
+import { documentFolders, drawnAppearances, expressionRows, isFolderCollapsed, itemFolder, overwritingFolder, rowAppearance } from './document/expressionFolders'
 import { folderKey, folderName, isWithin, samePath, type FolderPath } from './document/folderModel'
 import { AppearancePopover, FOLDER_STYLE_KINDS } from './components/AppearancePopover'
 import { ZoomLevelField } from './components/ZoomLevelField'
@@ -1777,7 +1777,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
   const insertExpression = (
     anchorId?: string,
     placement: 'before' | 'after' = 'after',
-    content: Readonly<{ source: string; positionSource?: string }> = { source: '' },
+    content: Readonly<{ source: string; positionSource?: string; folder?: FolderPath }> = { source: '' },
   ) => {
     if (expressionDoc.items.length >= MAX_EXPRESSION_ITEMS) return
     let id = `item-${nextId.current++}`
@@ -1800,6 +1800,30 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
     executeCommand({
       kind: 'insert-item', item: { id, ...content }, anchorId, placement,
     })
+  }
+
+  /**
+   * Enter in the name field of a folder goes on to write in the folder: its
+   * first row when that one is empty, as after `/`, or a new empty row at
+   * the start of the folder, which opens if it is collapsed. The folder had
+   * `path` before its name was validated, in the document this render shows,
+   * and has `renamed` once the rename is applied, before this insertion.
+   */
+  const enterFolder = (path: FolderPath, renamed: FolderPath) => {
+    if (isFolderCollapsed(expressionDoc, path)) dispatchHistory({ type: 'set-folder-collapsed', path: renamed, collapsed: false })
+    const first = expressionDoc.items.find((item) => isWithin(itemFolder(item), path))
+    if (first && first.kind !== 'annotation' && first.source === '') {
+      requestAnimationFrame(() => document.getElementById(`expression-source-${first.id}`)?.focus())
+      return
+    }
+    if (first) {
+      insertExpression(first.id, 'before')
+      return
+    }
+    // An empty folder shows before the row it names: the new row takes that place.
+    const before = documentFolders(expressionDoc).find((folder) => samePath(folder.path, path))?.before
+    const anchor = before !== undefined && expressionDoc.items.some((item) => item.id === before) ? before : undefined
+    insertExpression(anchor, anchor === undefined ? 'after' : 'before', { source: '', folder: renamed })
   }
 
   /** Adds a reference example as a new expression at the end of the list (#259). */
@@ -2839,7 +2863,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
           </div>
 
           <div className="expression-list">
-            <ExpressionTree document={expressionDoc} folders={folders} folderActions={renderFolderActions} renderItem={(itemId) => {
+            <ExpressionTree document={expressionDoc} folders={folders} folderActions={renderFolderActions} onEnterFolder={enterFolder} renderItem={(itemId) => {
               const index = evaluatedItems.findIndex((candidate) => candidate.item.id === itemId)
               const entry = evaluatedItems[index]
               if (!entry) return null

@@ -26,10 +26,11 @@ type FolderRowProps = Readonly<{
   /** Absent for a read-only folder. Returns why a name is refused, or null. */
   onRename?(name: string): string | null
   /**
-   * Called when Enter has validated the name: moves focus into the folder and
-   * returns true, or returns false to leave focus on the folder itself.
+   * Called when Enter has validated the name, with the name the folder now
+   * has: moves focus into the folder and returns true, or returns false to
+   * leave focus on the folder itself.
    */
-  onNameEntered?(): boolean
+  onNameEntered?(name: string): boolean
   /** Absent for a read-only folder. */
   onDelete?(): void
   /** The handle that moves the folder by pointer and keyboard; absent when folders cannot be moved. */
@@ -105,7 +106,7 @@ export function FolderRow({
       }
       const renamed = draft.trim()
       // Enter goes on to the content of the folder when there is some.
-      const inside = entered && (onNameEntered?.() ?? false)
+      const inside = entered && (onNameEntered?.(renamed === '' ? name : renamed) ?? false)
       focusOnMount = inside || renamed === name ? null : folderKey([...path.slice(0, -1), renamed])
       if (inside) {
         ended.current = true

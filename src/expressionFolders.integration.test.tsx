@@ -45,10 +45,13 @@ describe('expression folders (DOC-013, A11Y-011)', () => {
     expect(name).toHaveFocus()
     fireEvent.change(name, { target: { value: '  Sums  ' } })
     fireEvent.keyDown(name, { key: 'Enter' })
-    expect(folderButton('Sums')).toHaveAccessibleName('Folder Sums, level 1, 0 rows')
     expect(folderButton('Sums')).toHaveAttribute('aria-expanded', 'true')
-    // The renamed folder is a new row: it takes focus back from the name field.
-    await waitFor(() => expect(folderButton('Sums')).toHaveFocus())
+    // Enter goes on to write in the folder: a new row in it takes the focus.
+    expect(folderButton('Sums')).toHaveAccessibleName('Folder Sums, level 1, 1 row')
+    await waitFor(() => expect(editorOf('')).toHaveFocus())
+    expect(editorOf('').closest('.folder-member')).toHaveStyle({ '--folder-depth': '1' })
+    fireEvent.keyDown(editorOf(''), { key: 'Backspace' })
+    expect(folderButton('Sums')).toHaveAccessibleName('Folder Sums, level 1, 0 rows')
 
     // C is the last row: Alt+Down enters the empty folder after it.
     handleFor('C = A + B').focus()

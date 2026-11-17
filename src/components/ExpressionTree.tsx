@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import type { ExpressionDocument } from '../document/expressionDocument'
-import { expressionFolderTree, isFolderCollapsed, itemFolder } from '../document/expressionFolders'
-import { flattenFolderTree, folderKey, isWithin, type FolderPath } from '../document/folderModel'
+import { expressionFolderTree, isFolderCollapsed } from '../document/expressionFolders'
+import { flattenFolderTree, folderKey, type FolderPath } from '../document/folderModel'
 import type { ExpressionFolders } from '../hooks/useExpressionFolders'
 import { folderPlainName } from '../presentation/annotationText'
 import { InlineMarkdown } from './AnnotationText'
@@ -12,6 +12,11 @@ type ExpressionTreeProps = Readonly<{
   folders: ExpressionFolders
   /** One expression row. */
   renderItem(itemId: string): ReactNode
+  /**
+   * Enter in the name field of a folder: a row of the folder to write in. The
+   * folder had `path` before the name was validated and has `renamed` now.
+   */
+  onEnterFolder?(path: FolderPath, renamed: FolderPath): void
   /** The actions of a folder before its remove button, such as its eye and its appearance. */
   folderActions?(path: FolderPath, plainName: string): ReactNode
 }>
@@ -36,7 +41,7 @@ const indent = (depth: number): CSSProperties | undefined =>
  * flat, so that a row moved between folders keeps its element and its focus;
  * the rows of a collapsed folder are hidden, not removed.
  */
-export function ExpressionTree({ document, folders, renderItem, folderActions }: ExpressionTreeProps) {
+export function ExpressionTree({ document, folders, renderItem, folderActions, onEnterFolder }: ExpressionTreeProps) {
   const target = folders.dropTarget
   return treeRows(document).map(({ row, hidden }) => {
     if (row.kind === 'entry') {
@@ -66,11 +71,9 @@ export function ExpressionTree({ document, folders, renderItem, folderActions }:
           onRenamingChange={(renaming) => folders.setRenamingKey(renaming ? key : null)}
           onToggle={() => folders.toggleFolder(row.path)}
           onRename={(name) => folders.renameFolder(row.path, name)}
-          onNameEntered={() => {
-            // The first row of the folder takes focus once the renamed folder has rendered.
-            const first = document.items.find((item) => isWithin(itemFolder(item), row.path))
-            if (!first || isFolderCollapsed(document, row.path)) return false
-            requestAnimationFrame(() => window.document.getElementById(`expression-source-${first.id}`)?.focus())
+          onNameEntered={(name) => {
+            if (!onEnterFolder) return false
+            onEnterFolder(row.path, [...row.path.slice(0, -1), name])
             return true
           }}
           onDelete={() => folders.deleteFolder(row.path)}

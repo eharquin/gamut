@@ -89,8 +89,9 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Expression folders: **New folder** in the expression toolbar creates a
   folder at the end, and typing `/` first in an expression row makes a folder
   of that row, where the row is: what follows the slash is its name, and the
-  row, emptied, is its first row. Enter after the name of a folder goes to
-  its first row. Either way the folder is
+  row, emptied, is its first row. Enter after the name of a folder opens
+  a new first row in it, or goes to its first row when that one is empty,
+  as after `/`; a collapsed folder opens. Either way the folder is
   named in place; its name may hold **bold**, *italic*, `code`, and
   mathematics between `$…$`, rendered like a note but without links, and is
   edited as written. A folder is renamed by clicking its name (or F2),
