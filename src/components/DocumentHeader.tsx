@@ -2,7 +2,7 @@ import { useRef, type ChangeEvent, type RefObject } from 'react'
 import type { ThemeMode } from '../document/canonicalDocument'
 import { AlgebraMenu, type AlgebraChoice } from './AlgebraMenu'
 import { DocumentCommands, GraphNameField, LibraryCommands } from './DocumentCommands'
-import { SettingsMenu, type DisplaySettings } from './SettingsMenu'
+import { SettingsMenu, type DisplaySettings, type PanelStyle } from './SettingsMenu'
 import { ThemeToggle } from './ThemeToggle'
 
 /** The header buttons that other parts of the editor focus or anchor to. */
@@ -27,6 +27,7 @@ export type DocumentHeaderActions = Readonly<{
   copyLink(): void
   changeTheme(theme: ThemeMode): void
   changeDisplay(change: Partial<DisplaySettings>): void
+  changePanelStyle(style: PanelStyle): void
 }>
 
 export type DocumentHeaderProps = Readonly<{
@@ -43,6 +44,8 @@ export type DocumentHeaderProps = Readonly<{
   sharing: boolean
   theme: ThemeMode
   display: DisplaySettings
+  /** How the rows of the expression panel are drawn, a per-browser preference. */
+  panelStyle: PanelStyle
   /** Whether the display settings that only affect the canvas are offered. */
   renderingSettings: boolean
   refs: DocumentHeaderRefs
@@ -65,6 +68,7 @@ export function DocumentHeader({
   sharing,
   theme,
   display,
+  panelStyle,
   renderingSettings,
   refs,
   actions,
@@ -133,6 +137,8 @@ export function DocumentHeader({
             theme={theme}
             onDisplayChange={actions.changeDisplay}
             onThemeChange={actions.changeTheme}
+            panelStyle={panelStyle}
+            onPanelStyleChange={actions.changePanelStyle}
             renderingSettings={renderingSettings}
           />
         </div>

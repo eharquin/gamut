@@ -50,6 +50,11 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Settings** › Theme › **Panel style** offers *Cards* besides the default
+  *Lines*: the rows keep their content and sit in rounded boxes on a grey
+  ground, the rows of one folder are joined in one box under the folder's
+  name, and notes outside folders lie on the ground. The choice is kept per
+  browser, and a temporary shared scene keeps the default.
 - The expression toolbar has one add control: **+** adds an expression, and
   the arrow beside it opens a menu that adds an expression, a comment (a
   note), or a folder, each shown with the key that does the same in a row

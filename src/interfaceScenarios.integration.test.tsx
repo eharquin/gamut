@@ -341,6 +341,32 @@ describe('interface scenarios', () => {
     expect(panel().slice(0, 2)).toEqual(['[Third]', '  '])
   })
 
+  it('draws the panel as cards when chosen in the settings, joining the rows of a folder, and remembers it', () => {
+    open(doc(['"A note', 'A = 1', 'B = 2', 'C = 3', 'D = 4'], [{ path: ['F'], collapsed: false }], { 2: ['F'], 3: ['F'] }))
+    const panelElement = () => document.querySelector('.expression-panel')!
+    expect(panelElement()).not.toHaveClass('is-cards')
+    fireEvent.click(screen.getByRole('button', { name: /^Settings/ }))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Panel style' }), { target: { value: 'cards' } })
+    expect(panelElement()).toHaveClass('is-cards')
+    expect(window.localStorage.getItem('gamut.panelStyle')).toBe('cards')
+    // F's header is the first card of one block with its rows; the others stand alone.
+    const member = (source: string) => editor(source).closest('.folder-member')!
+    expect(screen.getByRole('button', { name: /^Folder F, level/ }).closest('.folder-member')).toHaveAttribute('data-group', 'first')
+    expect(member('B = 2')).toHaveAttribute('data-group', 'middle')
+    expect(member('C = 3')).toHaveAttribute('data-group', 'last')
+    // Collapsed, the header is a card of its own.
+    fireEvent.click(screen.getByRole('button', { name: /^Folder F, level/ }))
+    expect(screen.getByRole('button', { name: /^Folder F, level/ }).closest('.folder-member')).toHaveAttribute('data-group', 'only')
+    fireEvent.click(screen.getByRole('button', { name: /^Folder F, level/ }))
+    expect(member('A = 1')).not.toHaveAttribute('data-group')
+    expect(member('A = 1')).toHaveAttribute('data-kind', 'expression')
+    expect(member('D = 4')).not.toHaveAttribute('data-group')
+    // The style is a preference of this browser, kept after a reload.
+    cleanup()
+    render(<App />)
+    expect(panelElement()).toHaveClass('is-cards')
+  })
+
   it('adds an expression, a comment, or a folder from the add menu, by pointer and keyboard', async () => {
     open(doc(['A = 1']))
     const toggle = screen.getByRole('button', { name: 'More to add' })
