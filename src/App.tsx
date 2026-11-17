@@ -119,6 +119,7 @@ import {
   type LibraryRead,
 } from './document/documentLibrary'
 import { LibraryPanel, type LibraryArchiveReport } from './components/LibraryPanel'
+import { SceneThumbnail } from './components/SceneThumbnail'
 import { useLibraryFolderActions } from './hooks/useLibraryFolderActions'
 import type { LibraryExample } from './examples'
 import { selectDroppedDocument } from './document/droppedDocument'
@@ -2157,6 +2158,24 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
       void importLibrary(file)
     }
   })
+  /**
+   * The stored document of a graph for its card, read once per revision: a
+   * card redraws when its graph is saved again, not on every render.
+   */
+  const thumbnailDocuments = useRef(new Map<string, CanonicalDocument | null>())
+  const libraryThumbnailDocument = (entry: LibraryEntry): CanonicalDocument | null => {
+    const key = `${entry.id}\u0000${entry.updatedAt}`
+    const cached = thumbnailDocuments.current.get(key)
+    if (cached !== undefined) return cached
+    let document: CanonicalDocument | null
+    try {
+      document = loadFromLibrary(browserLibraryStorage(), entry.id)
+    } catch {
+      document = null
+    }
+    thumbnailDocuments.current.set(key, document)
+    return document
+  }
   const closeLibrary = useCallback(() => {
     setLibraryOpen(false)
     setLibraryNaming(null)
@@ -3239,6 +3258,11 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
           onOpenExample={openExample}
           onAddExample={addExampleToLibrary}
           onAddScene={() => { commitLibrarySave(expressionDoc.title.trim() || 'Untitled graph') }}
+          graphThumbnail={(entry) => {
+            const document = libraryThumbnailDocument(entry)
+            return document && <SceneThumbnail document={document} registry={algebraRegistry} />
+          }}
+          exampleThumbnail={(example) => <SceneThumbnail document={example.document} registry={algebraRegistry} />}
           archiveReport={archiveReport}
           onDismissArchiveReport={() => setArchiveReport(null)}
           onExportLibrary={() => { void exportLibrary() }}

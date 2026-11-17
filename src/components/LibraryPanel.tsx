@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type RefObject } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { entryFolder, filterLibraryEntries, libraryFolderEntries, type LibraryEntry } from '../document/documentLibrary'
 import { ancestorPaths, describeFolder, folderKey, samePath, withAncestors, type FolderPath } from '../document/folderModel'
@@ -74,6 +74,10 @@ export type LibraryPanelProps = Readonly<{
   onAddExample(example: LibraryExample): void
   /** In a temporary session: copies the scene into the library. */
   onAddScene(): void
+  /** The drawing of a saved graph on its card, or nothing while it cannot be read. */
+  graphThumbnail?(entry: LibraryEntry): ReactNode
+  /** The drawing of an example on its card. */
+  exampleThumbnail?(example: LibraryExample): ReactNode
   /** The outcome of the last library export or import, shown until dismissed. */
   archiveReport: LibraryArchiveReport | null
   onDismissArchiveReport(): void
@@ -117,7 +121,7 @@ export function LibraryPanel({
   returnFocusRef, overlayHost, entries, folders, folderActions, algebras, openId, naming, diagnostic,
   unsavedChanges, temporarySession, currentName,
   onSaveAs, onSaveAsNew, onNew, onOpen, onRename, onDuplicate, onDelete,
-  onOpenExample, onAddExample, onAddScene, archiveReport, onDismissArchiveReport, onExportLibrary, onImportLibrary, onClose,
+  onOpenExample, onAddExample, onAddScene, graphThumbnail, exampleThumbnail, archiveReport, onDismissArchiveReport, onExportLibrary, onImportLibrary, onClose,
 }: LibraryPanelProps) {
   const ref = useRef<HTMLElement>(null)
   const archiveInputRef = useRef<HTMLInputElement>(null)
@@ -478,6 +482,7 @@ export function LibraryPanel({
                   aria-label={`Open ${entry.name}`}
                   onClick={() => requestOpen(entry)}
                 >
+                  <span className="library-thumbnail">{graphThumbnail?.(entry)}</span>
                   <span className="library-name">{entry.name}</span>
                 </button>
                 <div className="library-meta">
@@ -538,6 +543,7 @@ export function LibraryPanel({
                   aria-label={`Open example ${example.name}`}
                   onClick={() => requestExample(example)}
                 >
+                  <span className="library-thumbnail">{exampleThumbnail?.(example)}</span>
                   <span className="library-name">{example.name}</span>
                   {example.description && <span className="library-description">{example.description}</span>}
                 </button>

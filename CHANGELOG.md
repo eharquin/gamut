@@ -136,6 +136,12 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Library
 
+- The library is a gallery: each graph of **My library** and each example is
+  a card with a drawing of its scene (points, vectors, lines, areas, and
+  connected point lists in their colours, framed on the objects), its name,
+  and its actions; the cards of a folder sit under its header, two per row in
+  the docked panel.
+
 - The library is a panel docked on the right, opened and closed by
   **Library**, instead of a popover; the viewport resizes beside it. Below a
   window width of 720 pixels it opens over the viewport and closes on Escape.

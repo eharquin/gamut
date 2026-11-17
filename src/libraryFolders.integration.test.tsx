@@ -165,6 +165,23 @@ describe('library folders (STORE-016, A11Y-011)', () => {
     expect(index().entries.find((entry) => entry.name === 'PGA 2D Triangle Example')?.folder).toEqual(['PGA(2)'])
   })
 
+  it('shows every graph and example as a card with a drawing of its scene', () => {
+    render(<App />)
+    saveAs('Rotation talk')
+    openLibrary()
+    const card = within(panel()).getByRole('button', { name: 'Open Rotation talk' })
+    const drawing = card.querySelector('svg.scene-thumbnail')!
+    expect(drawing).toHaveAttribute('aria-hidden', 'true')
+    // The default document draws its vectors.
+    expect(drawing.querySelectorAll('line, polygon').length).toBeGreaterThan(2)
+    fireEvent.click(within(panel()).getByRole('tab', { name: 'Examples' }))
+    const examples = within(panel()).getByRole('list', { name: 'Examples' })
+    const cards = within(examples).getAllByRole('button', { name: /^Open example / })
+    expect(cards.length).toBeGreaterThan(1)
+    for (const each of cards) expect(each.querySelector('svg.scene-thumbnail')).not.toBeNull()
+    expect(within(examples).getByRole('button', { name: 'Open example PGA 2D Triangle Example' }).querySelectorAll('circle').length).toBeGreaterThanOrEqual(3)
+  })
+
   it('moves a graph by drag and drop onto a folder', () => {
     render(<App />)
     saveAs('Rotation talk')

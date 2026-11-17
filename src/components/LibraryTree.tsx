@@ -73,13 +73,17 @@ export function LibraryTree<T>({
   return (
     <ul className={`library-list library-tree${dragged !== null && dropKey === folderKey([]) ? ' is-drop-target' : ''}`}
       aria-label={label} {...dropProps([])}>
-      {rows.map((row) => {
+      {rows.map((row, index) => {
         while (hiddenDepths.length > 0 && hiddenDepths[hiddenDepths.length - 1] >= row.depth) hiddenDepths.pop()
         const hidden = hiddenDepths.length > 0
         if (row.kind === 'entry') {
           const id = entryId(row.entry)
+          // In the gallery, the cards of one folder start a row of their own.
+          const previous = rows[index - 1]
+          const groupStart = previous?.kind !== 'entry' || folderKey(previous.folder) !== folderKey(row.folder)
+          const className = [entryClassName?.(row.entry), 'library-card', groupStart ? 'is-group-start' : null].filter(Boolean).join(' ')
           return (
-            <li key={`entry:${id}`} hidden={hidden} className={entryClassName?.(row.entry)} style={indent(row.depth)}
+            <li key={`entry:${id}`} hidden={hidden} className={className} style={indent(row.depth)}
               draggable={onMoveEntry ? true : undefined}
               onDragStart={onMoveEntry ? (event) => {
                 event.dataTransfer?.setData('text/plain', id)
