@@ -1826,6 +1826,28 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
     insertExpression(anchor, anchor === undefined ? 'after' : 'before', { source: '', folder: renamed })
   }
 
+  /**
+   * Turns an empty folder back into a row, where the folder shows, written
+   * `source`, as Backspace turns a note back into an expression: one step.
+   */
+  const folderToRow = (path: FolderPath, source: string) => {
+    if (expressionDoc.items.length >= MAX_EXPRESSION_ITEMS) return
+    const before = documentFolders(expressionDoc).find((folder) => samePath(folder.path, path))?.before
+    const anchor = before !== undefined && expressionDoc.items.some((item) => item.id === before) ? before : undefined
+    let id = `item-${nextId.current++}`
+    while (expressionDoc.items.some((item) => item.id === id)) id = `item-${nextId.current++}`
+    dispatchHistory({ type: 'begin-transaction' })
+    executeCommand({ kind: 'insert-item', item: { id, source }, anchorId: anchor, placement: anchor === undefined ? 'after' : 'before' })
+    executeCommand({ kind: 'delete-folder', path })
+    dispatchHistory({ type: 'commit-transaction' })
+    // The caret goes before the text, where the slash was.
+    requestAnimationFrame(() => {
+      const editor = inputRefs.current.get(id)
+      editor?.focus()
+      editor?.setSelectionRange(0, 0)
+    })
+  }
+
   /** Adds a reference example as a new expression at the end of the list (#259). */
   const addReferenceExample = (example: ReferenceExample) => insertExpression(undefined, 'after', {
     source: example.source,
@@ -2863,7 +2885,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
           </div>
 
           <div className="expression-list">
-            <ExpressionTree document={expressionDoc} folders={folders} folderActions={renderFolderActions} onEnterFolder={enterFolder} renderItem={(itemId) => {
+            <ExpressionTree document={expressionDoc} folders={folders} folderActions={renderFolderActions} onEnterFolder={enterFolder} onFolderToRow={folderToRow} renderItem={(itemId) => {
               const index = evaluatedItems.findIndex((candidate) => candidate.item.id === itemId)
               const entry = evaluatedItems[index]
               if (!entry) return null
