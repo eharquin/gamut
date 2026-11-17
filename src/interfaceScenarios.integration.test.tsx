@@ -174,8 +174,8 @@ describe('interface scenarios', () => {
     // A slash in a row inside Left creates a folder at the margin, just after Left.
     type(editor('B = 2'), '/Inner')
     key(screen.getByRole('textbox', { name: 'Name of folder Inner' }), 'Escape')
-    expect(panel()).toEqual(['[Left]', '  A = 1', '[Inner]', '  ', '[Right]', '  C = 3', 'D = 4'])
-    expect(folderToggle('Inner')).toHaveAccessibleName('Folder Inner, level 1, 1 row')
+    expect(panel()).toEqual(['[Left]', '  A = 1', '[Inner]', '[Right]', '  C = 3', 'D = 4'])
+    expect(folderToggle('Inner')).toHaveAccessibleName('Folder Inner, level 1, 0 rows')
     undo()
     expect(panel()).toEqual(['[Left]', '  A = 1', '  B = 2', '[Right]', '  C = 3', 'D = 4'])
 
@@ -328,10 +328,10 @@ describe('interface scenarios', () => {
     expect(panel()).toEqual(['A = 1', '[Full]', '  C = A + B', '  B = 2', '[Empty]', '  '])
     await waitFor(() => expect(editor('')).toHaveFocus())
 
-    // After a slash, the folder's first row is already empty: it takes the focus, no second row is made.
+    // After a slash the row is the folder, which holds nothing: Enter opens its first row.
     type(editor('A = 1'), '/Third')
+    expect(panel().slice(0, 2)).toEqual(['[Third]', '[Full]'])
     key(screen.getByRole('textbox', { name: 'Name of folder Third' }), 'Enter')
-    expect(panel().filter((line) => line === '  ')).toHaveLength(2)
     expect(panel().slice(0, 2)).toEqual(['[Third]', '  '])
   })
 

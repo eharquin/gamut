@@ -56,9 +56,9 @@ export type ExpressionFolders = Readonly<{
   folderRowRefs: RefObject<Map<string, HTMLElement>>
   createFolder(): void
   /**
-   * Makes a folder of a row, where the row is: the folder takes `name` (or a
-   * free default name) and holds the row, emptied. Folders are created at
-   * the top level, so a row inside a folder leaves it first.
+   * Turns a row into a folder, where the row is: the folder takes `name` (or
+   * a free default name) and holds no row. Folders are created at the top
+   * level, so a row inside a folder becomes a folder just after that folder.
    */
   convertRowToFolder(itemId: string, name: string): void
   /** Renames a folder; returns why it is refused, or null. */
@@ -191,29 +191,19 @@ export function useExpressionFolders({ document, executeCommand, dispatchHistory
       commands.push(command)
       return null
     }
+    // The row becomes the folder: the folder shows where the row was, at the
+    // top level, just after the folder the row was in, and holds no row.
+    const origin = itemFolder(item)
+    const outer = origin.slice(0, 1)
+    let last = document.items.findIndex((candidate) => candidate.id === itemId)
+    if (outer.length > 0) document.items.forEach((candidate, index) => { if (isWithin(itemFolder(candidate), outer)) last = Math.max(last, index) })
+    const following = outer.length === 0
+      ? document.items[last + 1]
+      : document.items.slice(last + 1).find((candidate) => !isWithin(itemFolder(candidate), outer))
     const steps: (() => string | null)[] = [
-      () => {
-        // A row inside a folder first leaves it, to just after that folder.
-        const origin = itemFolder(item)
-        const leave = origin.length === 0 ? null : planItemMove(current, itemId, { kind: 'after-folder', path: origin.slice(0, 1) })
-        return leave ? run({ kind: 'move-item', ...leave }) : null
-      },
+      () => run({ kind: 'delete-item', itemId }),
       () => run({ kind: 'create-folder', path }),
-      () => {
-        // The row keeps its place in the item order, which is where its folder shows.
-        const index = current.items.findIndex((candidate) => candidate.id === itemId)
-        const previous = current.items[index - 1]
-        const next = current.items[index + 1]
-        return run({
-          kind: 'move-item', itemId, folder: path,
-          ...(previous ? { anchorId: previous.id, placement: 'after' as const } : next ? { anchorId: next.id, placement: 'before' as const } : {}),
-        })
-      },
-      // What was typed became the name: the row starts empty.
-      () => item.source === '' ? null : run({ kind: 'update-source', itemId, source: '' }),
-      () => item.positionSource ? run({ kind: 'update-position', itemId, positionSource: '' }) : null,
-      () => item.normalization ? run({ kind: 'update-normalization', itemId }) : null,
-      () => item.control ? run({ kind: 'update-control', itemId }) : null,
+      () => following ? run({ kind: 'move-folder', path, parent: [], anchorId: following.id, placement: 'before' }) : null,
     ]
     for (const step of steps) {
       const problem = step()
@@ -226,7 +216,7 @@ export function useExpressionFolders({ document, executeCommand, dispatchHistory
     commands.forEach((command) => executeCommand(command))
     dispatchHistory({ type: 'commit-transaction' })
     setRenamingKey(folderKey(path))
-    announce(`Folder ${folderPlainName(path[0])} created with this row.`)
+    announce(`Row turned into the folder ${folderPlainName(path[0])}.`)
   }, [document, executeCommand, dispatchHistory, announce])
 
   const renameFolder = useCallback((path: FolderPath, rawName: string): string | null => {

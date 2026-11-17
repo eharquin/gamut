@@ -918,11 +918,13 @@ h2 {
   padding-bottom: 4px;
 }
 
-/* A note has no kind or value line below its text: it is as tall as its text. */
+/* A note has no kind or value line below its text. A one-line note is as
+   tall as an empty expression row and a folder header, so that typing ", /,
+   or Backspace at the start of a row never changes its height. */
 .expression-item.is-annotation .expression-input-row {
   min-height: 0;
-  padding-top: 6px;
-  padding-bottom: 6px;
+  padding-top: 4px;
+  padding-bottom: 4px;
 }
 
 .expression-item.is-empty-expression .expression-actions {
@@ -1088,6 +1090,7 @@ body.reordering-items .reorder-handle {
 }
 
 .note-source {
+  box-sizing: border-box;
   width: 100%;
   resize: none;
   overflow: hidden;
@@ -1108,6 +1111,8 @@ body.reordering-items .reorder-handle {
 }
 
 .note-rendered {
+  /* The same line box as the source field: 2 px above and below one line. */
+  padding: 2px 0;
   cursor: text;
   border-radius: 3px;
 }
@@ -1124,9 +1129,9 @@ body.reordering-items .reorder-handle {
 /* Annotation text in the Markdown subset (#187): prose, not code. */
 .annotation-text {
   margin: 0;
-  padding: 0 4px 2px 0;
+  padding: 0 4px 0 0;
   color: var(--text);
-  font: 0.875rem/1.45 var(--font-sans);
+  font: 0.875rem/1.5 var(--font-sans);
   overflow-wrap: anywhere;
   display: grid;
   gap: 4px;

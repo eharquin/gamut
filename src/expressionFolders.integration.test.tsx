@@ -207,35 +207,48 @@ describe('expression folders (DOC-013, A11Y-011)', () => {
     expect(visibleSources()).toEqual(['B = 2', 'C = A + B', 'A = 1'])
   })
 
-  it('makes a folder of a row when a slash is typed first, where the row is', async () => {
+  it('turns a row into a folder when a slash is typed first, where the row is, and back with Backspace', async () => {
     open(flat())
     fireEvent.change(editorOf('B = 2'), { target: { value: '/Sums' } })
     // The folder is named by what follows the slash, and its name is open for editing.
     const name = screen.getByRole('textbox', { name: 'Name of folder Sums' })
     expect(name).toHaveFocus()
     expect(name).toHaveValue('Sums')
-    expect(folderButton('Sums')).toHaveAccessibleName('Folder Sums, level 1, 1 row')
-    // The row, emptied, is the first row of the folder, between its neighbours.
-    expect(visibleSources()).toEqual(['A = 1', '', 'C = A + B'])
-    expect(editorOf('').closest('.folder-member')).toHaveStyle({ '--folder-depth': '1' })
-    expect(screen.getByText('Folder Sums created with this row.')).toBeInTheDocument()
-    // Enter validates the name and goes to the first row of the folder.
-    fireEvent.change(name, { target: { value: 'Totals' } })
-    fireEvent.keyDown(name, { key: 'Enter' })
-    await waitFor(() => expect(editorOf('')).toHaveFocus())
-    expect(folderButton('Totals')).toHaveAccessibleName('Folder Totals, level 1, 1 row')
-    // One undo takes the new name back, and one more gives the row back.
-    fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
-    expect(folderButton('Sums')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
-    expect(visibleSources()).toEqual(['A = 1', 'B = 2', 'C = A + B'])
+    // The row became the folder: it holds no row, and shows where the row was.
+    expect(folderButton('Sums')).toHaveAccessibleName('Folder Sums, level 1, 0 rows')
+    expect(visibleSources()).toEqual(['A = 1', 'C = A + B'])
+    expect(folderButton('Sums').compareDocumentPosition(editorOf('C = A + B')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByText('Row turned into the folder Sums.')).toBeInTheDocument()
+
+    // Backspace at the start of the name turns the folder back into a row, with the name as its text.
+    ;(name as HTMLInputElement).setSelectionRange(0, 0)
+    fireEvent.keyDown(name, { key: 'Backspace' })
     expect(screen.queryByRole('button', { name: /^Folder / })).not.toBeInTheDocument()
+    expect(visibleSources()).toEqual(['A = 1', 'Sums', 'C = A + B'])
+    await waitFor(() => expect(editorOf('Sums')).toHaveFocus())
+    expect(editorOf('Sums').selectionStart).toBe(0)
+    // Backspace elsewhere in the name only edits it.
+    fireEvent.change(editorOf('Sums'), { target: { value: '/Totals' } })
+    const totals = screen.getByRole<HTMLInputElement>('textbox', { name: 'Name of folder Totals' })
+    totals.setSelectionRange(3, 3)
+    fireEvent.keyDown(totals, { key: 'Backspace' })
+    expect(folderButton('Totals')).toBeInTheDocument()
+
+    // Enter validates the name and opens the first row of the folder.
+    fireEvent.keyDown(totals, { key: 'Enter' })
+    expect(folderButton('Totals')).toHaveAccessibleName('Folder Totals, level 1, 1 row')
+    await waitFor(() => expect(editorOf('')).toHaveFocus())
+    // Undo takes back the new row, then the folder, then the row turned back.
+    fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
+    expect(folderButton('Totals')).toHaveAccessibleName('Folder Totals, level 1, 0 rows')
+    fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
+    expect(visibleSources()).toEqual(['A = 1', 'Sums', 'C = A + B'])
     // A slash elsewhere is a division.
-    fireEvent.change(editorOf('B = 2'), { target: { value: 'B = 2 / 1' } })
+    fireEvent.change(editorOf('Sums'), { target: { value: 'B = 2 / 1' } })
     expect(screen.queryByRole('button', { name: /^Folder / })).not.toBeInTheDocument()
   })
 
-  it('creates the folder of a slash at the top level, after the folder the row was in', () => {
+  it('makes the folder of a slash at the top level, after the folder the row was in', () => {
     open({
       ...flat(),
       items: flat().items.map((item, index) => index < 2 ? { ...item, folder: ['Sums'] } : item),
@@ -243,9 +256,10 @@ describe('expression folders (DOC-013, A11Y-011)', () => {
     })
     fireEvent.change(editorOf('A = 1'), { target: { value: '/' } })
     expect(screen.getByRole('textbox', { name: 'Name of folder New folder' })).toHaveFocus()
-    expect(folderButton('New folder')).toHaveAccessibleName('Folder New folder, level 1, 1 row')
+    expect(folderButton('New folder')).toHaveAccessibleName('Folder New folder, level 1, 0 rows')
     expect(folderButton('Sums')).toHaveAccessibleName('Folder Sums, level 1, 1 row')
-    expect(visibleSources()).toEqual(['B = 2', '', 'C = A + B'])
+    expect(folderButton('Sums').compareDocumentPosition(folderButton('New folder')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(folderButton('New folder').compareDocumentPosition(editorOf('C = A + B')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     // A name already taken gets a suffix.
     fireEvent.keyDown(screen.getByRole('textbox', { name: 'Name of folder New folder' }), { key: 'Escape' })
     fireEvent.change(editorOf('C = A + B'), { target: { value: '/Sums' } })
