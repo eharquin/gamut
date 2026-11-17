@@ -39,6 +39,7 @@ import {
   type FolderPath,
 } from '../document/folderModel'
 import { declaredName } from '../language/declaredName'
+import { folderPlainName } from '../presentation/annotationText'
 
 /** Where a dragged row would land, shown by the panel while dragging. */
 export type DropTarget =
@@ -84,6 +85,11 @@ type Options = Readonly<{
 /** What a drag moves: one row, or a folder with everything it holds. */
 type Dragged = Readonly<{ kind: 'item'; itemId: string }> | Readonly<{ kind: 'folder'; path: FolderPath }>
 
+/** A folder path as announced: the plain text of each name (DOC-013). */
+function describePlainFolder(path: FolderPath): string {
+  return describeFolder(path.map(folderPlainName))
+}
+
 function rowName(document: ExpressionDocument, itemId: string): string {
   const item = document.items.find((candidate) => candidate.id === itemId)
   return (item && declaredName(item.source)) ?? 'Expression'
@@ -113,7 +119,7 @@ export function useExpressionFolders({ document, executeCommand, dispatchHistory
     const position = itemPosition(result.document, itemId)
     if (position) {
       announce(`Moved ${rowName(document, itemId)} to position ${position.position} of ${position.count}${
-        position.folder.length === 0 ? '' : ` in folder ${describeFolder(position.folder)}`}.`)
+        position.folder.length === 0 ? '' : ` in folder ${describePlainFolder(position.folder)}`}.`)
     }
     return true
   }, [document, executeCommand, dispatchHistory, announce])
@@ -131,7 +137,7 @@ export function useExpressionFolders({ document, executeCommand, dispatchHistory
     if (!move) return false
     const result = applyFolderMove(document, move)
     if (result.status !== 'applied') {
-      announce(`Folder ${folderName(path)} cannot move there. ${result.reason}`)
+      announce(`Folder ${folderPlainName(folderName(path))} cannot move there. ${result.reason}`)
       return true
     }
     executeCommand({ kind: 'move-folder', ...move })
@@ -140,8 +146,8 @@ export function useExpressionFolders({ document, executeCommand, dispatchHistory
     const moved = [...move.parent, folderName(path)]
     const position = folderPosition(result.document, moved)
     if (position) {
-      announce(`Moved folder ${folderName(path)} to position ${position.position} of ${position.count}${
-        position.parent.length === 0 ? '' : ` in folder ${describeFolder(position.parent)}`}.`)
+      announce(`Moved folder ${folderPlainName(folderName(path))} to position ${position.position} of ${position.count}${
+        position.parent.length === 0 ? '' : ` in folder ${describePlainFolder(position.parent)}`}.`)
     }
     // A folder that changes parent gets a new row; its handle takes focus back.
     requestAnimationFrame(() => {
@@ -154,7 +160,7 @@ export function useExpressionFolders({ document, executeCommand, dispatchHistory
   const folderMoveStep = useCallback((path: FolderPath, step: MoveStep): boolean => {
     const placement = folderStepPlacement(document, path, step)
     if (placement && moveFolderTo(path, placement)) return true
-    announce(`Folder ${folderName(path)} cannot move ${step === 'up' || step === 'first' ? 'up' : 'down'}.`)
+    announce(`Folder ${folderPlainName(folderName(path))} cannot move ${step === 'up' || step === 'first' ? 'up' : 'down'}.`)
     return false
   }, [document, moveFolderTo, announce])
 
@@ -220,7 +226,7 @@ export function useExpressionFolders({ document, executeCommand, dispatchHistory
     commands.forEach((command) => executeCommand(command))
     dispatchHistory({ type: 'commit-transaction' })
     setRenamingKey(folderKey(path))
-    announce(`Folder ${path[0]} created with this row.`)
+    announce(`Folder ${folderPlainName(path[0])} created with this row.`)
   }, [document, executeCommand, dispatchHistory, announce])
 
   const renameFolder = useCallback((path: FolderPath, rawName: string): string | null => {
@@ -230,7 +236,7 @@ export function useExpressionFolders({ document, executeCommand, dispatchHistory
     const edit = renameFolderEdit(document, path, name)
     if (edit.status !== 'applied') return edit.reason
     executeCommand({ kind: 'rename-folder', path, name })
-    announce(`Folder renamed to ${name}.`)
+    announce(`Folder renamed to ${folderPlainName(name)}.`)
     return null
   }, [document, executeCommand, announce])
 
@@ -242,11 +248,11 @@ export function useExpressionFolders({ document, executeCommand, dispatchHistory
       .map(folderName))
     const clash = children.find((child) => siblings.has(folderName(child)))
     if (clash) {
-      announce(`Folder ${folderName(path)} cannot be removed: the folder ${folderName(clash)} inside it has the name of a folder next to it.`)
+      announce(`Folder ${folderPlainName(folderName(path))} cannot be removed: the folder ${folderName(clash)} inside it has the name of a folder next to it.`)
       return
     }
     executeCommand({ kind: 'delete-folder', path })
-    announce(`Folder ${folderName(path)} removed; its rows stay in ${describeFolder(path.slice(0, -1))}.`)
+    announce(`Folder ${folderPlainName(folderName(path))} removed; its rows stay in ${describePlainFolder(path.slice(0, -1))}.`)
   }, [document, executeCommand, announce])
 
   const toggleFolder = useCallback((path: FolderPath) => {

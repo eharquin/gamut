@@ -91,7 +91,9 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   of that row, where the row is: what follows the slash is its name, and the
   row, emptied, is its first row. Enter after the name of a folder goes to
   its first row. Either way the folder is
-  named in place; a folder is renamed by clicking its name (or F2),
+  named in place; its name may hold **bold**, *italic*, `code`, and
+  mathematics between `$…$`, rendered like a note but without links, and is
+  edited as written. A folder is renamed by clicking its name (or F2),
   and collapsed or expanded by its chevron. The indent of the rows of a
   folder is filled with the colour of its header. Rows move into, within, and out of folders by dragging
   their handle, or by Alt or Shift with the arrow keys, Home, and End on the

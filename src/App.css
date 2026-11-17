@@ -3990,6 +3990,21 @@ body.reordering-items .folder-handle {
   color: var(--muted);
 }
 
+/* Mathematics in a folder name stays within the height of the row. */
+.folder-name .katex {
+  font-size: 1em;
+  line-height: 1;
+}
+
+.folder-name .note-math-source,
+.folder-name code {
+  padding: 0 3px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  background: var(--surface-code);
+  border-radius: 3px;
+}
+
 .folder-name {
   min-width: 0;
   overflow: hidden;

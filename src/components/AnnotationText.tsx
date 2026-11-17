@@ -1,6 +1,6 @@
 import { Fragment, useMemo, type ReactNode } from 'react'
 import { parseAnnotationBlocks, type AnnotationBlock, type AnnotationList } from '../presentation/annotationBlocks'
-import type { AnnotationSegment } from '../presentation/annotationText'
+import { parseAnnotationMarkdown, type AnnotationSegment } from '../presentation/annotationText'
 import { MathText, MAX_MATH_SEGMENTS, MAX_MATH_SOURCE_LENGTH } from './MathText'
 
 /** How many more mathematics segments of the note are typeset. */
@@ -101,4 +101,17 @@ export function AnnotationText({ id, text }: AnnotationTextProps) {
       {renderBlocks(blocks, id, { remaining: MAX_MATH_SEGMENTS })}
     </div>
   )
+}
+
+/** The most mathematics segments typeset in one inline text, such as a folder name. */
+const MAX_INLINE_MATH_SEGMENTS = 8
+
+/**
+ * One line of the inline subset without links, such as an expression folder
+ * name (DOC-013): bold, italic, code, and mathematics. A click on it must
+ * stay with the control that holds it, so it has no link.
+ */
+export function InlineMarkdown({ id, text }: Readonly<{ id: string; text: string }>) {
+  const segments = useMemo(() => parseAnnotationMarkdown(text, false), [text])
+  return <>{renderSegments(segments, id, { remaining: MAX_INLINE_MATH_SEGMENTS })}</>
 }
