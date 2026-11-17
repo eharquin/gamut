@@ -221,7 +221,7 @@ unknown field as an implicit extension.
 | Field | Type | Rule |
 | --- | --- | --- |
 | `id` | string | Non-empty opaque immutable document identity. |
-| `formatVersion` | positive integer | Exactly the current version (`9`) after migration (section 4.1). |
+| `formatVersion` | positive integer | Exactly the current version (`10`) after migration (section 4.1). |
 | `languageVersion` | positive integer | Selects source syntax and semantics. |
 | `algebra` | `AlgebraReference` | Selects one validated algebra configuration. |
 | `interpretation` | `InterpretationReference \| null` | At most one active interpretation. |
@@ -545,9 +545,10 @@ previous one; the implementation records the migrations in
 | 7 | Appearance sources (`strokeWidthSource`, `pointSizeSource`, `opacitySource`, `labelAngleSource`, `labelSizeSource`, `labelDistanceSource`), `strokeStyle`, `pointStyle`, `labelAnchor`, and `primitiveStyles`; `Item.normalization` adds `euclidean` and `ideal`; the style registry adds `orange`, `teal`, `purple`, and `pink`. The migration fills empty sources, `solid`, `dot`, and `labelAnchor: top-right` (the fixed position of earlier versions), and moves `pointListDisplay` to `primitiveStyles.points.connection` and `pointMarkersVisible` to `primitiveStyles.points.visible`, kept `true` for an unconnected list, which always drew its markers; `primitiveStyles.lines.orientationVisible` copies the item's orientation. Normalization is unchanged. |
 | 8 | **Planned for 0.3.0; may change until 0.3.0 is published.** `ViewState.display.valuesVisible` ([#191](https://github.com/eharquin/gamut/issues/191)); earlier documents always showed their values, so the migration sets `valuesVisible: true`. Expression folders ([#83](https://github.com/eharquin/gamut/issues/83)): the optional `Item.folder`, the item's folder name list, and `Document.folders`, every folder with its `path` and `collapsed` state (section 2.4); the migration adds `folders: []`, so every item stays at the top level in its current order. |
 | 9 | **Planned for 0.3.0; may change until 0.3.0 is published.** The source of an annotation is its text only: `kind` is stored and no longer follows from a leading `#`. Version 8, which was never released, kept that `#` in the source; the migration removes the first `#` of each annotation and the whitespace around its text, which is the text version 8 displayed, so that it does not become a heading. Expressions are unchanged. |
+| 10 | **Planned for 0.3.0; may change until 0.3.0 is published.** Each `Folder` gains `overwriteAppearance`, a boolean, and `appearance`, `null` or a complete `Appearance` record (section 2.2). `appearance.visible` false hides every item of the folder; the rest of the record is drawn instead of that of its items while `overwriteAppearance` is true, except the label fields. The migration sets `overwriteAppearance: false` and `appearance: null`. |
 
 A release can open only the format versions it knows. Release 0.2.0 cannot
-open a version 8 or 9 document; protecting an older release against a document
+open a version 8, 9, or 10 document; protecting an older release against a document
 stored in a newer format is deferred to
 [#275](https://github.com/eharquin/gamut/issues/275) and accepted while GAMUT
 has no users.

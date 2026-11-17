@@ -98,6 +98,14 @@ export type ExpressionItem = Readonly<{
 export type ExpressionFolder = Readonly<{
   path: FolderPath
   collapsed: boolean
+  /**
+   * The appearance of the folder. Its `visible` hides every row of the folder
+   * when false; the rest applies to the rows only while `overwriteAppearance`
+   * is on. Absent until the folder's menu is first used.
+   */
+  appearance?: ExpressionAppearance
+  /** The folder's appearance replaces that of every row it holds, without changing theirs. */
+  overwriteAppearance?: boolean
 }>
 
 export type ExpressionDocument = Readonly<{

@@ -3,6 +3,7 @@ import { executeDocumentCommand, type DocumentCommand } from './documentCommands
 import { createDocumentHistory, documentHistoryReducer } from './documentHistory'
 import { expressionDocument, type ExpressionDocument, type ExpressionItem } from './expressionDocument'
 import {
+  drawnAppearances,
   expressionRows,
   folderPosition,
   folderStepPlacement,
@@ -341,6 +342,71 @@ describe('moving folders', () => {
 
 })
 
+describe('folder appearance', () => {
+  const styled = (): ExpressionDocument => ({
+    ...sample(),
+    appearance: { a: { style: 'green-4' }, b: { style: 'red-4', strokeWidthSource: '3', label: 'B', labelVisible: true }, c: { style: 'orange-4' } },
+  })
+
+  it('overwrites the appearance of every row of the folder only while asked, keeping labels and the stored rows', () => {
+    const document = apply(styled(), { kind: 'update-folder-appearance', path: ['F'], appearance: { style: 'purple-3', strokeStyle: 'dashed' } })
+    // Not overwriting: the rows are drawn as they are stored.
+    expect(drawnAppearances(document)).toBe(document.appearance)
+    const overwriting = apply(document, { kind: 'update-folder-appearance', path: ['F'], overwriteAppearance: true })
+    const drawn = drawnAppearances(overwriting)
+    // b and c, in F and F › G, take the folder's settings; a, outside, keeps its own.
+    expect(drawn.a).toEqual({ style: 'green-4' })
+    expect(drawn.b).toMatchObject({ style: 'purple-3', strokeStyle: 'dashed', label: 'B', labelVisible: true })
+    // A setting the folder leaves unset is the default for its rows.
+    expect(drawn.b.strokeWidthSource).toBeUndefined()
+    expect(drawn.c).toMatchObject({ style: 'purple-3', strokeStyle: 'dashed' })
+    // The stored rows are unchanged, so turning it off gives them back.
+    expect(overwriting.appearance).toEqual(styled().appearance)
+    const off = apply(overwriting, { kind: 'update-folder-appearance', path: ['F'], overwriteAppearance: false })
+    expect(drawnAppearances(off)).toBe(off.appearance)
+  })
+
+  it('lets the nearest overwriting folder win', () => {
+    let document = apply(styled(), { kind: 'update-folder-appearance', path: ['F'], appearance: { style: 'purple-3' }, overwriteAppearance: true })
+    document = apply(document, { kind: 'update-folder-appearance', path: ['F', 'G'], appearance: { style: 'teal-3' }, overwriteAppearance: true })
+    expect(drawnAppearances(document).b.style).toBe('purple-3')
+    expect(drawnAppearances(document).c.style).toBe('teal-3')
+  })
+
+  it('hides every row of a hidden folder, whether it overwrites or not, without changing their own visibility', () => {
+    const document = apply(styled(), { kind: 'update-folder-appearance', path: ['F'], appearance: { visible: false } })
+    const drawn = drawnAppearances(document)
+    expect([drawn.a.visible, drawn.b.visible, drawn.c.visible]).toEqual([undefined, false, false])
+    expect(document.appearance.b.visible).toBeUndefined()
+  })
+
+  it('keeps the appearance of a folder through rename, undo, and the canonical format', () => {
+    let document = apply(styled(), { kind: 'update-folder-appearance', path: ['F'], appearance: { style: 'purple-3', visible: false }, overwriteAppearance: true })
+    document = apply(document, { kind: 'rename-folder', path: ['F'], name: 'Shapes' })
+    expect(document.folders?.[0]).toMatchObject({ path: ['Shapes'], overwriteAppearance: true, appearance: { style: 'purple-3', visible: false } })
+    const bytes = serializeCanonicalDocument(toCanonicalDocument(document, 'light'))
+    expect(serializeCanonicalDocument(parseCanonicalDocument(bytes))).toBe(bytes)
+    const restored = fromCanonicalDocument(parseCanonicalDocument(bytes)).document
+    expect(restored.folders?.[0]).toMatchObject({ path: ['Shapes'], overwriteAppearance: true, appearance: { style: 'purple-3', visible: false, strokeStyle: 'solid' } })
+    // A folder without its own appearance stays without one.
+    expect(restored.folders?.[1]).toEqual({ path: ['Shapes', 'G'], collapsed: false })
+    let history = createDocumentHistory(styled())
+    history = documentHistoryReducer(history, { type: 'execute', command: { kind: 'update-folder-appearance', path: ['F'], overwriteAppearance: true } })
+    history = documentHistoryReducer(history, { type: 'undo' })
+    expect(history.present.folders?.[0].overwriteAppearance).toBeUndefined()
+  })
+
+  it('migrates version 9 folders as having no appearance of their own', () => {
+    const current = JSON.parse(serializeCanonicalDocument(toCanonicalDocument(sample(), 'light'))) as Record<string, unknown>
+    const folders = (current.folders as Record<string, unknown>[]).map(({ overwriteAppearance: _o, appearance: _a, ...folder }) => folder)
+    const migrated = parseCanonicalDocument(JSON.stringify({ ...current, formatVersion: 9, folders }))
+    expect(migrated.folders).toEqual([
+      { path: ['F'], collapsed: false, overwriteAppearance: false, appearance: null },
+      { path: ['F', 'G'], collapsed: false, overwriteAppearance: false, appearance: null },
+    ])
+  })
+})
+
 describe('folder history', () => {
   it('undoes and redoes folder commands', () => {
     let history = createDocumentHistory(sample())
@@ -383,7 +449,7 @@ describe('canonical folders', () => {
     const restored = fromCanonicalDocument(parsed).document
     expect(restored.folders).toEqual(document.folders)
     expect(restored.items.map(({ id, folder }) => [id, folder])).toEqual([['a', undefined], ['b', ['F']], ['c', ['F', 'G']], ['d', undefined]])
-    expect(bytes).toContain('"folders":[{"collapsed":true,"path":["F"]}')
+    expect(bytes).toContain('"folders":[{"appearance":null,"collapsed":true,"overwriteAppearance":false,"path":["F"]}')
     expect(bytes).not.toContain('"folder":[]')
   })
 
@@ -409,14 +475,16 @@ describe('canonical folders', () => {
       expect(() => parseCanonicalDocument(JSON.stringify(copy))).toThrow(expect.objectContaining({ code }))
     }
     reject((document) => { (document.items as Record<string, unknown>[])[0].folder = ['Nowhere'] }, 'DOCUMENT_ORPHAN_FOLDER')
-    reject((document) => { document.folders = [{ path: ['F'], collapsed: false }, { path: ['F'], collapsed: true }, { path: ['F', 'G'], collapsed: false }] }, 'DOCUMENT_DUPLICATE_FOLDER')
-    reject((document) => { document.folders = [{ path: ['F', 'G'], collapsed: false }] }, 'DOCUMENT_ORPHAN_FOLDER')
-    reject((document) => { document.folders = [{ path: [''], collapsed: false }] }, 'DOCUMENT_FOLDER_NAME')
-    reject((document) => { document.folders = [{ path: [], collapsed: false }] }, 'DOCUMENT_FOLDER_NAME')
-    reject((document) => { document.folders = [{ path: ['F'], collapsed: false, color: 'red' }] }, 'DOCUMENT_UNKNOWN_FIELD')
-    reject((document) => { document.folders = [{ path: ['x'.repeat(129)], collapsed: false }] }, 'LIMIT_FOLDER_NAME_LENGTH')
-    reject((document) => { document.folders = Array.from({ length: 9 }, (_, depth) => ({ path: Array.from({ length: depth + 1 }, () => 'L'), collapsed: false })) }, 'LIMIT_FOLDER_DEPTH')
-    reject((document) => { document.folders = Array.from({ length: 257 }, (_, index) => ({ path: [`F${index}`], collapsed: false })) }, 'LIMIT_FOLDER_COUNT')
+    reject((document) => { document.folders = [{ path: ['F'], collapsed: false, overwriteAppearance: false, appearance: null }, { path: ['F'], collapsed: true, overwriteAppearance: false, appearance: null }, { path: ['F', 'G'], collapsed: false, overwriteAppearance: false, appearance: null }] }, 'DOCUMENT_DUPLICATE_FOLDER')
+    reject((document) => { document.folders = [{ path: ['F', 'G'], collapsed: false, overwriteAppearance: false, appearance: null }] }, 'DOCUMENT_ORPHAN_FOLDER')
+    reject((document) => { document.folders = [{ path: [''], collapsed: false, overwriteAppearance: false, appearance: null }] }, 'DOCUMENT_FOLDER_NAME')
+    reject((document) => { document.folders = [{ path: [], collapsed: false, overwriteAppearance: false, appearance: null }] }, 'DOCUMENT_FOLDER_NAME')
+    reject((document) => { document.folders = [{ path: ['F'], collapsed: false, overwriteAppearance: false, appearance: null, color: 'red' }] }, 'DOCUMENT_UNKNOWN_FIELD')
+    reject((document) => { document.folders = [{ path: ['x'.repeat(129)], collapsed: false, overwriteAppearance: false, appearance: null }] }, 'LIMIT_FOLDER_NAME_LENGTH')
+    reject((document) => { document.folders = Array.from({ length: 9 }, (_, depth) => ({ path: Array.from({ length: depth + 1 }, () => 'L'), collapsed: false, overwriteAppearance: false, appearance: null })) }, 'LIMIT_FOLDER_DEPTH')
+    reject((document) => { document.folders = Array.from({ length: 257 }, (_, index) => ({ path: [`F${index}`], collapsed: false, overwriteAppearance: false, appearance: null })) }, 'LIMIT_FOLDER_COUNT')
+    // A folder appearance is a complete appearance record.
+    reject((document) => { document.folders = [{ path: ['F'], collapsed: false, overwriteAppearance: true, appearance: { style: 'red-4' } }, { path: ['F', 'G'], collapsed: false, overwriteAppearance: false, appearance: null }] }, 'DOCUMENT_UNKNOWN_FIELD')
   })
 
   it('counts a name in code points', () => {

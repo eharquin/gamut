@@ -83,7 +83,7 @@ describe('expression folders (DOC-013, A11Y-011)', () => {
     expect(folderButton('Sums')).toHaveAttribute('aria-expanded', 'false')
     expect(visibleSources()).toEqual(['A = 1'])
     expect(undo).toBeDisabled()
-    await waitFor(() => expect(stored().folders).toEqual([{ path: ['Sums'], collapsed: true }]))
+    await waitFor(() => expect(stored().folders).toEqual([{ path: ['Sums'], collapsed: true, overwriteAppearance: false, appearance: null }]))
 
     // Plain arrows skip the hidden rows.
     fireEvent.click(folderButton('Sums'))
@@ -253,6 +253,46 @@ describe('expression folders (DOC-013, A11Y-011)', () => {
     })
     expect(editorOf('B = 2').closest('.folder-member')).toHaveStyle({ '--folder-depth': '1' })
     expect(editorOf('A = 1').closest('.folder-member')).not.toHaveStyle({ '--folder-depth': '1' })
+  })
+
+  it('hides the rows of a folder with its eye, and overwrites their appearance from its menu', () => {
+    open({
+      ...expressionDocument([
+        { id: 'a', source: 'A = vector(1, 0)' },
+        { id: 'b', source: 'B = vector(0, 1)', folder: ['Basis'] },
+      ], { a: { style: 'green-4' }, b: { style: 'red-4' } }, { id: 'folders', title: 'Folders' }),
+      folders: [{ path: ['Basis'], collapsed: false }],
+    })
+    const description = () => screen.getByRole('img', { name: /Two-dimensional VGA viewport/ }).textContent ?? ''
+    expect(description()).toMatch(/B runs/)
+    fireEvent.click(screen.getByRole('button', { name: 'Hide folder Basis' }))
+    expect(description()).not.toMatch(/B runs/)
+    expect(description()).toMatch(/A runs/)
+    // The row keeps its own eye: showing the folder brings it back.
+    expect(screen.getByRole('button', { name: 'Hide B' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Show folder Basis' }))
+    expect(description()).toMatch(/B runs/)
+
+    const swatch = (name: string) => (screen.getByRole('textbox', { name }).closest('.expression-item') as HTMLElement)
+      .querySelector<HTMLElement>('.appearance-swatch-fill')!.style.backgroundColor
+    const before = swatch('Expression 2')
+    fireEvent.click(screen.getByRole('button', { name: 'Open appearance menu for folder Basis' }))
+    const menu = screen.getByRole('dialog', { name: 'Folder Basis' })
+    // The menu shows the kinds the folder holds, and no label.
+    expect(within(menu).getByRole('button', { name: 'Vectors' })).toBeInTheDocument()
+    expect(within(menu).queryByText('Label')).not.toBeInTheDocument()
+    fireEvent.click(within(menu).getByRole('button', { name: 'Purple' }))
+    // Off by default: the row keeps its own colour.
+    expect(swatch('Expression 2')).toBe(before)
+    fireEvent.click(within(menu).getByRole('switch', { name: 'Overwrite appearance' }))
+    expect(swatch('Expression 2')).not.toBe(before)
+    expect(screen.getByText('Appearance set by the folder Basis')).toBeInTheDocument()
+    // The row outside the folder is unchanged.
+    expect(screen.getByRole('button', { name: /^Open .* menu for A$/ })).toBeInTheDocument()
+    // One undo turns the overwrite off and gives the row its colour back.
+    fireEvent.keyDown(document, { key: 'Escape' })
+    fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
+    expect(swatch('Expression 2')).toBe(before)
   })
 
   it('drops a dragged row into a folder', () => {

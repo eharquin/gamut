@@ -1,4 +1,4 @@
-import type { ExpressionDocument, ExpressionFolder, ExpressionItem } from './expressionDocument'
+import { mergeAppearance, type ExpressionAppearance, type ExpressionDocument, type ExpressionFolder, type ExpressionItem } from './expressionDocument'
 import {
   buildFolderTree,
   describeFolder,
@@ -150,6 +150,85 @@ export function setFolderCollapsed(document: ExpressionDocument, path: FolderPat
 export function foldersToReveal(document: ExpressionDocument, path: FolderPath): FolderPath[] {
   return path.map((_, index) => path.slice(0, index + 1))
     .filter((ancestor) => isFolderCollapsed(document, ancestor))
+}
+
+/**
+ * The appearance settings a folder overwrites on its rows. Visibility is
+ * combined instead, and labels stay those of each row: a label names one row.
+ */
+export const OVERWRITTEN_APPEARANCE_FIELDS = [
+  'style', 'opacitySource', 'strokeStyle', 'strokeWidthSource', 'pointStyle', 'pointSizeSource',
+  'borderVisible', 'orientationVisible', 'bivectorShape', 'idealPointDisplay', 'primitiveStyles',
+] as const satisfies readonly (keyof ExpressionAppearance)[]
+
+/** Changes the appearance of a folder, and whether it overwrites that of its rows. */
+export function updateFolderAppearance(
+  document: ExpressionDocument,
+  path: FolderPath,
+  change: Readonly<{ appearance?: ExpressionAppearance; overwriteAppearance?: boolean }>,
+): FolderEdit {
+  if (path.length === 0 || !hasFolder(document, path)) return refused('The folder does not exist.')
+  return {
+    status: 'applied',
+    document: {
+      ...document,
+      folders: documentFolders(document).map((folder) => samePath(folder.path, path) ? {
+        ...folder,
+        ...(change.appearance ? { appearance: mergeAppearance(folder.appearance, change.appearance) } : {}),
+        ...(change.overwriteAppearance === undefined ? {} : { overwriteAppearance: change.overwriteAppearance }),
+      } : folder),
+    },
+  }
+}
+
+/** The folder whose appearance overwrites that of a row: the nearest one that does, or null. */
+export function overwritingFolder(document: ExpressionDocument, item: ExpressionItem): ExpressionFolder | null {
+  const folder = itemFolder(item)
+  let found: ExpressionFolder | null = null
+  for (const candidate of documentFolders(document)) {
+    if (!candidate.overwriteAppearance || !isWithin(folder, candidate.path)) continue
+    if (!found || candidate.path.length > found.path.length) found = candidate
+  }
+  return found
+}
+
+/** Whether a folder above a row is hidden, which hides the row. */
+export function hiddenByFolder(document: ExpressionDocument, item: ExpressionItem): boolean {
+  const folder = itemFolder(item)
+  return documentFolders(document).some((candidate) => candidate.appearance?.visible === false && isWithin(folder, candidate.path))
+}
+
+/** The appearance of a row with the settings its folder overwrites; its own when none does. */
+export function rowAppearance(document: ExpressionDocument, item: ExpressionItem): ExpressionAppearance | undefined {
+  const own = document.appearance[item.id]
+  const folder = overwritingFolder(document, item)
+  if (!folder) return own
+  const overwritten: Record<string, unknown> = {}
+  for (const field of OVERWRITTEN_APPEARANCE_FIELDS) {
+    const value = folder.appearance?.[field]
+    // A setting the folder leaves at its default resets the row to that default.
+    overwritten[field] = value
+  }
+  return { ...own, ...overwritten } as ExpressionAppearance
+}
+
+/**
+ * The appearance every row is drawn with (DOC-013): the settings of the
+ * nearest folder that overwrites them, and hidden when a folder above it is
+ * hidden. The stored appearance of each row is unchanged. Returns the stored
+ * record itself when no folder changes anything.
+ */
+export function drawnAppearances(document: ExpressionDocument): ExpressionDocument['appearance'] {
+  const folders = documentFolders(document)
+  if (!folders.some((folder) => folder.overwriteAppearance || folder.appearance?.visible === false)) return document.appearance
+  const result: Record<string, ExpressionAppearance> = { ...document.appearance }
+  for (const item of document.items) {
+    const appearance = rowAppearance(document, item)
+    const hidden = hiddenByFolder(document, item)
+    if (appearance === document.appearance[item.id] && !hidden) continue
+    result[item.id] = hidden ? { ...appearance, visible: false } : appearance ?? {}
+  }
+  return result
 }
 
 /** The move of one item to a position in the folder tree, as a document command. */
