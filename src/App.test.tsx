@@ -4932,9 +4932,13 @@ describe('local library of named graphs (#212)', () => {
       fireEvent.click(within(panel).getByRole('tab', { name: 'Examples' }))
       const exampleNames = () => within(panel).getAllByRole('button', { name: /^Open example / })
         .map((button) => button.getAttribute('aria-label'))
-      expect(exampleNames()).toEqual(['Open example VGA 2D Rotation Example', 'Open example PGA 2D Triangle Example'])
+      expect(exampleNames()).toHaveLength(10)
+      expect(exampleNames()).toContain('Open example VGA 2D Rotation Example')
+      expect(exampleNames()).toContain('Open example PGA 2D Triangle Example')
       fireEvent.click(within(panel).getByRole('button', { name: 'PGA' }))
-      expect(exampleNames()).toEqual(['Open example PGA 2D Triangle Example'])
+      // The filter keeps the PGA(2) examples only.
+      expect(exampleNames()).toHaveLength(7)
+      expect(exampleNames()).not.toContain('Open example VGA 2D Rotation Example')
       fireEvent.click(within(panel).getByRole('button', { name: 'All' }))
       // Examples are read-only.
       expect(within(panel).queryByRole('button', { name: /^(Rename|Delete|Duplicate) / })).not.toBeInTheDocument()

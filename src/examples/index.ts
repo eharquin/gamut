@@ -1,6 +1,14 @@
 import { parseCanonicalDocument, type CanonicalDocument } from '../document/canonicalDocument'
+import pga2Desargues from './pga2-desargues.gamut.json?raw'
+import pga2DistancesAndAngles from './pga2-distances-and-angles.gamut.json?raw'
+import pga2EulerLine from './pga2-euler-line.gamut.json?raw'
+import pga2PointsAndLines from './pga2-points-and-lines.gamut.json?raw'
+import pga2ProjectAndReject from './pga2-project-and-reject.gamut.json?raw'
+import pga2RotorsAndTranslators from './pga2-rotors-and-translators.gamut.json?raw'
 import pga2Triangle from './pga2-triangle.gamut.json?raw'
+import vga2Reflections from './vga2-reflections.gamut.json?raw'
 import vga2Rotation from './vga2-rotation.gamut.json?raw'
+import vga2VectorsAndProducts from './vga2-vectors-and-products.gamut.json?raw'
 import type { FolderPath } from '../document/folderModel'
 
 /**
@@ -21,6 +29,15 @@ export type ShippedExample = Readonly<{ id: string; source: string; folder?: Fol
 export const SHIPPED_EXAMPLES: readonly ShippedExample[] = [
   { id: 'vga2-rotation', source: vga2Rotation, folder: ['VGA(2)'] },
   { id: 'pga2-triangle', source: pga2Triangle, folder: ['PGA(2)'] },
+  // A first set after the PGA(2) samples of ganja.js (#270), by algebra, then by topic.
+  { id: 'vga2-vectors-and-products', source: vga2VectorsAndProducts, folder: ['VGA(2)', 'Basics'] },
+  { id: 'vga2-reflections', source: vga2Reflections, folder: ['VGA(2)', 'Transformations'] },
+  { id: 'pga2-points-and-lines', source: pga2PointsAndLines, folder: ['PGA(2)', 'Basics'] },
+  { id: 'pga2-distances-and-angles', source: pga2DistancesAndAngles, folder: ['PGA(2)', 'Basics'] },
+  { id: 'pga2-project-and-reject', source: pga2ProjectAndReject, folder: ['PGA(2)', 'Basics'] },
+  { id: 'pga2-rotors-and-translators', source: pga2RotorsAndTranslators, folder: ['PGA(2)', 'Transformations'] },
+  { id: 'pga2-euler-line', source: pga2EulerLine, folder: ['PGA(2)', 'Constructions'] },
+  { id: 'pga2-desargues', source: pga2Desargues, folder: ['PGA(2)', 'Constructions'] },
 ]
 
 /** An example as the library lists it; its document is read-only. */
