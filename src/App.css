@@ -75,8 +75,7 @@
 }
 
 .app-title:focus-visible,
-.add-expression:focus-visible,
-.add-folder:focus-visible,
+.toolbar-add:focus-visible,
 .folder-toggle:focus-visible,
 .folder-action:focus-visible,
 .history-command:focus-visible,
@@ -418,6 +417,7 @@
 
 .expression-toolbar {
   flex-shrink: 0;
+  position: relative;
   display: flex;
   align-items: center;
   min-height: 40px;
@@ -426,7 +426,11 @@
   border-bottom: 1px solid var(--border-subtle);
 }
 
+/* Undo and redo sit in the middle of the toolbar, whatever is on either side. */
 .expression-history-controls {
+  position: absolute;
+  inset-inline-start: 50%;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -1792,6 +1796,15 @@ body.reordering-items .reorder-handle {
   opacity: 0.85;
 }
 
+/* The kind and its detail, such as "Point at (-3.18, -1.79)", stay on one
+   line: a narrow panel cuts the line short instead of wrapping it. */
+span.object-kind {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .approximated-indicator {
   margin-left: 2px;
   font-weight: 400;
@@ -2513,26 +2526,36 @@ body.reordering-items .reorder-handle {
   line-height: 1.4;
 }
 
-.add-expression {
-  min-height: 30px;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 4px 9px;
+.toolbar-add {
+  width: 30px;
+  height: 30px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
   color: var(--accent);
   background: transparent;
   border: 1px solid transparent;
   border-radius: 4px;
-  font: 700 0.76rem var(--font-mono);
   cursor: pointer;
 }
 
-.add-expression:hover:not(:disabled) {
+/* The folder is drawn around a plus of the size of the Add expression one. */
+.toolbar-add.is-folder {
+  width: 38px;
+}
+
+.toolbar-add svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+
+.toolbar-add:hover:not(:disabled) {
   background: var(--accent-soft);
   border-color: var(--accent-border);
 }
 
-.add-expression:disabled {
+.toolbar-add:disabled {
   opacity: 0.45;
   cursor: default;
 }
@@ -3838,29 +3861,6 @@ html.is-embedded body {
 }
 
 /* Expression and library folders (DOC-013, STORE-016). */
-.add-folder {
-  width: 30px;
-  height: 30px;
-  display: inline-grid;
-  place-items: center;
-  padding: 0;
-  color: var(--accent);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.add-folder svg {
-  stroke: currentColor;
-  stroke-width: 1.4;
-}
-
-.add-folder:hover {
-  background: var(--accent-soft);
-  border-color: var(--accent-border);
-}
-
 /* The indent of a row inside a folder is filled with the colour of the folder header. */
 .folder-member {
   --folder-indent: 14px;
