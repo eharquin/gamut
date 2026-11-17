@@ -451,7 +451,20 @@ export function stepPlacement(document: ExpressionDocument, itemId: string, step
     return previous.expanded ? { kind: 'end', folder: previous.path } : { kind: 'before-folder', path: previous.path }
   }
   const next = rows[index + 1]
-  if (!next || !samePath(rowParent(next), own)) return leave
+  if (!next || !samePath(rowParent(next), own)) {
+    // The only row of a folder leaves it empty, and an empty folder shows
+    // after the rows of its parent. Followed by nothing or by empty folders,
+    // the row would come back above them, so down never leaves: it enters the
+    // next empty folder of the same parent declared later, or stays, so that
+    // a row never cycles between empty folders.
+    const alone = own.length > 0 && !document.items.some((item) => item.id !== itemId && isWithin(itemFolder(item), own))
+    const emptyAfter = !next || (next.kind === 'folder' && next.entryCount === 0)
+    if (!alone || !emptyAfter) return leave
+    if (!next || next.kind !== 'folder' || !next.expanded || !samePath(parentPath(next.path), parentPath(own))) return null
+    const order = folderPaths(document)
+    const later = order.findIndex((path) => samePath(path, next.path)) > order.findIndex((path) => samePath(path, own))
+    return later ? { kind: 'start', folder: next.path } : null
+  }
   if (next.kind === 'entry') return { kind: 'after', itemId: next.entry.id }
   if (next.expanded) return { kind: 'start', folder: next.path }
   // A collapsed folder is skipped; one without items is among the last rows
