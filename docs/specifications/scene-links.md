@@ -36,7 +36,7 @@ diagnostic and leaves JSON import/export available. SHA-256 detects corruption;
 it does not authenticate the author, so the document is still untrusted input.
 
 Unknown fragment options are ignored. The display options of
-[embed mode](#embed-mode) (`embed`, `theme`, `lock`) are read next to `scene`
+[embed mode](#embed-mode) (`embed`, `theme`, `lock`, `bg`) are read next to `scene`
 and never change the canonical document, whose theme is preserved.
 
 ## Validation and limits
@@ -147,6 +147,7 @@ fragment overrides the detection:
 | `embed=0` | Turns embed mode off inside a frame: the full editor opens. |
 | `theme=light` or `theme=dark` | Overrides the document theme for this view; the document is unchanged. |
 | `lock=1` | Opens with the viewport locked: no pan or zoom by pointer, wheel, or keyboard, and no zoom controls, while objects stay draggable. |
+| `bg=transparent` or `bg=rrggbb` / `bg=rgb` | Paints the page and the canvas without a background, or in that colour, given as hexadecimal digits without `#`; any other value is ignored. Grid, axes, labels, and objects keep the theme colours. |
 
 Options sit next to `scene`, in any order, for example
 `#scene=1.deflate-raw.…&embed=1&lock=1`. They are read without decoding the

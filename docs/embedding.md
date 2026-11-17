@@ -53,8 +53,15 @@ They change only how the embedded view is displayed, never the scene itself.
 | `theme=light` | Light colors, whatever the scene's theme. |
 | `theme=dark` | Dark colors, whatever the scene's theme. |
 | `lock=1` | Locks the view: no panning or zooming, and no zoom buttons. Objects can still be dragged. |
+| `bg=transparent` | No background: the slide shows through behind the grid and the objects. |
+| `bg=f5f0e6` | A background of that colour, as 6 or 3 hexadecimal digits without `#`. |
 | `embed=1` | Shows the canvas-only view even outside an iframe, to preview it in a browser tab. |
 | `embed=0` | Shows the full editor inside an iframe. |
+
+The grid, axes, labels, and objects keep the colours of the theme, so choose
+`theme=dark` on a dark background and `theme=light` on a light one. With
+`bg=transparent`, some browsers paint an opaque backdrop when the theme of the
+scene and that of the presentation page differ; matching them avoids it.
 
 Example, a dark scene with a fixed view:
 
