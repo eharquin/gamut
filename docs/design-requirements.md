@@ -263,7 +263,9 @@ They are stored in canonical format version 8.
   overwriting folder winning, and their own settings come back when it is
   off; labels stay those of each item. The folder's menu shows a section for
   each kind of object it holds. Removing a folder keeps its
-  items at the folder's position in its parent. The document format
+  items at the folder's position in its parent. A folder without items keeps
+  a place of its own among the rows: it is moved like any other folder, and
+  a folder emptied by moving or deleting its rows stays where it was. The document format
   allows nested folders, and a document that holds them is displayed and
   edited, but until nesting is designed the interface keeps every folder it
   creates or moves at the top level. Typing `/` as the first character of an

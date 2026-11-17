@@ -325,22 +325,51 @@ describe('interface scenarios', () => {
     expect(panel()).toEqual(['[Basis]', '  A = vector(1, 0)', '  B = vector(0, 1)', '"S is the sum'])
   })
 
-  it('walks a row through empty folders by keyboard without cycling', () => {
+  it('walks a row through empty folders by keyboard, in and out of each, without cycling', () => {
     open(doc(['A = 1', 'B = 2'], [{ path: ['E1'], collapsed: false }, { path: ['E2'], collapsed: false }]))
     expect(panel()).toEqual(['A = 1', 'B = 2', '[E1]', '[E2]'])
     act(() => rowHandle('B = 2').focus())
     const down = () => key(document.activeElement as HTMLElement, 'ArrowDown', { altKey: true })
+    const up = () => key(document.activeElement as HTMLElement, 'ArrowUp', { altKey: true })
+    const visited: string[][] = []
+    for (let move = 0; move < 4; move += 1) { down(); visited.push(panel()) }
+    expect(visited).toEqual([
+      ['A = 1', '[E1]', '  B = 2', '[E2]'],
+      ['A = 1', '[E1]', 'B = 2', '[E2]'],
+      ['A = 1', '[E1]', '[E2]', '  B = 2'],
+      ['A = 1', '[E1]', '[E2]', 'B = 2'],
+    ])
     down()
-    expect(panel()).toEqual(['A = 1', '[E1]', '  B = 2', '[E2]'])
-    // From the only row of E1 down enters the next empty folder, and never goes back up.
-    down()
-    expect(panel()).toEqual(['A = 1', '[E2]', '  B = 2', '[E1]'])
-    down()
-    expect(panel()).toEqual(['A = 1', '[E2]', '  B = 2', '[E1]'])
     announced('B cannot move down.')
-    // Up leaves the folder, to the margin.
-    key(document.activeElement as HTMLElement, 'ArrowUp', { altKey: true })
+    // Up goes back the same way, and the focus stays on the handle.
+    for (let move = 0; move < 4; move += 1) up()
     expect(panel()).toEqual(['A = 1', 'B = 2', '[E1]', '[E2]'])
     expect(rowHandle('B = 2')).toHaveFocus()
   })
+
+  it('moves an empty folder by its handle, with the keyboard and by dragging', () => {
+    open(doc(['A = 1', 'B = 2', 'C = 3'], [{ path: ['Box'], collapsed: false }], { 1: ['Box'] }))
+    fireEvent.click(screen.getByRole('button', { name: 'New folder' }))
+    key(screen.getByRole('textbox', { name: 'Name of folder New folder' }), 'Escape')
+    expect(panel()).toEqual(['A = 1', '[Box]', '  B = 2', 'C = 3', '[New folder]'])
+    // By keyboard, up past a row and past a folder.
+    act(() => folderHandle('New folder').focus())
+    key(folderHandle('New folder'), 'ArrowUp', { altKey: true })
+    expect(panel()).toEqual(['A = 1', '[Box]', '  B = 2', '[New folder]', 'C = 3'])
+    key(folderHandle('New folder'), 'ArrowUp', { altKey: true })
+    expect(panel()).toEqual(['A = 1', '[New folder]', '[Box]', '  B = 2', 'C = 3'])
+    expect(folderHandle('New folder')).toHaveFocus()
+    // By dragging, after the last row.
+    drag(folderHandle('New folder'), at('C = 3', 'lower'))
+    expect(panel()).toEqual(['A = 1', '[Box]', '  B = 2', 'C = 3', '[New folder]'])
+    // Before the first row.
+    drag(folderHandle('New folder'), at('A = 1', 'upper'))
+    expect(panel()).toEqual(['[New folder]', 'A = 1', '[Box]', '  B = 2', 'C = 3'])
+    // One undo per move, and the place is kept through a reload.
+    undo()
+    expect(panel()).toEqual(['A = 1', '[Box]', '  B = 2', 'C = 3', '[New folder]'])
+    redo()
+    return reload().then(() => expect(panel()).toEqual(['[New folder]', 'A = 1', '[Box]', '  B = 2', 'C = 3']))
+  })
+
 })

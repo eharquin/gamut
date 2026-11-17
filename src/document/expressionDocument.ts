@@ -106,6 +106,14 @@ export type ExpressionFolder = Readonly<{
   appearance?: ExpressionAppearance
   /** The folder's appearance replaces that of every row it holds, without changing theirs. */
   overwriteAppearance?: boolean
+  /**
+   * Where a folder without items shows: just before the row, or the folder,
+   * that holds this item at its level. A folder with items shows at its first
+   * item; absent, or naming an item that is not there, an empty folder shows
+   * after the other rows of its parent. Empty folders before one item keep
+   * the order of the folder list.
+   */
+  before?: string
 }>
 
 export type ExpressionDocument = Readonly<{

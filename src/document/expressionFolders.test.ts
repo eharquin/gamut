@@ -224,15 +224,13 @@ describe('moving rows', () => {
     ]
     const document = { ...expressionDocument(items), folders: [{ path: ['E'], collapsed: false }] }
     expect(layout(document)).toEqual(['b', '[E]', '  a', 'c'])
-    // The emptied folder goes last; the row stays between its neighbours.
-    for (const direction of ['up', 'down'] as const) {
-      const moved = step(document, 'a', direction)
-      expect(layout(moved)).toEqual(['b', 'a', 'c', '[E]'])
-      expectItemOrderMatchesRows(moved)
-    }
-    // A row dropped before a folder that was already empty joins the end of its parent.
+    // The emptied folder keeps its place: up, the row shows above it; down, below it.
+    expect(layout(step(document, 'a', 'up'))).toEqual(['b', 'a', '[E]', 'c'])
+    expect(layout(step(document, 'a', 'down'))).toEqual(['b', '[E]', 'a', 'c'])
+    for (const direction of ['up', 'down'] as const) expectItemOrderMatchesRows(step(document, 'a', direction))
+    // A row dropped before an empty folder shows just above it.
     const emptied = step(document, 'a', 'up')
-    expect(layout(move(emptied, 'b', { kind: 'before-folder', path: ['E'] }))).toEqual(['a', 'c', 'b', '[E]'])
+    expect(layout(move(emptied, 'b', { kind: 'before-folder', path: ['E'] }))).toEqual(['a', 'b', '[E]', 'c'])
   })
 
   it('skips over a collapsed folder by keyboard', () => {
@@ -335,9 +333,44 @@ describe('moving folders', () => {
     document = stepFolder(document, ['F'], 'up')
     expect(layout(document)).toEqual(['a', '[F]', '  b', '[H]', '  c', 'd'])
     expectItemOrderMatchesRows(document)
-    // A folder without rows holds the last place and is not passed.
+    // A folder without rows is passed like any other.
     const withEmpty = apply(document, { kind: 'create-folder', path: ['E'] })
-    expect(folderStepPlacement(stepFolder(stepFolder(withEmpty, ['F'], 'down'), ['F'], 'down'), ['F'], 'down')).toBeNull()
+    expect(layout(withEmpty)).toEqual(['a', '[F]', '  b', '[H]', '  c', 'd', '[E]'])
+    expect(layout(stepFolder(stepFolder(withEmpty, ['F'], 'down'), ['F'], 'down'))).toEqual(['a', '[H]', '  c', 'd', '[F]', '  b', '[E]'])
+    expect(layout(stepFolder(stepFolder(stepFolder(withEmpty, ['F'], 'down'), ['F'], 'down'), ['F'], 'down'))).toEqual(['a', '[H]', '  c', 'd', '[E]', '[F]', '  b'])
+  })
+
+  it('moves an empty folder between rows and folders, and keeps its place', () => {
+    let document = apply(siblings(), { kind: 'create-folder', path: ['E'] })
+    document = { ...document, folders: document.folders?.map((folder) => ({ ...folder, collapsed: false })) }
+    expect(layout(document)).toEqual(['a', '[F]', '  b', '[H]', '  c', 'd', '[E]'])
+    // Up through every row and folder, then no further.
+    const seen: string[][] = []
+    for (let move = 0; move < 6; move += 1) {
+      const placement = folderStepPlacement(document, ['E'], 'up')
+      if (!placement) break
+      document = stepFolder(document, ['E'], 'up')
+      seen.push(layout(document))
+    }
+    expect(seen).toEqual([
+      ['a', '[F]', '  b', '[H]', '  c', '[E]', 'd'],
+      ['a', '[F]', '  b', '[E]', '[H]', '  c', 'd'],
+      ['a', '[E]', '[F]', '  b', '[H]', '  c', 'd'],
+      ['[E]', 'a', '[F]', '  b', '[H]', '  c', 'd'],
+    ])
+    expect(folderStepPlacement(document, ['E'], 'up')).toBeNull()
+    // Its place survives an edit elsewhere and the canonical format.
+    document = apply(document, { kind: 'update-source', itemId: 'd', source: 'd = 4' })
+    const bytes = serializeCanonicalDocument(toCanonicalDocument(document, 'light'))
+    expect(layout(fromCanonicalDocument(parseCanonicalDocument(bytes)).document)).toEqual(['[E]', 'a', '[F]', '  b', '[H]', '  c', 'd'])
+    // Deleting the item it shows before keeps it before the item that followed.
+    expect(layout(apply(document, { kind: 'delete-item', itemId: 'a' }))).toEqual(['[E]', '[F]', '  b', '[H]', '  c', 'd'])
+    expect(apply(document, { kind: 'delete-item', itemId: 'a' }).folders?.find(({ path }) => path[0] === 'E')?.before).toBe('b')
+  })
+
+  it('keeps the place of a folder emptied by a deletion', () => {
+    const document = apply(siblings(), { kind: 'delete-item', itemId: 'b' })
+    expect(layout(document)).toEqual(['a', '[F]', '[H]+', 'd'])
   })
 
 })
@@ -401,8 +434,8 @@ describe('folder appearance', () => {
     const folders = (current.folders as Record<string, unknown>[]).map(({ overwriteAppearance: _o, appearance: _a, ...folder }) => folder)
     const migrated = parseCanonicalDocument(JSON.stringify({ ...current, formatVersion: 9, folders }))
     expect(migrated.folders).toEqual([
-      { path: ['F'], collapsed: false, overwriteAppearance: false, appearance: null },
-      { path: ['F', 'G'], collapsed: false, overwriteAppearance: false, appearance: null },
+      { path: ['F'], collapsed: false, overwriteAppearance: false, appearance: null, before: null },
+      { path: ['F', 'G'], collapsed: false, overwriteAppearance: false, appearance: null, before: null },
     ])
   })
 })
@@ -449,7 +482,7 @@ describe('canonical folders', () => {
     const restored = fromCanonicalDocument(parsed).document
     expect(restored.folders).toEqual(document.folders)
     expect(restored.items.map(({ id, folder }) => [id, folder])).toEqual([['a', undefined], ['b', ['F']], ['c', ['F', 'G']], ['d', undefined]])
-    expect(bytes).toContain('"folders":[{"appearance":null,"collapsed":true,"overwriteAppearance":false,"path":["F"]}')
+    expect(bytes).toContain('"folders":[{"appearance":null,"before":null,"collapsed":true,"overwriteAppearance":false,"path":["F"]}')
     expect(bytes).not.toContain('"folder":[]')
   })
 
@@ -475,16 +508,16 @@ describe('canonical folders', () => {
       expect(() => parseCanonicalDocument(JSON.stringify(copy))).toThrow(expect.objectContaining({ code }))
     }
     reject((document) => { (document.items as Record<string, unknown>[])[0].folder = ['Nowhere'] }, 'DOCUMENT_ORPHAN_FOLDER')
-    reject((document) => { document.folders = [{ path: ['F'], collapsed: false, overwriteAppearance: false, appearance: null }, { path: ['F'], collapsed: true, overwriteAppearance: false, appearance: null }, { path: ['F', 'G'], collapsed: false, overwriteAppearance: false, appearance: null }] }, 'DOCUMENT_DUPLICATE_FOLDER')
-    reject((document) => { document.folders = [{ path: ['F', 'G'], collapsed: false, overwriteAppearance: false, appearance: null }] }, 'DOCUMENT_ORPHAN_FOLDER')
-    reject((document) => { document.folders = [{ path: [''], collapsed: false, overwriteAppearance: false, appearance: null }] }, 'DOCUMENT_FOLDER_NAME')
-    reject((document) => { document.folders = [{ path: [], collapsed: false, overwriteAppearance: false, appearance: null }] }, 'DOCUMENT_FOLDER_NAME')
+    reject((document) => { document.folders = [{ path: ['F'], collapsed: false, overwriteAppearance: false, appearance: null, before: null }, { path: ['F'], collapsed: true, overwriteAppearance: false, appearance: null, before: null }, { path: ['F', 'G'], collapsed: false, overwriteAppearance: false, appearance: null, before: null }] }, 'DOCUMENT_DUPLICATE_FOLDER')
+    reject((document) => { document.folders = [{ path: ['F', 'G'], collapsed: false, overwriteAppearance: false, appearance: null, before: null }] }, 'DOCUMENT_ORPHAN_FOLDER')
+    reject((document) => { document.folders = [{ path: [''], collapsed: false, overwriteAppearance: false, appearance: null, before: null }] }, 'DOCUMENT_FOLDER_NAME')
+    reject((document) => { document.folders = [{ path: [], collapsed: false, overwriteAppearance: false, appearance: null, before: null }] }, 'DOCUMENT_FOLDER_NAME')
     reject((document) => { document.folders = [{ path: ['F'], collapsed: false, overwriteAppearance: false, appearance: null, color: 'red' }] }, 'DOCUMENT_UNKNOWN_FIELD')
-    reject((document) => { document.folders = [{ path: ['x'.repeat(129)], collapsed: false, overwriteAppearance: false, appearance: null }] }, 'LIMIT_FOLDER_NAME_LENGTH')
-    reject((document) => { document.folders = Array.from({ length: 9 }, (_, depth) => ({ path: Array.from({ length: depth + 1 }, () => 'L'), collapsed: false, overwriteAppearance: false, appearance: null })) }, 'LIMIT_FOLDER_DEPTH')
-    reject((document) => { document.folders = Array.from({ length: 257 }, (_, index) => ({ path: [`F${index}`], collapsed: false, overwriteAppearance: false, appearance: null })) }, 'LIMIT_FOLDER_COUNT')
+    reject((document) => { document.folders = [{ path: ['x'.repeat(129)], collapsed: false, overwriteAppearance: false, appearance: null, before: null }] }, 'LIMIT_FOLDER_NAME_LENGTH')
+    reject((document) => { document.folders = Array.from({ length: 9 }, (_, depth) => ({ path: Array.from({ length: depth + 1 }, () => 'L'), collapsed: false, overwriteAppearance: false, appearance: null, before: null })) }, 'LIMIT_FOLDER_DEPTH')
+    reject((document) => { document.folders = Array.from({ length: 257 }, (_, index) => ({ path: [`F${index}`], collapsed: false, overwriteAppearance: false, appearance: null, before: null })) }, 'LIMIT_FOLDER_COUNT')
     // A folder appearance is a complete appearance record.
-    reject((document) => { document.folders = [{ path: ['F'], collapsed: false, overwriteAppearance: true, appearance: { style: 'red-4' } }, { path: ['F', 'G'], collapsed: false, overwriteAppearance: false, appearance: null }] }, 'DOCUMENT_UNKNOWN_FIELD')
+    reject((document) => { document.folders = [{ path: ['F'], collapsed: false, overwriteAppearance: true, appearance: { style: 'red-4' } }, { path: ['F', 'G'], collapsed: false, overwriteAppearance: false, appearance: null, before: null }] }, 'DOCUMENT_UNKNOWN_FIELD')
   })
 
   it('counts a name in code points', () => {
