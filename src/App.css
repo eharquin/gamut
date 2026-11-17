@@ -4326,6 +4326,10 @@ body.reordering-items .folder-handle {
   margin-bottom: 8px;
 }
 
+.expression-panel.is-cards [data-kind='folder'][data-group='first'] {
+  margin-bottom: 0;
+}
+
 .expression-panel.is-cards .expression-item {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -4364,14 +4368,18 @@ body.reordering-items .folder-handle {
   display: none;
 }
 
-/* A folder's name heads its box, on the ground. */
-.expression-panel.is-cards [data-kind='folder'] {
-  margin-bottom: 4px;
+/* A folder's header is the first card of its box; alone, when it holds no
+   visible row, it is a card of its own. */
+.expression-panel.is-cards [data-kind='folder'] .folder-row {
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 10px;
 }
 
-.expression-panel.is-cards [data-kind='folder'] .folder-row {
-  background: transparent;
-  border-bottom: 0;
+.expression-panel.is-cards [data-kind='folder'][data-group='first'] .folder-row {
+  border-bottom-color: var(--border-subtle);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 .expression-panel.is-cards .expression-item:focus-within {

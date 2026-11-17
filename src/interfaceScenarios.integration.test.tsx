@@ -343,10 +343,15 @@ describe('interface scenarios', () => {
     fireEvent.change(screen.getByRole('combobox', { name: 'Panel style' }), { target: { value: 'cards' } })
     expect(panelElement()).toHaveClass('is-cards')
     expect(window.localStorage.getItem('gamut.panelStyle')).toBe('cards')
-    // The rows of F are marked as one block; the others stand alone.
+    // F's header is the first card of one block with its rows; the others stand alone.
     const member = (source: string) => editor(source).closest('.folder-member')!
-    expect(member('B = 2')).toHaveAttribute('data-group', 'first')
+    expect(screen.getByRole('button', { name: /^Folder F, level/ }).closest('.folder-member')).toHaveAttribute('data-group', 'first')
+    expect(member('B = 2')).toHaveAttribute('data-group', 'middle')
     expect(member('C = 3')).toHaveAttribute('data-group', 'last')
+    // Collapsed, the header is a card of its own.
+    fireEvent.click(screen.getByRole('button', { name: /^Folder F, level/ }))
+    expect(screen.getByRole('button', { name: /^Folder F, level/ }).closest('.folder-member')).toHaveAttribute('data-group', 'only')
+    fireEvent.click(screen.getByRole('button', { name: /^Folder F, level/ }))
     expect(member('A = 1')).not.toHaveAttribute('data-group')
     expect(member('A = 1')).toHaveAttribute('data-kind', 'expression')
     expect(member('D = 4')).not.toHaveAttribute('data-group')
