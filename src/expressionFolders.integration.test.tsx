@@ -293,6 +293,8 @@ describe('expression folders (DOC-013, A11Y-011)', () => {
     fireEvent.keyDown(document, { key: 'Escape' })
     fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
     expect(swatch('Expression 2')).toBe(before)
+  })
+
   it('renders bold, code, and mathematics in a folder name, and edits the name as written', async () => {
     open({ ...flat(), folders: [{ path: ['Rotor **R** $R_\\theta$'], collapsed: false }] })
     expect(screen.getByRole('button', { name: /^Folder Rotor R R_\\theta, level 1/ })).toBeInTheDocument()
