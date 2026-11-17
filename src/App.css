@@ -3772,6 +3772,13 @@ html.is-embedded body {
   min-width: 0;
 }
 
+/* bg= in the link: the page and the canvas take that background; the grid,
+   axes, and objects keep the colours of the theme. */
+html.has-embed-background,
+html.has-embed-background .canvas-frame {
+  background: var(--embed-background);
+}
+
 .app-shell.is-embedded .workspace {
   overflow: hidden;
 }

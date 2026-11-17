@@ -110,6 +110,22 @@ describe('embed mode (#215)', () => {
     expect(screen.queryByRole('toolbar', { name: 'Viewport controls' })).not.toBeInTheDocument()
   })
 
+  it('paints the page and the canvas in the background of the link', async () => {
+    await openEmbeddedScene('&embed=1&bg=transparent')
+    const root = document.documentElement
+    expect(root).toHaveClass('has-embed-background')
+    expect(root.style.getPropertyValue('--embed-background')).toBe('transparent')
+    cleanup()
+    expect(root).not.toHaveClass('has-embed-background')
+    expect(root.style.getPropertyValue('--embed-background')).toBe('')
+    await openEmbeddedScene('&embed=1&bg=F5F0E6')
+    expect(root.style.getPropertyValue('--embed-background')).toBe('#f5f0e6')
+    cleanup()
+    // A value that is not a colour changes nothing.
+    await openEmbeddedScene('&embed=1&bg=red;color:blue')
+    expect(root).not.toHaveClass('has-embed-background')
+  })
+
   it('shows the default example without storage when the fragment has no scene', () => {
     const storage = blockStorage()
     window.history.replaceState(null, '', '/#embed=1')

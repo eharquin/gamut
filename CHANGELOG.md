@@ -119,7 +119,8 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   **Fullscreen** button appears when the host allows it.
   Embed mode reads and writes no browser storage. `embed=1` in the scene-link
   fragment forces it outside an iframe and `embed=0` turns it off inside one;
-  `theme=light|dark` and `lock=1` are optional display options, and unknown
+  `theme=light|dark`, `lock=1`, and `bg=transparent` or `bg=rrggbb` (a
+  background colour without `#`) are optional display options, and unknown
   options are ignored. Links already pasted in presentations work unchanged
   (#215).
 
