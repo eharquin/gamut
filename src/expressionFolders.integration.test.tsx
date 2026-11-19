@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { parseCanonicalDocument, serializeCanonicalDocument, toCanonicalDocument } from './document/canonicalDocument'
@@ -211,6 +211,44 @@ describe('expression folders (DOC-013, A11Y-011)', () => {
     fireEvent.pointerUp(window, { pointerId: 1 })
     expect(folderButton('Sums')).toHaveAccessibleName('Folder Sums, level 1, 1 row')
     expect(visibleSources()).toEqual(['B = 2', 'C = A + B', 'A = 1'])
+  })
+
+  it('scrolls the panel while a row is held near its top, so that the last row reaches the first place', () => {
+    open(flat())
+    const rows = ['A = 1', 'B = 2', 'C = A + B'].map((value) => editorOf(value).closest('.expression-item') as HTMLElement)
+    // The panel shows 100 px, scrolled down by 100: the first rows are above it.
+    let panel = rows[0].parentElement as HTMLElement
+    while (!rows.every((row) => panel.contains(row))) panel = panel.parentElement as HTMLElement
+    let scrollTop = 100
+    panel.style.overflowY = 'auto'
+    Object.defineProperty(panel, 'scrollHeight', { configurable: true, value: 400 })
+    Object.defineProperty(panel, 'clientHeight', { configurable: true, value: 100 })
+    Object.defineProperty(panel, 'scrollTop', {
+      configurable: true, get: () => scrollTop, set: (value: number) => { scrollTop = Math.max(0, Math.min(300, value)) },
+    })
+    panel.getBoundingClientRect = () => ({ top: 0, bottom: 100, height: 100 }) as DOMRect
+    rows.forEach((row, index) => {
+      row.getBoundingClientRect = () => ({ top: index * 40 - scrollTop + 60, bottom: index * 40 - scrollTop + 100, height: 40 }) as DOMRect
+    })
+    const frames: FrameRequestCallback[] = []
+    const request = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => frames.push(callback))
+    const cancel = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined)
+    try {
+      fireEvent.pointerDown(handleFor('C = A + B'), { pointerId: 1, clientY: 90 })
+      // Held at the top edge, the drag scrolls up every frame until the panel is at its top.
+      fireEvent.pointerMove(window, { clientY: 2 })
+      act(() => {
+        for (let frame = 0; frame < 20 && frames.length > 0; frame += 1) frames.shift()!(frame * 16)
+      })
+      expect(scrollTop).toBe(0)
+      expect(frames).toHaveLength(0)
+      expect(rows[0]).toHaveClass('drop-before')
+      fireEvent.pointerUp(window, { pointerId: 1 })
+      expect(visibleSources()).toEqual(['C = A + B', 'A = 1', 'B = 2'])
+    } finally {
+      request.mockRestore()
+      cancel.mockRestore()
+    }
   })
 
   it('turns a row into a folder when a slash is typed first, where the row is, and back with Backspace', async () => {
