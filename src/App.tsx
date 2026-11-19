@@ -28,6 +28,8 @@ import { isFramed, resolveEmbedMode, type EmbedOptions } from './application/emb
 import type { ReferenceExample } from './language/expressionReference'
 import type { PanelStyle } from './components/SettingsMenu'
 import { AddMenu } from './components/AddMenu'
+import { PerformanceMonitor } from './components/PerformanceMonitor'
+import { createPerformanceProbe } from './presentation/performanceProbe'
 import { ClearExpressionsButton } from './components/ClearExpressionsButton'
 import { ExpressionRow, type ExpressionRowActions, type ExpressionRowRefs } from './components/ExpressionRow'
 import { isSourceEditor, type SourceEditor } from './components/sourceEditor'
@@ -286,6 +288,26 @@ function persistPanelStyle(style: PanelStyle): void {
   }
 }
 
+/** Per-browser preference: whether the performance monitor is shown over the canvas. */
+const PERFORMANCE_MONITOR_STORAGE_KEY = 'gamut.performanceMonitor'
+
+function restoredPerformanceMonitor(): boolean {
+  try {
+    return window.localStorage.getItem(PERFORMANCE_MONITOR_STORAGE_KEY) === 'on'
+  } catch {
+    return false
+  }
+}
+
+function persistPerformanceMonitor(shown: boolean): void {
+  try {
+    if (shown) window.localStorage.setItem(PERFORMANCE_MONITOR_STORAGE_KEY, 'on')
+    else window.localStorage.removeItem(PERFORMANCE_MONITOR_STORAGE_KEY)
+  } catch {
+    // The monitor still shows for this visit when browser storage is unavailable.
+  }
+}
+
 function persistReferenceHeight(height: number): void {
   try {
     window.localStorage.setItem(REFERENCE_HEIGHT_STORAGE_KEY, String(height))
@@ -353,6 +375,12 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
   /** Embed mode (#215): the canvas alone, in a session that never touches storage. */
   embed?: EmbedOptions | null
 }) {
+  // The time from the start of each render to its commit, for the performance monitor.
+  const [performanceProbe] = useState(createPerformanceProbe)
+  const renderStarted = performance.now()
+  useLayoutEffect(() => {
+    performanceProbe.render.record(performance.now() - renderStarted)
+  })
   /**
    * A shared scene and embed mode never read or write browser storage until
    * an explicit save; embed mode offers none, so it never touches storage.
@@ -619,6 +647,11 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
   const changePanelStyle = (style: PanelStyle) => {
     setPanelStyle(style)
     if (!ephemeral) persistPanelStyle(style)
+  }
+  const [performanceMonitor, setPerformanceMonitor] = useState(() => !temporary && restoredPerformanceMonitor())
+  const changePerformanceMonitor = (shown: boolean) => {
+    setPerformanceMonitor(shown)
+    if (!ephemeral) persistPerformanceMonitor(shown)
   }
   const closeInfoDialog = useCallback(() => setInfoDialog(null), [])
   const closeAppearance = useCallback(() => {
@@ -1491,10 +1524,12 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
     return () => observer.disconnect()
   }, [visualizerActive])
 
-  const evaluatedItems = useMemo(
-    () => evaluateDocument(expressionDoc, evaluationContext),
-    [expressionDoc],
-  )
+  const evaluatedItems = useMemo(() => {
+    const started = performance.now()
+    const evaluated = evaluateDocument(expressionDoc, evaluationContext)
+    performanceProbe.evaluation.record(performance.now() - started)
+    return evaluated
+  }, [expressionDoc, performanceProbe])
   const scalarControlEvaluations = useMemo(
     () => new Map(evaluatedItems.flatMap((evaluated) => evaluated.item.control
       ? [[evaluated.item.id, evaluateScalarControl(
@@ -2792,6 +2827,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
     changeTheme: setTheme,
     changeDisplay: updateDisplay,
     changePanelStyle,
+    changePerformanceMonitor,
   }
   return (
     <div className={`app-shell${embed ? ' is-embedded' : ''}`}>
@@ -2813,6 +2849,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
         theme={theme}
         display={expressionDoc.view.display}
         panelStyle={panelStyle}
+        performanceMonitor={performanceMonitor}
         renderingSettings={!noViz}
         refs={documentHeaderRefs}
         actions={documentHeaderActions}
@@ -3034,6 +3071,11 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
               executeCommand={executeCommand}
               dispatchHistory={dispatchHistory}
             />
+            {performanceMonitor && !embed && <PerformanceMonitor
+              probe={performanceProbe}
+              canvasRef={viewportSvgRef}
+              expressionCount={expressionDoc.items.length}
+            />}
             {!embed && <>
             {panelHidden && <button
               ref={expandPanelButtonRef}

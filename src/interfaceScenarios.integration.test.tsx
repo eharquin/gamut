@@ -367,6 +367,32 @@ describe('interface scenarios', () => {
     expect(panelElement()).toHaveClass('is-cards')
   })
 
+  it('shows the performance monitor over the canvas when chosen in the settings, and remembers it', async () => {
+    open(doc(['A = 1', 'B = 2']))
+    expect(screen.queryByRole('region', { name: 'Performance monitor' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /^Settings/ }))
+    const option = screen.getByRole('switch', { name: 'Performance monitoring' })
+    expect(option).not.toBeChecked()
+    fireEvent.click(option)
+    const monitor = await screen.findByRole('region', { name: 'Performance monitor' })
+    expect(monitor.closest('.canvas-frame')).not.toBeNull()
+    const reading = (name: string) => within(monitor).getByText(name).nextElementSibling?.textContent
+    expect(reading('Expressions')).toBe('2')
+    // The document was evaluated and the app rendered before the monitor read them.
+    expect(reading('Evaluate')).toMatch(/^\d+\.\d ms$/)
+    expect(reading('Render')).toMatch(/^\d+\.\d ms$/)
+    expect(Number(reading('SVG nodes'))).toBeGreaterThan(0)
+    expect(window.localStorage.getItem('gamut.performanceMonitor')).toBe('on')
+    // A preference of this browser, kept after a reload, and dropped when turned off.
+    cleanup()
+    render(<App />)
+    expect(await screen.findByRole('region', { name: 'Performance monitor' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /^Settings/ }))
+    fireEvent.click(screen.getByRole('switch', { name: 'Performance monitoring' }))
+    expect(screen.queryByRole('region', { name: 'Performance monitor' })).toBeNull()
+    expect(window.localStorage.getItem('gamut.performanceMonitor')).toBeNull()
+  })
+
   it('adds an expression, a comment, or a folder from the add menu, by pointer and keyboard', async () => {
     open(doc(['A = 1']))
     const toggle = screen.getByRole('button', { name: 'More to add' })
