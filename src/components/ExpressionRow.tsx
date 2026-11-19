@@ -4,12 +4,11 @@ import type { ItemAppearanceSources } from '../application/evaluateAppearanceSou
 import type { EvaluatedDocumentItem } from '../application/evaluateDocument'
 import { evaluateScalarControl, type ScalarControlEvaluation } from '../application/evaluateScalarControl'
 import { hasIdealNorm, isUnitNorm, measuredNorm, normalizeItemValue } from '../application/normalization'
-import { DEFAULT_SCALAR_ANIMATION, type ScalarPlayback } from '../hooks/useScalarPlayback'
+import { DEFAULT_SCALAR_CONTROL, type ScalarPlayback } from '../hooks/useScalarPlayback'
 import type { DocumentCommand } from '../document/documentCommands'
 import type { HistoryAction } from '../document/documentHistory'
 import type {
   ExpressionAppearance,
-  ExpressionControl,
   ExpressionDocument,
   ExpressionItem,
 } from '../document/expressionDocument'
@@ -32,13 +31,6 @@ import { FOLDER_TRIGGER, NOTE_TRIGGER, type SourceEditor } from './sourceEditor'
 /** The row's normalization modes, by stored value; off is no mode (#185). */
 const NORMALIZATION_TEXT = { off: 'off', natural: 'auto', euclidean: 'norm', ideal: 'inorm' } as const
 const NORM_NAME = { euclidean: 'the Euclidean norm', ideal: 'the ideal norm' } as const
-const DEFAULT_SCALAR_CONTROL: ExpressionControl = {
-  mode: 'slider',
-  minimumSource: '-10',
-  maximumSource: '10',
-  stepSource: '0.1',
-  animation: DEFAULT_SCALAR_ANIMATION,
-}
 
 /** The element registries and popover anchors that rows share with the panel. */
 export type ExpressionRowRefs = Readonly<{
@@ -96,7 +88,6 @@ type ExpressionRowProps = Readonly<{
   engine: AlgebraEngine
   interpretation: AnyInterpretation
   display: ExpressionDocument['view']['display']
-  objectRenderScale: number
   /** The document has no visualizer: appearance is kept but dormant. */
   noViz: boolean
   /** A drag on the canvas can move the object: its row offers to hold it in place. */
@@ -132,7 +123,6 @@ export function ExpressionRow({
   engine,
   interpretation,
   display,
-  objectRenderScale,
   noViz,
   draggableAvailable,
   reducedMotion,
@@ -233,6 +223,7 @@ export function ExpressionRow({
     label,
     displayLabel,
     draggable,
+    sliderInCanvas,
   } = resolveItemAppearance(
     appearance,
     kind,
@@ -263,7 +254,7 @@ export function ExpressionRow({
     : undefined
   const controlEvaluation = effectiveControl
     ? scalarControlEvaluation ?? evaluateScalarControl(
-        effectiveControl, evaluatedItems, engine,
+        effectiveControl, evaluatedItems, engine, scalarEdit?.value ?? null,
       )
     : null
   const scalarControlAvailable = effectiveControl !== undefined
@@ -276,7 +267,11 @@ export function ExpressionRow({
         if (element) expressionRowRefs.current.set(item.id, element)
         else expressionRowRefs.current.delete(item.id)
       }}
-      onFocus={() => focusRow(item.id)}
+      onFocus={(event) => {
+        // A control pressed with the pointer (the slider) does not focus the row.
+        if (event.target instanceof HTMLElement && event.target.dataset.pointerFocus !== undefined) return
+        focusRow(item.id)
+      }}
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget))
           blurRow(item.id)
@@ -340,6 +335,9 @@ export function ExpressionRow({
                 aria-label={`Open ${kind} menu for ${objectName}`}
                 aria-haspopup="dialog"
                 aria-expanded={appearanceOpen}
+                // A click opens the menu without focusing the row; the menu
+                // then returns the focus to the swatch only if it had it.
+                onMouseDown={(event) => event.preventDefault()}
                 onClick={(event) => {
                   event.stopPropagation()
                   appearanceAnchorRef.current = event.currentTarget
@@ -611,7 +609,6 @@ export function ExpressionRow({
               isPlaying={isPlaying}
               playback={playback}
               decimalPlaces={display.decimalPlaces}
-              objectRenderScale={objectRenderScale}
               executeCommand={executeCommand}
               dispatchHistory={dispatchHistory}
             />
@@ -766,6 +763,11 @@ export function ExpressionRow({
           visible={visible}
           labelVisible={labelVisible}
           labelsDisabled={!display.labelsVisible}
+          sliderInCanvas={sliderInCanvas}
+          // The canvas slider needs a canvas: none in NoViz.
+          onSliderInCanvasChange={scalarControlAvailable && !noViz ? (next) => executeCommand({
+            kind: 'update-appearance', itemId: item.id, appearance: { sliderInCanvas: next },
+          }) : undefined}
           draggable={draggableAvailable ? draggable : undefined}
           onDraggableChange={draggableAvailable ? (nextDraggable) => executeCommand({
             kind: 'update-appearance', itemId: item.id, appearance: { draggable: nextDraggable },
@@ -828,9 +830,15 @@ export function ExpressionRow({
             kind: 'update-appearance', itemId: item.id, appearance: nextAppearance,
           }, coalesceKey === undefined ? undefined : `appearance-${coalesceKey}:${item.id}`)}
           onControlChange={(control) => {
-            if (isPlaying) playback.stop(item.id)
+            // A new speed changes a playing animation without stopping it;
+            // typing a speed is one undo step.
+            const speedOnly = effectiveControl !== undefined && control.animation !== null &&
+              JSON.stringify({ ...control, animation: { ...control.animation, durationSeconds: 0 } }) ===
+              JSON.stringify({ ...effectiveControl, animation: effectiveControl.animation && { ...effectiveControl.animation, durationSeconds: 0 } })
+            if (isPlaying && !speedOnly) playback.stop(item.id)
             playback.forgetPaused(item.id)
-            executeCommand({ kind: 'update-control', itemId: item.id, control })
+            executeCommand({ kind: 'update-control', itemId: item.id, control },
+              speedOnly ? `control-speed:${item.id}` : undefined)
           }}
           onClose={closeAppearance}
         />

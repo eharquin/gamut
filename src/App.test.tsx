@@ -1305,8 +1305,11 @@ describe('VGA 2D vertical slice', () => {
     source.focus()
     fireEvent.change(source, { target: { value: 'a = ((2))' } })
     expect(screen.getByRole('slider', { name: 'Value for a' })).toBeEnabled()
-    expect(screen.getByRole('textbox', { name: 'Minimum source' }))
-      .toHaveValue('-10')
+    // A new slider leaves its bounds and step empty; they are derived from the value.
+    expect(screen.getByRole('textbox', { name: 'Minimum source' })).toHaveValue('')
+    expect(screen.getByRole('textbox', { name: 'Minimum source' })).toHaveAttribute('placeholder', '-10')
+    expect(screen.getByRole('textbox', { name: 'Maximum source' })).toHaveAttribute('placeholder', '10')
+    expect(screen.getByRole('textbox', { name: 'Step source' })).toHaveAttribute('placeholder', '0.2')
     fireEvent.blur(source)
     expect(screen.getByRole('textbox', { name: 'Minimum source' }))
       .toBeVisible()
@@ -1316,6 +1319,11 @@ describe('VGA 2D vertical slice', () => {
       .toBeVisible()
     const interval = screen.getByRole('group', { name: 'Interval of a' })
     expect(interval).toHaveTextContent(/^≤ a ≤step$/)
+    // The interval shows only while the row has the focus, which a slider
+    // played with the pointer does not give.
+    expect(readFileSync(`${import.meta.dirname}/App.css`, 'utf8')).toMatch(
+      /\.expression-item:not\(:focus-within\) \.scalar-interval-row,\s*\.expression-item:has\(\[data-pointer-focus\]\) \.scalar-interval-row \{\s*display: none;\s*\}/,
+    )
     expect(within(interval).getAllByRole('textbox').map((field) => field.getAttribute('aria-label')))
       .toEqual(['Minimum source', 'Maximum source', 'Step source'])
     const trigger = screen.getByRole('button', {
@@ -1334,7 +1342,7 @@ describe('VGA 2D vertical slice', () => {
     // A new scalar is an animated slider.
     expect(screen.getByRole('switch', { name: 'Animate' })).toBeChecked()
     expect(screen.getByRole('textbox', { name: 'Minimum source' }))
-      .toHaveValue('-10')
+      .toHaveValue('')
     const slider = screen.getByRole('slider', { name: 'Value for a' })
     expect(slider).toBeEnabled()
 
@@ -1349,6 +1357,8 @@ describe('VGA 2D vertical slice', () => {
 
     // Pressing the row's slider closes the menu, as any press outside it does.
     expect(screen.queryByRole('dialog', { name: 'Scalar' })).not.toBeInTheDocument()
+    // Opened from the keyboard, the menu returns the focus to its swatch.
+    trigger.focus()
     fireEvent.click(trigger)
 
     // Turning Animate off makes it a number field.
@@ -1549,6 +1559,11 @@ describe('VGA 2D vertical slice', () => {
     render(<App />)
     const source = screen.getByRole('textbox', { name: 'Expression 1' })
     fireEvent.change(source, { target: { value: 'a = 20' } })
+    // An empty maximum follows the value beyond 10; a given one does not.
+    expect(screen.getByRole('slider', { name: 'Value for a' })).toHaveAttribute('max', '20')
+    fireEvent.change(screen.getByRole('textbox', { name: 'Maximum source' }), {
+      target: { value: '10' },
+    })
     fireEvent.click(screen.getByRole('button', {
       name: 'Open Scalar menu for a',
     }))
@@ -1612,6 +1627,59 @@ describe('VGA 2D vertical slice', () => {
     act(() => vi.advanceTimersByTime(1000))
     expect(source).toHaveValue('a = 2*3')
     expect(screen.queryByRole('button', { name: /scalar animation$/ })).not.toBeInTheDocument()
+  })
+
+  it('puts a scalar\'s slider on the canvas from its appearance menu, off by default', () => {
+    render(<App />)
+    const source = screen.getByRole<HTMLInputElement>('textbox', { name: 'Expression 1' })
+    fireEvent.change(source, { target: { value: 't = 2' } })
+    expect(screen.queryByRole('group', { name: 'Canvas sliders' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Scalar menu for t' }))
+    const option = screen.getByRole('switch', { name: 'Slider on the canvas' })
+    expect(option).not.toBeChecked()
+    fireEvent.click(option)
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    const sliders = screen.getByRole('group', { name: 'Canvas sliders' })
+    expect(sliders.closest('.canvas-frame')).not.toBeNull()
+    expect(sliders).toHaveTextContent('t = 2')
+    // It drives the scalar like the slider of its row; its interval stays in the row.
+    const slider = within(sliders).getByRole('slider', { name: 'Canvas slider for t' })
+    fireEvent.change(slider, { target: { value: '5' } })
+    expect(source).toHaveValue('t = 5')
+    expect(sliders).toHaveTextContent('t = 5')
+    expect(within(sliders).getByRole('button', { name: 'Play t on the canvas' })).toBeInTheDocument()
+    expect(within(sliders).queryByRole('textbox')).not.toBeInTheDocument()
+  })
+
+  it('plays on a click without focusing the row', () => {
+    render(<App />)
+    const source = screen.getByRole<HTMLInputElement>('textbox', { name: 'Expression 1' })
+    fireEvent.change(source, { target: { value: 'a = 2' } })
+    source.blur()
+    const play = screen.getByRole('button', { name: 'Play scalar animation' })
+    // The browser focuses a pressed button unless its mousedown is prevented.
+    expect(fireEvent.mouseDown(play)).toBe(false)
+    fireEvent.click(play)
+    expect(play.closest('.expression-item')).not.toContainElement(document.activeElement as HTMLElement)
+    fireEvent.keyDown(document, { key: 'Escape' })
+  })
+
+  it('changes the speed of a playing animation without stopping it', () => {
+    vi.useFakeTimers()
+    render(<App />)
+    const source = screen.getByRole<HTMLInputElement>('textbox', { name: 'Expression 1' })
+    fireEvent.change(source, { target: { value: 'a = 0' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Play scalar animation' }))
+    act(() => vi.advanceTimersByTime(500))
+    fireEvent.click(screen.getByRole('button', { name: 'Open Scalar menu for a' }))
+    const speed = screen.getByRole('textbox', { name: 'Speed' })
+    expect(speed).toHaveValue('1')
+    fireEvent.change(speed, { target: { value: '2' } })
+    act(() => vi.advanceTimersByTime(100))
+    expect(screen.getByRole('button', { name: 'Pause scalar animation' })).toBeInTheDocument()
+    fireEvent.keyDown(document, { key: 'Escape' })
   })
 
   it('plays scalar animation as one transaction and cancels through Escape', () => {
@@ -2357,11 +2425,43 @@ describe('VGA 2D vertical slice', () => {
     render(<App />)
     const swatch = screen.getByRole('button', { name: 'Open Vector menu for Vector' })
 
+    // Opened from the keyboard: the swatch has the focus.
+    swatch.focus()
     fireEvent.click(swatch)
     fireEvent.click(screen.getByRole('button', { name: 'Close Vector menu' }))
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(swatch).toHaveFocus()
+  })
+
+  it('opens and closes the appearance menu with the pointer without focusing the row', () => {
+    render(<App />)
+    const swatch = screen.getByRole('button', { name: 'Open Vector menu for Vector' })
+    const row = swatch.closest('.expression-item') as HTMLElement
+
+    // The browser focuses a pressed button unless its mousedown is prevented.
+    expect(fireEvent.mouseDown(swatch)).toBe(false)
+    fireEvent.click(swatch)
+    fireEvent.click(screen.getByRole('button', { name: 'Close Vector menu' }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(row).not.toContainElement(document.activeElement as HTMLElement)
+  })
+
+  it('plays the slider with the pointer without focusing the row', () => {
+    render(<App />)
+    const source = screen.getByRole<HTMLInputElement>('textbox', { name: 'Expression 1' })
+    fireEvent.change(source, { target: { value: 'a = 2' } })
+    source.blur()
+    const slider = screen.getByRole('slider', { name: 'Value for a' })
+    fireEvent.pointerDown(slider)
+    slider.focus()
+    // Marked as pressed with the pointer, which App.css reads to keep the
+    // interval hidden; the mark goes with the focus.
+    expect(slider).toHaveAttribute('data-pointer-focus')
+    fireEvent.pointerUp(slider)
+    slider.blur()
+    expect(slider).not.toHaveAttribute('data-pointer-focus')
   })
 
   it('closes appearance with Escape and restores focus without a keyboard trap', () => {
@@ -2370,6 +2470,7 @@ describe('VGA 2D vertical slice', () => {
       name: 'Open Vector menu for Vector',
     })
 
+    swatch.focus()
     fireEvent.click(swatch)
     expect(screen.getByRole('dialog', { name: 'Vector' }))
       .toBeInTheDocument()

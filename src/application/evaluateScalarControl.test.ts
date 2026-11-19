@@ -34,4 +34,21 @@ describe('scalar control evaluation', () => {
     expect(evaluateScalarControl(control({ minimumSource: '2', maximumSource: '1' }), items, engine))
       .toMatchObject({ status: 'invalid', diagnostic: 'Minimum must be less than maximum.' })
   })
+
+  it('derives empty bounds and step from the scalar value', () => {
+    const items = evaluateDocument(expressionDocument([{ id: 't', source: 't = 12' }]), context)
+    const empty = control({ minimumSource: '', maximumSource: '', stepSource: '' })
+    const derived = (value: number) => evaluateScalarControl(empty, items, engine, value)
+    // Inside [−10, 10] the interval is [−10, 10]; a value beyond widens its side.
+    expect(derived(3)).toMatchObject({ status: 'valid', minimum: -10, maximum: 10, step: 0.2 })
+    expect(derived(12)).toMatchObject({ status: 'valid', minimum: -10, maximum: 12, step: 0.22 })
+    expect(derived(-30)).toMatchObject({ status: 'valid', minimum: -30, maximum: 10, step: 0.4 })
+    expect(derived(12).fields.maximum).toEqual({ status: 'valid', value: 12, derived: true })
+    // A given field is kept; the step follows the interval it gives.
+    expect(evaluateScalarControl(control({ minimumSource: '0', maximumSource: '', stepSource: '' }), items, engine, 4))
+      .toMatchObject({ status: 'valid', minimum: 0, maximum: 10, step: 0.1 })
+    // A derived bound never meets a given one.
+    expect(evaluateScalarControl(control({ minimumSource: '15', maximumSource: '', stepSource: '' }), items, engine, 0))
+      .toMatchObject({ status: 'valid', minimum: 15, maximum: 35 })
+  })
 })

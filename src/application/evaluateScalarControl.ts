@@ -10,7 +10,8 @@ import type { EvaluatedDocumentItem } from './evaluateDocument'
 
 export type ScalarControlField = 'minimum' | 'maximum' | 'step'
 export type ScalarControlFieldState =
-  | Readonly<{ status: 'valid'; value: number }>
+  /** `derived` marks an empty field whose value is derived from the scalar. */
+  | Readonly<{ status: 'valid'; value: number; derived?: true }>
   | Readonly<{ status: 'invalid'; diagnostic: Diagnostic }>
 
 export type ScalarControlEvaluation = Readonly<{
@@ -137,17 +138,49 @@ export function valueSourceEvaluator(
   }
 }
 
+/** The interval an empty bound falls back to while the scalar lies inside it. */
+export const DERIVED_SLIDER_BOUND = 10
+/** An empty step divides the slider's interval into this many steps. */
+export const DERIVED_SLIDER_STEPS = 100
+
+const derivedField = (value: number): ScalarControlFieldState => ({ status: 'valid', value, derived: true })
+
+/**
+ * Evaluates the bounds and the step of a scalar's slider. An empty field is
+ * derived from the scalar's value: the maximum is the value when it exceeds
+ * 10 and 10 otherwise, the minimum is the value when it is below −10 and −10
+ * otherwise, and the step is a hundredth of the interval.
+ */
 export function evaluateScalarControl(
   control: ExpressionControl,
   items: readonly EvaluatedDocumentItem[],
   engine: AlgebraEngine,
+  value: number | null = null,
 ): ScalarControlEvaluation {
   const evaluateField = scalarSourceEvaluator(items, engine)
-
+  const empty = (source: string) => source.trim() === ''
+  const current = value !== null && Number.isFinite(value) ? value : 0
+  const given = (source: string) => empty(source) ? null : evaluateField(source)
+  const givenMinimum = given(control.minimumSource)
+  const givenMaximum = given(control.maximumSource)
+  const knownMinimum = givenMinimum?.status === 'valid' ? givenMinimum.value : null
+  const knownMaximum = givenMaximum?.status === 'valid' ? givenMaximum.value : null
+  // A derived bound never meets the bound that is given.
+  let derivedMinimum = Math.min(-DERIVED_SLIDER_BOUND, current)
+  if (knownMaximum !== null && derivedMinimum >= knownMaximum) derivedMinimum = knownMaximum - 2 * DERIVED_SLIDER_BOUND
+  let derivedMaximum = Math.max(DERIVED_SLIDER_BOUND, current)
+  if (knownMinimum !== null && derivedMaximum <= knownMinimum) derivedMaximum = knownMinimum + 2 * DERIVED_SLIDER_BOUND
+  const minimumField = givenMinimum ?? derivedField(derivedMinimum)
+  const maximumField = givenMaximum ?? derivedField(derivedMaximum)
   const fields = {
-    minimum: evaluateField(control.minimumSource),
-    maximum: evaluateField(control.maximumSource),
-    step: evaluateField(control.stepSource),
+    minimum: minimumField,
+    maximum: maximumField,
+    step: given(control.stepSource) ?? derivedField(
+      minimumField.status === 'valid' && maximumField.status === 'valid' &&
+        maximumField.value > minimumField.value
+        ? (maximumField.value - minimumField.value) / DERIVED_SLIDER_STEPS
+        : 2 * DERIVED_SLIDER_BOUND / DERIVED_SLIDER_STEPS,
+    ),
   }
   const minimum = fields.minimum.status === 'valid' ? fields.minimum.value : null
   const maximum = fields.maximum.status === 'valid' ? fields.maximum.value : null

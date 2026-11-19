@@ -27,6 +27,9 @@ type AppearancePopoverProps = Readonly<{
   /** Whether a drag on the canvas moves the object; undefined when no drag can. */
   draggable?: boolean
   onDraggableChange?(draggable: boolean): void
+  /** Whether a scalar's slider is also drawn on the canvas; offered with a control only. */
+  sliderInCanvas?: boolean
+  onSliderInCanvasChange?(sliderInCanvas: boolean): void
   borderVisible?: boolean
   orientationVisible?: boolean
   bivectorShape?: 'from-vectors' | 'disk' | 'square'
@@ -91,6 +94,8 @@ export function AppearancePopover({
   labelsDisabled = false,
   draggable,
   onDraggableChange,
+  sliderInCanvas,
+  onSliderInCanvasChange,
   borderVisible = false,
   orientationVisible = true,
   bivectorShape = 'from-vectors',
@@ -173,11 +178,14 @@ export function AppearancePopover({
   }, [place])
 
   useEffect(() => {
-    const returnFocusTarget = anchorRef.current
+    const anchor = anchorRef.current
+    // Opened from the keyboard, the menu gives the focus back to its swatch;
+    // opened with the pointer, it leaves the row unfocused.
+    const returnFocusTarget = anchor !== null && anchor === document.activeElement ? anchor : null
     ;(visibilityRef.current ?? closeRef.current)?.focus()
     const onPointerDown = (event: PointerEvent) => {
       if (ref.current?.contains(event.target as Node)) return
-      if (returnFocusTarget?.contains(event.target as Node)) return
+      if (anchor?.contains(event.target as Node)) return
       onClose()
     }
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
@@ -483,6 +491,13 @@ export function AppearancePopover({
           ...control,
           animation: { ...(control.animation ?? DEFAULT_ANIMATION), mode },
         })} />
+        <SpeedField
+          durationSeconds={(control.animation ?? DEFAULT_ANIMATION).durationSeconds}
+          onChange={(durationSeconds) => onControlChange({
+            ...control,
+            animation: { ...(control.animation ?? DEFAULT_ANIMATION), durationSeconds },
+          })}
+        />
       </> : null, {
         label: 'Animate',
         checked: animated,
@@ -491,6 +506,11 @@ export function AppearancePopover({
         onChange: (checked) => onControlChange(checked
           ? { ...control, mode: 'slider', animation: control.animation ?? DEFAULT_ANIMATION }
           : { ...control, mode: 'number' }),
+      })}
+      {control && onSliderInCanvasChange && section('Canvas', null, {
+        label: 'Slider on the canvas',
+        checked: sliderInCanvas ?? false,
+        onChange: onSliderInCanvasChange,
       })}
       {/* A list has no label. The text is edited under the expression (#226). */}
       {!colorOnly && !list && !folder && section('Label', labelsDisabled ? (
@@ -535,6 +555,73 @@ export function AppearancePopover({
 }
 
 const DEFAULT_ANIMATION = { mode: 'ping-pong', direction: 'forward', durationSeconds: 2 } as const
+
+/**
+ * The speed of an animation, as a multiple of the default one, which crosses
+ * the interval in 2 s. It is stored as the duration of one crossing.
+ */
+const speedOfDuration = (durationSeconds: number) => DEFAULT_ANIMATION.durationSeconds / durationSeconds
+const durationOfSpeed = (speed: number) => DEFAULT_ANIMATION.durationSeconds / speed
+
+function SpeedField({ durationSeconds, onChange }: Readonly<{
+  durationSeconds: number
+  onChange(durationSeconds: number): void
+}>) {
+  const id = useId()
+  const shown = String(Number(speedOfDuration(durationSeconds).toPrecision(4)))
+  // The text being typed; a value is stored only once it is a positive number.
+  const [draft, setDraft] = useState<string | null>(null)
+  const text = draft ?? shown
+  const speed = Number(text)
+  const error = text.trim() === '' || !Number.isFinite(speed) || speed <= 0
+    ? 'Enter a number greater than 0.'
+    : null
+  // The arrows halve and double the speed shown, and end any typing.
+  const scaled = (factor: number) => {
+    const base = error ? speedOfDuration(durationSeconds) : speed
+    setDraft(null)
+    onChange(durationOfSpeed(base * factor))
+  }
+  return <>
+    <div className="appearance-pair">
+      <div className="appearance-field appearance-speed">
+        <span aria-hidden="true">Speed</span>
+        <span className="appearance-speed-row">
+          <button type="button" className="appearance-speed-step" aria-label="Halve speed" title="Half as fast"
+            onClick={() => scaled(0.5)}>
+            <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M6.5 1.5 3 5l3.5 3.5" /></svg>
+          </button>
+          <span className={`appearance-source${error ? ' is-invalid' : ''}`}>
+            <input
+              type="text"
+              inputMode="decimal"
+              spellCheck={false}
+              autoComplete="off"
+              value={text}
+              aria-label="Speed"
+              title="1 crosses the interval in 2 s; 2 is twice as fast"
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? `${id}-error` : undefined}
+              onChange={(event) => {
+                const value = event.target.value
+                setDraft(value)
+                const next = Number(value)
+                if (value.trim() !== '' && Number.isFinite(next) && next > 0) onChange(durationOfSpeed(next))
+              }}
+              onBlur={() => setDraft(null)}
+            />
+            <span className="appearance-unit appearance-speed-unit" aria-hidden="true">×</span>
+          </span>
+          <button type="button" className="appearance-speed-step" aria-label="Double speed" title="Twice as fast"
+            onClick={() => scaled(2)}>
+            <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M3.5 1.5 7 5 3.5 8.5" /></svg>
+          </button>
+        </span>
+      </div>
+    </div>
+    {error && <p id={`${id}-error`} className="appearance-error">Speed: {error}</p>}
+  </>
+}
 
 function capitalized(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1)

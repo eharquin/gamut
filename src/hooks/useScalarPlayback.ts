@@ -17,6 +17,15 @@ export const DEFAULT_SCALAR_ANIMATION = {
   durationSeconds: 2,
 } satisfies NonNullable<ExpressionControl['animation']>
 
+/** The control of a scalar that has none stored: empty bounds and step, derived from its value. */
+export const DEFAULT_SCALAR_CONTROL: ExpressionControl = {
+  mode: 'slider',
+  minimumSource: '',
+  maximumSource: '',
+  stepSource: '',
+  animation: DEFAULT_SCALAR_ANIMATION,
+}
+
 type ActiveScalarPlayback = Readonly<{
   itemId: string
   name: string
@@ -202,14 +211,35 @@ export function useScalarPlayback({
         changed = true
         continue
       }
+      // A bound derived from the value would follow the animation it drives:
+      // a playback keeps the derived bounds it started with.
+      const kept = (field: 'minimum' | 'maximum' | 'step') => {
+        const state = evaluation.fields[field]
+        return state.status === 'valid' && state.derived ? playback.parameters[field] : evaluation[field]!
+      }
       const parameters: PlaybackParameters = {
-        minimum: evaluation.minimum!,
-        maximum: evaluation.maximum!,
-        step: evaluation.step!,
+        minimum: kept('minimum'),
+        maximum: kept('maximum'),
+        step: kept('step'),
         animation: control.animation ?? DEFAULT_SCALAR_ANIMATION,
       }
       if (!playbackParametersEqual(playback.parameters, parameters)) {
-        next.set(itemId, { ...playback, parameters })
+        // A new speed keeps the animation where it is: the elapsed time is
+        // rescaled to the new duration.
+        const oldDuration = playback.parameters.animation.durationSeconds
+        const newDuration = parameters.animation.durationSeconds
+        if (oldDuration !== newDuration) {
+          const now = performance.now()
+          const elapsed = now - playback.startedAt + playback.offsetMilliseconds
+          next.set(itemId, {
+            ...playback,
+            parameters,
+            startedAt: now,
+            offsetMilliseconds: elapsed * newDuration / oldDuration,
+          })
+        } else {
+          next.set(itemId, { ...playback, parameters })
+        }
         changed = true
       }
     }

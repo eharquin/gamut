@@ -130,6 +130,7 @@ import { DEFAULT_APPEARANCE_SOURCES, evaluateAppearanceSources } from './applica
 import { placeLabels, type LabelObstacle } from './visualization/labels'
 import { DEFAULT_POINT_SIZE, POINT_OUTER_SCALE, segmentSizeFactor } from './visualization/stroke'
 import { directScalarEdit } from './language/directScalarEdit'
+import { CanvasSliders } from './components/CanvasSliders'
 import {
   directConstructorComponents,
   directItemLiteralEdit,
@@ -1500,6 +1501,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
           evaluated.item.control,
           evaluatedItems,
           engine,
+          directScalarEdit(evaluated.item.source)?.value ?? null,
         )] as const]
       : [])),
     [evaluatedItems],
@@ -2935,7 +2937,6 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
                 engine={engine}
                 interpretation={interpretation}
                 display={expressionDoc.view.display}
-                objectRenderScale={objectRenderScale}
                 noViz={noViz}
                 draggableAvailable={!noViz && entry.evaluation?.status === 'valid' &&
                   entry.evaluation.valueType === 'single' && entry.evaluation.primitive !== null &&
@@ -3023,6 +3024,16 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
 
         {visualizerActive && <section ref={setViewportHost} className="visualizer" aria-label={visualizer?.regionName}>
           <div ref={canvasFrameRef} className="canvas-frame">
+            <CanvasSliders
+              evaluatedItems={evaluatedItems}
+              appearanceOf={(itemId) => expressionDoc.appearance[itemId]}
+              scalarControlEvaluations={scalarControlEvaluations}
+              engine={engine}
+              decimalPlaces={expressionDoc.view.display.decimalPlaces}
+              playback={playback}
+              executeCommand={executeCommand}
+              dispatchHistory={dispatchHistory}
+            />
             {!embed && <>
             {panelHidden && <button
               ref={expandPanelButtonRef}
