@@ -1254,7 +1254,7 @@ describe('VGA 2D vertical slice', () => {
     openSettings()
     expect(screen.getByText('1.00×')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('switch', { name: 'Axes and labels' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'Axes and axis names' }))
     expect(container.querySelectorAll('.axis')).toHaveLength(0)
     expect(container.querySelectorAll('.graduation').length).toBeGreaterThan(0)
 
@@ -2315,6 +2315,26 @@ describe('VGA 2D vertical slice', () => {
 
     expect(label).toHaveValue('')
     expect(screen.getByText('V', { selector: 'text' })).toBeInTheDocument()
+  })
+
+  it('inserts the value of ${expression} in a label and says why one fails', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), {
+      target: { value: 'V = vector(2, 1)' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Open Vector menu for V' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'Show label' }))
+    fireEvent.keyDown(document, { key: 'Escape' })
+    const label = screen.getByRole('textbox', { name: 'Label of expression 1' })
+
+    fireEvent.change(label, { target: { value: 'n = ${2 * 3}, cost \\$5' } })
+    expect(screen.getByText('n = 6, cost $5', { selector: 'text' })).toBeInTheDocument()
+    expect(label).not.toHaveAttribute('aria-invalid')
+
+    fireEvent.change(label, { target: { value: 'W = ${W}' } })
+    expect(screen.getByText('W = ?', { selector: 'text' })).toBeInTheDocument()
+    expect(label).toHaveAttribute('aria-invalid', 'true')
+    expect(label).toHaveAccessibleDescription('${W}: The name “W” is not defined.')
   })
 
   it('keeps focus in the label field while its text changes', () => {
@@ -3952,6 +3972,55 @@ describe('point style and size from the appearance menu (#222)', () => {
   })
 })
 
+describe('labels switched under the expression and for the whole graph', () => {
+  it('shows a label switch under each object that can have a label, in step with the menu', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: 'V = vector(2, 1)' } })
+    const toggle = screen.getByRole('checkbox', { name: 'Show label of V' })
+    expect(toggle).not.toBeChecked()
+    expect(screen.queryByRole('textbox', { name: 'Label of expression 1' })).not.toBeInTheDocument()
+    fireEvent.click(toggle)
+    expect(screen.getByText('V', { selector: 'text' })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Label of expression 1' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Open Vector menu for V' }))
+    const dialog = screen.getByRole('dialog', { name: 'Vector' })
+    const menuSwitch = within(dialog).getByRole('switch', { name: 'Show label' })
+    expect(menuSwitch).toBeChecked()
+    fireEvent.click(menuSwitch)
+    expect(screen.getByRole('checkbox', { name: 'Show label of V' })).not.toBeChecked()
+    expect(screen.queryByText('V', { selector: 'text' })).not.toBeInTheDocument()
+  })
+
+  it('draws no label while the Labels setting is off, and gives each its own setting back', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: 'V = vector(2, 1)' } })
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Show label of V' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    const labels = screen.getByRole('switch', { name: 'Expression labels' })
+    expect(labels).toBeChecked()
+    fireEvent.click(labels)
+    expect(screen.queryByText('V', { selector: 'text' })).not.toBeInTheDocument()
+    // The row shows no label line, and the menu greys its label switch out.
+    expect(screen.queryByRole('checkbox', { name: 'Show label of V' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: 'Label of expression 1' })).not.toBeInTheDocument()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    fireEvent.click(screen.getByRole('button', { name: 'Open Vector menu for V' }))
+    const dialog = screen.getByRole('dialog', { name: 'Vector' })
+    const menuSwitch = within(dialog).getByRole('switch', { name: 'Show label' })
+    expect(menuSwitch).toBeDisabled()
+    expect(menuSwitch).toBeChecked()
+    expect(within(dialog).getByText('Expression labels are off for the whole graph in Settings.')).toBeInTheDocument()
+    expect(within(dialog).queryByRole('textbox', { name: 'Angle' })).not.toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close Vector menu' }))
+
+    // Turned back on, each object has its own setting again.
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'Expression labels' }))
+    expect(screen.getByText('V', { selector: 'text' })).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'Show label of V' })).toBeChecked()
+  })
+})
+
 describe('labels edited under the expression and placed from the menu (#226)', () => {
   it('edits the text under the expression and places the label from the menu', () => {
     render(<App />)
@@ -3976,9 +4045,13 @@ describe('labels edited under the expression and placed from the menu (#226)', (
     fireEvent.click(within(dialog).getByRole('button', { name: 'Bottom left' }))
     expect(text()).toHaveAttribute('text-anchor', 'end')
     expect(text()).toHaveAttribute('dominant-baseline', 'hanging')
-    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Angle' }), { target: { value: '30' } })
-    expect(text().getAttribute('transform')).toMatch(/^rotate\(-30 /)
-    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Size' }), { target: { value: '20' } })
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Angle' }), { target: { value: 'pi / 6' } })
+    // In radians, counterclockwise, about the centre of its text.
+    expect(text().style.transform).toBe(`rotate(${-Math.PI / 6}rad)`)
+    expect(text().style.transformOrigin).toBe('center')
+    expect(text().style.transformBox).toBe('fill-box')
+    const labelSection = within(dialog).getByRole('switch', { name: 'Show label' }).closest('section')!
+    fireEvent.change(within(labelSection).getByRole('textbox', { name: 'Size' }), { target: { value: '20' } })
     expect(text().style.fontSize).toBe('20px')
   })
 

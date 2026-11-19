@@ -22,6 +22,8 @@ type AppearancePopoverProps = Readonly<{
   styleId: string
   visible: boolean
   labelVisible: boolean
+  /** The graph's Labels setting is off: the label switch is greyed out and the settings hidden. */
+  labelsDisabled?: boolean
   borderVisible?: boolean
   orientationVisible?: boolean
   bivectorShape?: 'from-vectors' | 'disk' | 'square'
@@ -83,6 +85,7 @@ export function AppearancePopover({
   styleId,
   visible,
   labelVisible,
+  labelsDisabled = false,
   borderVisible = false,
   orientationVisible = true,
   bivectorShape = 'from-vectors',
@@ -447,7 +450,9 @@ export function AppearancePopover({
           : { ...control, mode: 'number' }),
       })}
       {/* A list has no label. The text is edited under the expression (#226). */}
-      {!colorOnly && !list && !folder && section('Label', labelVisible && onAppearanceChange ? <>
+      {!colorOnly && !list && !folder && section('Label', labelsDisabled ? (
+        <p className="appearance-note">Expression labels are off for the whole graph in Settings.</p>
+      ) : labelVisible && onAppearanceChange ? <>
         <SourceFields fields={[{
           setting: 'labelAngle',
           label: 'Angle',
@@ -473,7 +478,14 @@ export function AppearancePopover({
         }]} trailing={
           <AnchorGrid value={appearance.labelAnchor ?? 'auto'} onChange={(labelAnchor) => change({ labelAnchor })} />
         } />
-      </> : null, { label: 'Show label', checked: labelVisible, onChange: onLabelVisibleChange })}
+        <label className="appearance-switch">
+          <span>Only label</span>
+          <input type="checkbox" role="switch" aria-label="Only label"
+            title="Draw the label without its object, which can still be moved"
+            checked={appearance.labelOnly ?? false}
+            onChange={(event) => change({ labelOnly: event.target.checked })} />
+        </label>
+      </> : null, { label: 'Show label', checked: labelVisible, disabled: labelsDisabled, onChange: onLabelVisibleChange })}
     </div>,
     document.body,
   )
@@ -575,7 +587,7 @@ function SourceFields({ fields, leading, trailing, className }: Readonly<{
     <div className={[leading ? 'appearance-row' : 'appearance-pair', className].filter(Boolean).join(' ')}>
       {leading}
       {fields.map((field, index) => {
-        const { minimum, maximum, unit } = APPEARANCE_SETTING_RANGES[field.setting]
+        const { minimum, maximum, unit, periodic } = APPEARANCE_SETTING_RANGES[field.setting]
         return (
           <label key={field.setting} className={`appearance-field${leading ? ' is-narrow' : ''}`}>
             <span>{field.label}</span>
@@ -587,7 +599,9 @@ function SourceFields({ fields, leading, trailing, className }: Readonly<{
                 autoComplete="off"
                 value={field.source}
                 placeholder={String(Number(field.placeholder.toFixed(2)))}
-                title={`${minimum} to ${maximum} ${unit}, or a scalar expression`}
+                title={periodic
+                  ? `Any angle in ${unit}, or a scalar expression such as pi / 4; 2π apart, angles are the same`
+                  : `${minimum} to ${maximum} ${unit}, or a scalar expression`}
                 aria-invalid={field.error ? true : undefined}
                 aria-describedby={field.error ? `${id}-error-${index}` : undefined}
                 onChange={(event) => field.onChange(event.target.value)}
@@ -605,20 +619,24 @@ function SourceFields({ fields, leading, trailing, className }: Readonly<{
 
 const ANCHOR_GRID: readonly LabelAnchor[] = [
   'top-left', 'top', 'top-right',
-  'left', 'auto', 'right',
+  'left', 'center', 'right',
   'bottom-left', 'bottom', 'bottom-right',
 ]
 
-/** The label's position around its anchor: eight places, and Auto in the center. */
+/** The label's position around its anchor: eight places and the center, and Auto beside them. */
 function AnchorGrid({ value, onChange }: Readonly<{ value: LabelAnchor; onChange(anchor: LabelAnchor): void }>) {
   return (
-    <div className="appearance-anchor-grid" role="group" aria-label="Label position">
-      {ANCHOR_GRID.map((anchor) => {
-        const name = anchor === 'auto' ? 'Automatic position' : capitalized(anchor.replace('-', ' '))
-        return <button key={anchor} type="button" className={anchor === 'auto' ? 'is-auto' : undefined}
-          aria-label={name} title={anchor === 'auto' ? 'Auto: first position without collision' : name}
-          aria-pressed={value === anchor} onClick={() => onChange(anchor)} />
-      })}
+    <div className="appearance-anchor" role="group" aria-label="Label position">
+      <div className="appearance-anchor-grid">
+        {ANCHOR_GRID.map((anchor) => {
+          const name = capitalized(anchor.replace('-', ' '))
+          return <button key={anchor} type="button" aria-label={name} title={name}
+            aria-pressed={value === anchor} onClick={() => onChange(anchor)} />
+        })}
+      </div>
+      <button type="button" className="appearance-anchor-auto" aria-label="Automatic position"
+        title="Auto: first position without collision"
+        aria-pressed={value === 'auto'} onClick={() => onChange('auto')}>Auto</button>
     </div>
   )
 }

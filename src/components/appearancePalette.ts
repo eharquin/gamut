@@ -104,6 +104,12 @@ export type ResolvedAppearance = Readonly<{
   connectionStrokeStyle: StrokeStyle
   /** New objects place their label automatically; migrated documents store `top-right`. */
   labelAnchor: LabelAnchor
+  /** The label is drawn without its object; only while the label is shown. */
+  labelOnly: boolean
+  /** Whether the object's handles move it; true unless it is held in place. */
+  draggable: boolean
+  /** Whether a scalar's slider is also drawn on the canvas. */
+  sliderInCanvas: boolean
 }>
 
 /**
@@ -150,5 +156,8 @@ export function resolveItemAppearance(
     listPointStyle: appearance?.primitiveStyles?.points?.pointStyle ?? 'dot',
     connectionStrokeStyle: appearance?.primitiveStyles?.points?.strokeStyle ?? 'solid',
     labelAnchor: appearance?.labelAnchor ?? 'auto',
+    labelOnly: (appearance?.labelVisible ?? false) && (appearance?.labelOnly ?? false),
+    draggable: appearance?.draggable ?? true,
+    sliderInCanvas: appearance?.sliderInCanvas ?? false,
   }
 }

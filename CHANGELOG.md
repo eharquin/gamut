@@ -30,9 +30,38 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (VGAC-004); VEC-001 to VEC-003 say so. The new PGA-015 states the PGA(2)
   rule and the PGA convention section 9 lists the tuple next to the
   constructors. The language version does not change (#180).
+- Format version 12 (planned for 0.3.0) adds `labelOnly`, `draggable` and
+  `sliderInCanvas` to every appearance record, `center` to the label anchors
+  and `labelsVisible` to the display settings. Version 11 documents migrate to
+  labels drawn with their object, all shown, objects draggable and sliders in
+  their rows only (#316).
+- A label angle is in radians and periodic: any angle is accepted, such as
+  `pi / 4` or `2 * pi + 0.5`, and angles 2π apart are the same. Version 11
+  documents keep their angles: a source `30` in degrees becomes
+  `30 * pi / 180` (#316).
+- The eight label positions lie on the circle whose radius is the label
+  distance, so a diagonal label is as far from its object as the others; the
+  default distance is 20 px instead of 8 (#316).
 
 ### Interface and accessibility
 
+- The **Label** section gains an **Only label** switch that draws the label
+  without its object, which can still be dragged. The position grid gains
+  **Center**, on the object itself; **Auto** moves beside the grid (#316).
+- Settings gain an **Expression labels** switch, on by default and saved
+  with the graph, that shows or hides every label of the canvas; each object
+  keeps its own label setting. While it is off, the rows show no **Label** line and the
+  appearance menu greys out its label switch, with a note saying why.
+  **Axes and labels** becomes **Axes and axis names**, so that the two are
+  not confused: it shows the axes, the origin and the names x and y (#316).
+- Each object that can have a label has a **Label** checkbox at the end of its
+  row, after its value and its position, which does what the menu's label
+  switch does; the text field shows beside it while the label is on (#316).
+- A label can show values: `A = ${t}` draws `A = 12` and follows `t`. Any
+  expression works, `${2 * t}` or `${P}` included, formatted like the values
+  of the panel; one that fails shows `?` and its reason under the label
+  field. `\$` writes a dollar sign; a lone `$` is reserved for inline math
+  and draws as written, with a warning (#316).
 - Dragging a point or vector written as a tuple rewrites the tuple in place,
   so `P = (2, 1)` becomes `P = (2.5, 1)`, not `point(2.5, 1)`. PGA position
   fields accept the tuple `(x, y)` and keep it when the base is dragged; the
@@ -239,6 +268,11 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   dark theme they had the colour of the panels themselves. The dark theme
   also gains contrast: darker page and canvas, panels that stand out, and
   lighter secondary and dim text (#324).
+- Opacity now fades a point, and the base of a vector or a bivector, instead
+  of leaving the drawn dot opaque; an object drawn as its label only leaves
+  no handle in sight (#316).
+- A rotated label turns about the centre of its text instead of the point it
+  is aligned on, so it stays in place around its object (#316).
 - Saving a graph while a slider animation plays now stops the animation and
   saves the values it stopped on, so the unsaved-changes dot disappears and
   stays hidden until the next change (#265).

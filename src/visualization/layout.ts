@@ -33,6 +33,8 @@ export type RenderedPrimitive = Readonly<{
   strokeWidth: number | null
   /** Opacity from 0 to 1 applied to fill and stroke together, or `null` when unset. */
   opacity: number | null
+  /** Opacity of the label: the object's, kept when the object is drawn as its label only. */
+  labelOpacity: number | null
   pointStyle: PointStyle
   /** Point core radius in reference pixels, or `null` for the kind default. */
   pointSize: number | null
@@ -203,6 +205,8 @@ export function collectRenderedPrimitives(
   interpretation: AnyInterpretation,
   declaredName: (source: string) => string | null,
   appearanceSources: ReadonlyMap<string, ItemAppearanceSources> = new Map(),
+  /** The graph's Labels setting: off, no label is drawn and no object is drawn as its label only. */
+  labelsVisible = true,
 ): Readonly<{
   rendered: readonly RenderedPrimitive[]
   connections: readonly RenderedPointListConnection[]
@@ -215,15 +219,17 @@ export function collectRenderedPrimitives(
       ? `List (${evaluated.evaluation.value.elements.length})`
       : interpretation.describe(evaluated.evaluation.entity)
     const {
-      visible, color, labelVisible, displayLabel, borderVisible, orientationVisible, bivectorShape,
+      visible, color, labelVisible: ownLabelVisible, displayLabel, borderVisible, orientationVisible, bivectorShape,
       idealPointDisplay, pointListDisplay, pointMarkersVisible, linesVisible, strokeStyle,
-      lineStrokeStyle, linesOrientationVisible, pointStyle, listPointStyle, connectionStrokeStyle, labelAnchor,
+      lineStrokeStyle, linesOrientationVisible, pointStyle, listPointStyle, connectionStrokeStyle, labelAnchor, labelOnly: ownLabelOnly,
     } = resolveItemAppearance(
       appearance[evaluated.item.id],
       kind,
       declaredName(evaluated.item.source),
     )
     if (!visible) return []
+    const labelVisible = labelsVisible && ownLabelVisible
+    const labelOnly = labelsVisible && ownLabelOnly
     const sources = appearanceSources.get(evaluated.item.id) ?? DEFAULT_APPEARANCE_SOURCES
     const opacity = sources.opacity.value === null ? null : sources.opacity.value / 100
     const labelSettings: LabelSettings = {
@@ -232,7 +238,8 @@ export function collectRenderedPrimitives(
       size: sources.labelSize.value,
       distance: sources.labelDistance.value,
     }
-    const baseLabel = displayLabel
+    // A label with `${…}` insertions shows their values.
+    const baseLabel = sources.label?.text ?? displayLabel
     if (evaluated.evaluation.valueType === 'list') {
       const elements = limitRenderedListElements(
         evaluated.evaluation.elements.filter((element) => element.primitive),
@@ -270,6 +277,7 @@ export function collectRenderedPrimitives(
             strokeStyle: line ? lineStrokeStyle : 'solid' as const,
             strokeWidth: line ? sources.lines.strokeWidth.value : null,
             opacity,
+            labelOpacity: opacity,
             pointStyle: listPointStyle,
             pointSize: sources.points.pointSize.value,
             labelSettings,
@@ -291,7 +299,8 @@ export function collectRenderedPrimitives(
           markerVisible: true,
           strokeStyle,
           strokeWidth: sources.strokeWidth.value,
-          opacity,
+          opacity: labelOnly ? 0 : opacity,
+          labelOpacity: opacity,
           pointStyle,
           pointSize: sources.pointSize.value,
           labelSettings,

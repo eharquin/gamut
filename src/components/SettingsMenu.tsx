@@ -13,6 +13,7 @@ export type DisplaySettings = Readonly<{
   objectScale: number
   showApproximatedResidue: boolean
   valuesVisible: boolean
+  labelsVisible: boolean
 }>
 
 export const MIN_OBJECT_SCALE = 0.25
@@ -147,7 +148,7 @@ export function SettingsMenu({
                 onChange={(gridVisible) => onDisplayChange({ gridVisible })}
               />
               <SwitchRow
-                label="Axes and labels"
+                label="Axes and axis names"
                 checked={display.axisLabelsVisible}
                 onChange={(axisLabelsVisible) =>
                   onDisplayChange({ axisLabelsVisible })
@@ -159,6 +160,12 @@ export function SettingsMenu({
                 onChange={(graduationsVisible) =>
                   onDisplayChange({ graduationsVisible })
                 }
+              />
+              {/* Every label of the graph; each object keeps its own label setting. */}
+              <SwitchRow
+                label="Expression labels"
+                checked={display.labelsVisible}
+                onChange={(labelsVisible) => onDisplayChange({ labelsVisible })}
               />
             </>}
             <label className="settings-row">

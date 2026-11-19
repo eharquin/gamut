@@ -33,14 +33,14 @@ To change any of these, change them in GAMUT, then copy the link again.
 | Objects and their sources | The expression panel |
 | Color, opacity, stroke, point style and size, labels of each object | The appearance menu of each row |
 | Grid | **Settings** › Display › **Grid** |
-| Axes and their labels | **Settings** › Display › **Axes and labels** |
+| Axes and their names | **Settings** › Display › **Axes and axis names** |
 | Graduations | **Settings** › Display › **Graduations** |
 | Size of arrows, points and labels | **Settings** › Display › **Object scale** |
 | Light or dark colors | **Settings** › Theme (*System*, *Light*, *Dark*) |
 | Framing: center and zoom of the view | Pan and zoom the canvas before copying |
 
 For example, a scene with only the objects is made by turning off **Grid**,
-**Axes and labels** and **Graduations** before copying the link. The colour
+**Axes and axis names** and **Graduations** before copying the link. The colour
 behind them is set by the `bg` option of section 3.
 
 ## 3. Options added at the end of the link

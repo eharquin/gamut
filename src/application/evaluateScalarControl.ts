@@ -42,7 +42,7 @@ function references(expression: SurfaceExpressionNode): readonly Readonly<{
   }
 }
 
-function invalid(code: string, message: string, span: SourceSpan): ScalarControlFieldState {
+function invalid(code: string, message: string, span: SourceSpan): Readonly<{ status: 'invalid'; diagnostic: Diagnostic }> {
   return { status: 'invalid', diagnostic: { code, severity: 'error', message, span } }
 }
 
@@ -70,6 +70,32 @@ export function scalarSourceEvaluator(
   items: readonly EvaluatedDocumentItem[],
   engine: AlgebraEngine,
 ): (source: string, messages?: ScalarSourceMessages) => ScalarControlFieldState {
+  const evaluateValue = valueSourceEvaluator(items, engine)
+  return (source, messages = CONTROL_MESSAGES) => {
+    const result = evaluateValue(source)
+    if (result.status === 'invalid') return result
+    const { value, span } = result
+    if (value.kind !== 'multivector' || value.coefficients.slice(1).some((coefficient) => coefficient !== 0)) {
+      return invalid(messages.nonScalar.code, messages.nonScalar.message, span)
+    }
+    const scalar = value.coefficients[0]
+    if (!Number.isFinite(scalar)) return invalid(messages.nonFinite.code, messages.nonFinite.message, span)
+    return { status: 'valid', value: scalar }
+  }
+}
+
+export type SourceValueState =
+  | Readonly<{ status: 'valid'; value: LanguageValue; span: SourceSpan }>
+  | Readonly<{ status: 'invalid'; diagnostic: Diagnostic }>
+
+/**
+ * Evaluates a source like `scalarSourceEvaluator` does, but returns any value:
+ * the inserted values of a label take multivectors and lists as well.
+ */
+export function valueSourceEvaluator(
+  items: readonly EvaluatedDocumentItem[],
+  engine: AlgebraEngine,
+): (source: string) => SourceValueState {
   const declarations = new Map<string, EvaluatedDocumentItem[]>()
   items.forEach((item) => {
     const name = declarationName(item.item.source)
@@ -77,7 +103,7 @@ export function scalarSourceEvaluator(
     declarations.set(name, [...(declarations.get(name) ?? []), item])
   })
 
-  return (source, messages = CONTROL_MESSAGES) => {
+  return (source) => {
     const parsed = parseExpression(source)
     if (!parsed.ok) return { status: 'invalid', diagnostic: parsed.diagnostic }
     const resolved = new Map<string, LanguageValue>()
@@ -107,12 +133,7 @@ export function scalarSourceEvaluator(
       if (!(error instanceof ExpressionEvaluationError)) throw error
       return invalid(error.code, error.message, error.origin)
     }
-    if (value.kind !== 'multivector' || value.coefficients.slice(1).some((coefficient) => coefficient !== 0)) {
-      return invalid(messages.nonScalar.code, messages.nonScalar.message, parsed.expression.span)
-    }
-    const scalar = value.coefficients[0]
-    if (!Number.isFinite(scalar)) return invalid(messages.nonFinite.code, messages.nonFinite.message, parsed.expression.span)
-    return { status: 'valid', value: scalar }
+    return { status: 'valid', value, span: parsed.expression.span }
   }
 }
 

@@ -1,7 +1,9 @@
 import type { AlgebraEngine } from '../algebra/algebraEngine'
 import type { ExpressionAppearance, ExpressionDocument } from '../document/expressionDocument'
 import type { EvaluatedDocumentItem } from './evaluateDocument'
-import { scalarSourceEvaluator, type ScalarSourceMessages } from './evaluateScalarControl'
+import { formatDisplayValue } from '../presentation/formatNumber'
+import { scalarSourceEvaluator, valueSourceEvaluator, type ScalarSourceMessages } from './evaluateScalarControl'
+import { isLabelTemplate, resolveLabelTemplate, type LabelTextResult } from './labelTemplate'
 
 /** The numeric appearance settings stored as source text (document format §2.2). */
 export type AppearanceSetting =
@@ -12,16 +14,21 @@ export type AppearanceSetting =
   | 'labelSize'
   | 'labelDistance'
 
-/** Inclusive ranges, from limits and interaction constants §5.1. */
+/**
+ * Ranges, from limits and interaction constants §5.1. A bounded setting
+ * refuses a value outside its inclusive range. A periodic setting (the label
+ * angle, in radians) takes any finite scalar, brought into (−π, π].
+ */
 export const APPEARANCE_SETTING_RANGES: Readonly<Record<AppearanceSetting, Readonly<{
   minimum: number
   maximum: number
   unit: string
+  periodic?: boolean
 }>>> = {
   strokeWidth: { minimum: 0.25, maximum: 10, unit: 'px' },
   pointSize: { minimum: 1, maximum: 20, unit: 'px' },
   opacity: { minimum: 0, maximum: 100, unit: '%' },
-  labelAngle: { minimum: -180, maximum: 180, unit: '°' },
+  labelAngle: { minimum: -Math.PI, maximum: Math.PI, unit: 'rad', periodic: true },
   labelSize: { minimum: 6, maximum: 36, unit: 'px' },
   labelDistance: { minimum: 0, maximum: 40, unit: 'px' },
 }
@@ -43,6 +50,8 @@ export type ItemAppearanceSources = Readonly<{
   labelDistance: AppearanceSourceResult
   points: Readonly<{ pointSize: AppearanceSourceResult; strokeWidth: AppearanceSourceResult }>
   lines: Readonly<{ strokeWidth: AppearanceSourceResult }>
+  /** The label with its `${…}` insertions replaced; `null` for a plain label. */
+  label: LabelTextResult | null
 }>
 
 const DEFAULT: AppearanceSourceResult = Object.freeze({ value: null, error: null })
@@ -56,11 +65,20 @@ export const DEFAULT_APPEARANCE_SOURCES: ItemAppearanceSources = Object.freeze({
   labelDistance: DEFAULT,
   points: Object.freeze({ pointSize: DEFAULT, strokeWidth: DEFAULT }),
   lines: Object.freeze({ strokeWidth: DEFAULT }),
+  label: null,
 })
 
 const APPEARANCE_MESSAGES: ScalarSourceMessages = {
   nonScalar: { code: 'APPEARANCE_NON_SCALAR', message: 'The value is not a real scalar.' },
   nonFinite: { code: 'APPEARANCE_NON_FINITE', message: 'The value is not finite.' },
+}
+
+/** An angle in radians brought into (−π, π]; 2π apart, two angles draw alike. */
+export function wrappedAngle(radians: number): number {
+  const turn = 2 * Math.PI
+  const wrapped = radians - turn * Math.floor((radians + Math.PI) / turn)
+  // −π and π are the same angle: the half-open interval keeps π.
+  return wrapped === -Math.PI ? Math.PI : wrapped
 }
 
 function formatted(value: number): string {
@@ -86,7 +104,8 @@ export function resolveAppearanceSource(
       : message
     return { value: null, error: `${reason} Default used.` }
   }
-  const { minimum, maximum } = APPEARANCE_SETTING_RANGES[setting]
+  const { minimum, maximum, periodic } = APPEARANCE_SETTING_RANGES[setting]
+  if (periodic) return { value: wrappedAngle(result.value), error: null }
   if (result.value < minimum || result.value > maximum) return {
     value: null,
     error: `${formatted(result.value)} is outside ${minimum} to ${maximum}. Default used.`,
@@ -101,7 +120,8 @@ function hasSource(appearance: ExpressionAppearance | undefined): boolean {
     appearance.strokeWidthSource, appearance.pointSizeSource, appearance.opacitySource,
     appearance.labelAngleSource, appearance.labelSizeSource, appearance.labelDistanceSource,
     points?.pointSizeSource, points?.strokeWidthSource, lines?.strokeWidthSource,
-  ].some((source) => source !== undefined && source.trim() !== '')
+  ].some((source) => source !== undefined && source.trim() !== '') ||
+    isLabelTemplate(appearance.label ?? '')
 }
 
 /**
@@ -118,6 +138,8 @@ export function evaluateAppearanceSources(
   const results = new Map<string, ItemAppearanceSources>()
   if (!document.items.some((item) => hasSource(document.appearance[item.id]))) return results
   const evaluate = scalarSourceEvaluator(items, engine)
+  const evaluateValue = valueSourceEvaluator(items, engine)
+  const { decimalPlaces, showApproximatedResidue } = document.view.display
   for (const item of document.items) {
     const appearance = document.appearance[item.id]
     if (!hasSource(appearance)) continue
@@ -136,6 +158,10 @@ export function evaluateAppearanceSources(
       lines: {
         strokeWidth: resolveAppearanceSource('strokeWidth', lines?.strokeWidthSource, evaluate),
       },
+      label: isLabelTemplate(appearance!.label ?? '')
+        ? resolveLabelTemplate(appearance!.label!, evaluateValue,
+          (value) => formatDisplayValue(value, decimalPlaces, showApproximatedResidue))
+        : null,
     })
   }
   return results

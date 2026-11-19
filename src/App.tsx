@@ -1594,6 +1594,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
     ? { rendered: [], connections: [], omitted: 0 }
     : collectRenderedPrimitives(
         evaluatedItems, drawnDocument.appearance, interpretation, declaredName, appearanceSources,
+        expressionDoc.view.display.labelsVisible,
       )
   const renderedVectors = renderedPrimitives.flatMap((entry) =>
     entry.primitive.kind === 'oriented-segment'
@@ -3182,7 +3183,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
               </g>}
 
               {raiseSelectedGlyphs([
-                ...renderedVectors.map(({ id, primitive, entity, layout, color, strokeStyle, strokeWidth, opacity }) => {
+                ...renderedVectors.map(({ id, primitive, entity, layout, color, strokeStyle, strokeWidth, opacity, labelOpacity }) => {
                   const item = expressionDoc.items.find((candidate) => candidate.id === id)
                   return <OrientedSegmentGlyph
                     key={id}
@@ -3199,9 +3200,10 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
                     strokeStyle={strokeStyle}
                     strokeWidth={strokeWidth}
                     opacity={opacity}
+                    labelOpacity={labelOpacity}
                   />
                 }),
-                ...renderedAreas.map(({ id, primitive, entity, layout, color, borderVisible, orientationVisible, strokeStyle, strokeWidth, opacity }) => {
+                ...renderedAreas.map(({ id, primitive, entity, layout, color, borderVisible, orientationVisible, strokeStyle, strokeWidth, opacity, labelOpacity }) => {
                   const item = expressionDoc.items.find((candidate) => candidate.id === id)
                   return <OrientedAreaGlyph
                     key={id}
@@ -3219,9 +3221,10 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
                     strokeStyle={strokeStyle}
                     strokeWidth={strokeWidth}
                     opacity={opacity}
+                    labelOpacity={labelOpacity}
                   />
                 }),
-                ...renderedLines.map(({ id, primitive, entity, layout, color, orientationVisible, strokeStyle, strokeWidth, opacity }) => {
+                ...renderedLines.map(({ id, primitive, entity, layout, color, orientationVisible, strokeStyle, strokeWidth, opacity, labelOpacity }) => {
                   const item = expressionDoc.items.find((candidate) => candidate.id === id)
                   const selection = selectedLine?.itemId === id
                     ? layoutLineSelection(primitive, selectedLine.anchor, viewport, objectRenderScale)
@@ -3243,12 +3246,13 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
                     strokeStyle={strokeStyle}
                     strokeWidth={strokeWidth}
                     opacity={opacity}
+                    labelOpacity={labelOpacity}
                   />
                 }),
-                ...renderedInfinity.map(({ id, primitive, layout, color, opacity }) => (
-                  <LineAtInfinityGlyph key={id} accessibleName={primitive.accessibleName} layout={layout} color={color} label={placedLabel(id)} scale={objectRenderScale} opacity={opacity} />
+                ...renderedInfinity.map(({ id, primitive, layout, color, opacity, labelOpacity }) => (
+                  <LineAtInfinityGlyph key={id} accessibleName={primitive.accessibleName} layout={layout} color={color} label={placedLabel(id)} scale={objectRenderScale} opacity={opacity} labelOpacity={labelOpacity} />
                 )),
-                ...renderedIdealPoints.map(({ id, primitive, entity, arrow, marker, color, strokeStyle, strokeWidth, opacity }) => {
+                ...renderedIdealPoints.map(({ id, primitive, entity, arrow, marker, color, strokeStyle, strokeWidth, opacity, labelOpacity }) => {
                   const item = expressionDoc.items.find((candidate) => candidate.id === id)
                   return <g key={id}>
                     {marker && <DirectionMarkerGlyph
@@ -3258,6 +3262,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
                       label={arrow ? null : placedLabel(id)}
                       scale={objectRenderScale}
                       opacity={opacity}
+                      labelOpacity={labelOpacity}
                     />}
                     {arrow && <OrientedSegmentGlyph
                       id={id}
@@ -3276,6 +3281,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
                       strokeStyle={strokeStyle}
                       strokeWidth={strokeWidth}
                       opacity={opacity}
+                      labelOpacity={labelOpacity}
                     />}
                   </g>
                 }),
@@ -3290,7 +3296,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
                     strokeWidth={strokeWidth}
                   />
                 )),
-                ...renderedPoints.map(({ id, primitive, entity, point, color, markerVisible, opacity, pointStyle, pointSize }) => {
+                ...renderedPoints.map(({ id, primitive, entity, point, color, markerVisible, opacity, labelOpacity, pointStyle, pointSize }) => {
                   const item = expressionDoc.items.find((candidate) => candidate.id === id)
                   return <PointMarkerGlyph
                     key={id}
@@ -3305,6 +3311,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
                     markerVisible={markerVisible}
                     controller={handleController}
                     opacity={opacity}
+                    labelOpacity={labelOpacity}
                     pointStyle={pointStyle}
                     pointSize={pointSize}
                   />
