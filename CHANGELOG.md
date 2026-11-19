@@ -235,6 +235,10 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- The grey separators between rows and sections show in both themes: in the
+  dark theme they had the colour of the panels themselves. The dark theme
+  also gains contrast: darker page and canvas, panels that stand out, and
+  lighter secondary and dim text (#324).
 - Saving a graph while a slider animation plays now stops the animation and
   saves the values it stopped on, so the unsaved-changes dot disappears and
   stays hidden until the next change (#265).
