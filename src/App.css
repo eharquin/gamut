@@ -1112,7 +1112,6 @@ body.reordering-items .reorder-handle {
   border-radius: 50%;
 }
 
-.expression-status-pastille.is-empty { background: var(--text-dim); }
 .expression-status-pastille.is-error { background: var(--error); }
 /* An annotation row is never evaluated: a hollow pastille, muted source. */
 
@@ -1289,12 +1288,17 @@ body.reordering-items .reorder-handle {
 
 /* The delete button sits at the middle of the row's height, whatever the eye
    above it takes; in a row too short for both, it stays just under the eye
-   (24px and the 2px gap, plus half its own 24px). */
+   (24px and the 2px gap, plus half its own 24px). Without an eye, as in an
+   empty or invalid row, it simply sits at the middle. */
 .expression-end-actions .delete-expression {
   position: absolute;
-  top: max(50%, 38px);
+  top: 50%;
   left: 0;
   transform: translateY(-50%);
+}
+
+.expression-end-actions:has(.visibility-toggle) .delete-expression {
+  top: max(50%, 38px);
 }
 
 .delete-expression {

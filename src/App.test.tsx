@@ -2096,14 +2096,14 @@ describe('VGA 2D vertical slice', () => {
     expect(screen.getByRole('img')).toHaveTextContent('No spatial objects are visible')
   })
 
-  it('shows gray and error pastilles for empty and invalid expressions', () => {
+  it('shows no pastille for an empty expression and an error pastille for an invalid one', () => {
     const { container } = render(<App />)
     const expression = screen.getByRole('textbox', { name: 'Expression 1' })
 
     fireEvent.change(expression, { target: { value: '' } })
     expect(screen.queryByText(/Enter an expression/)).not.toBeInTheDocument()
-    expect(container.querySelector('.expression-status-pastille.is-empty'))
-      .toBeInTheDocument()
+    // An empty row may yet become an expression, a note or a folder.
+    expect(container.querySelector('.expression-status-pastille')).toBeNull()
 
     fireEvent.change(expression, { target: { value: 'Missing' } })
     expect(expression).toHaveAttribute('aria-invalid', 'true')
@@ -2587,7 +2587,9 @@ describe('VGA 2D vertical slice', () => {
     const css = readFileSync(`${import.meta.dirname}/App.css`, 'utf8')
     expect(css.match(/\.expression-end-actions \{([^}]*)\}/)?.[1]).toMatch(/align-self: stretch;/)
     // The delete button is centred in the row's height, under the eye.
-    expect(css.match(/\.expression-end-actions \.delete-expression \{([^}]*)\}/)?.[1]).toMatch(/top: max\(50%, 38px\);[\s\S]*transform: translateY\(-50%\);/)
+    expect(css.match(/\.expression-end-actions \.delete-expression \{([^}]*)\}/)?.[1]).toMatch(/top: 50%;[\s\S]*transform: translateY\(-50%\);/)
+    // Only a row with an eye keeps the cross under it; an empty row has none.
+    expect(css.match(/\.expression-end-actions:has\(\.visibility-toggle\) \.delete-expression \{([^}]*)\}/)?.[1]).toMatch(/top: max\(50%, 38px\);/)
     // The kind is followed on its line by the value, then the norm button.
     const kindLine = row.querySelector('.expression-kind-line')!
     expect([...kindLine.children].map((child) => child.tagName === 'OUTPUT' ? 'value' : child.className))

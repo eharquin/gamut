@@ -105,7 +105,9 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The eye that shows or hides an object moves to the top right corner of the
   row, above the delete cross, which is centred in the row's height; the drag
   button moves above the color swatch. The blue dot that marked a unit norm
-  is gone (#319).
+  is gone. A row without an eye, such as an empty or invalid one, centres its
+  cross too. An empty row shows no grey dot, since it may yet become an
+  expression, a note or a folder (#319).
 - The appearance menu shows the kind in the color of the object (#319).
 - In NoViz, the cards style sits in the same centred column as the lines
   style (#319).
