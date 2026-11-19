@@ -3442,6 +3442,9 @@ body.canvas-gesture .expression-panel {
 .point-marker {
   fill: currentColor;
   pointer-events: none;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 350ms ease;
 }
 
 .point-list-connection {
@@ -3605,9 +3608,6 @@ body.canvas-gesture .expression-panel {
   stroke-linecap: butt;
   opacity: 0.55;
   pointer-events: none;
-  transform-box: fill-box;
-  transform-origin: center;
-  transition: transform 350ms ease;
 }
 
 .line-normal-head {
