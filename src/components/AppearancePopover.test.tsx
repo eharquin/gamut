@@ -357,17 +357,19 @@ describe('label placement settings (#226)', () => {
     const size = within(section).getByRole('textbox', { name: 'Size' })
     const distance = within(section).getByRole('textbox', { name: 'Distance' })
     expect(angle).toHaveValue('a')
-    expect(angle.parentElement).toHaveTextContent('°')
-    expect([angle, size, distance].map((field) => field.getAttribute('placeholder'))).toEqual(['0', '13', '8'])
+    expect(angle.parentElement).toHaveTextContent('rad')
+    expect([angle, size, distance].map((field) => field.getAttribute('placeholder'))).toEqual(['0', '13', '20'])
     expect(angle.closest('.appearance-pair')).toContainElement(size)
     const grid = within(section).getByRole('group', { name: 'Label position' })
     expect(distance.closest('.appearance-pair')).toHaveClass('appearance-pair-anchor')
     expect(distance.closest('.appearance-pair')).toContainElement(grid)
-    // Nine cells, Auto in the center, no caption and no anchor name shown.
+    // Nine cells with the centre among them, no anchor name shown, and Auto beside them.
     expect(within(grid).getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
-      'Top left', 'Top', 'Top right', 'Left', 'Automatic position', 'Right', 'Bottom left', 'Bottom', 'Bottom right',
+      'Top left', 'Top', 'Top right', 'Left', 'Center', 'Right', 'Bottom left', 'Bottom', 'Bottom right', 'Automatic position',
     ])
-    expect(grid).toHaveTextContent(/^$/)
+    expect(grid).toHaveTextContent(/^Auto$/)
+    fireEvent.click(within(grid).getByRole('button', { name: 'Center' }))
+    expect(onAppearanceChange).toHaveBeenLastCalledWith({ labelAnchor: 'center' }, undefined)
     expect(within(grid).getByRole('button', { name: 'Top left' })).toHaveAttribute('aria-pressed', 'true')
     fireEvent.click(within(grid).getByRole('button', { name: 'Automatic position' }))
     expect(onAppearanceChange).toHaveBeenLastCalledWith({ labelAnchor: 'auto' }, undefined)
@@ -375,6 +377,17 @@ describe('label placement settings (#226)', () => {
     expect(onAppearanceChange).toHaveBeenLastCalledWith({ labelDistanceSource: 'd' }, 'labelDistance')
     fireEvent.change(size, { target: { value: '20' } })
     expect(onAppearanceChange).toHaveBeenLastCalledWith({ labelSizeSource: '20' }, 'labelSize')
+  })
+
+  it('draws the label alone on request, with no opacity of its own', () => {
+    const onAppearanceChange = vi.fn()
+    const { dialog } = open({ labelVisible: true, onAppearanceChange })
+    const section = within(dialog).getByRole('switch', { name: 'Show label' }).closest('section')!
+    expect(within(section).queryByRole('textbox', { name: 'Opacity' })).not.toBeInTheDocument()
+    const only = within(section).getByRole('switch', { name: 'Only label' })
+    expect(only).not.toBeChecked()
+    fireEvent.click(only)
+    expect(onAppearanceChange).toHaveBeenLastCalledWith({ labelOnly: true }, undefined)
   })
 
   it('selects Auto when nothing is stored, and shows no setting while the label is off', () => {

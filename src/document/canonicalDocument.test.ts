@@ -28,7 +28,7 @@ const DEFAULT_V7_APPEARANCE = {
   orientationVisible: true, bivectorShape: 'from-vectors', idealPointDisplay: 'vector',
   strokeStyle: 'solid', strokeWidthSource: '', pointStyle: 'dot', pointSizeSource: '',
   opacitySource: '', labelAngleSource: '', labelSizeSource: '', labelDistanceSource: '',
-  labelAnchor: 'auto',
+  labelAnchor: 'auto', labelOnly: false, draggable: true, sliderInCanvas: false,
   primitiveStyles: {
     points: { visible: true, pointStyle: 'dot', pointSizeSource: '', connection: 'none', strokeStyle: 'solid', strokeWidthSource: '' },
     lines: { visible: true, strokeStyle: 'solid', strokeWidthSource: '', orientationVisible: true },
@@ -141,7 +141,7 @@ describe('canonical document format', () => {
       )),
     }
     const migrated = parseCanonicalDocument(JSON.stringify(legacy))
-    expect(migrated.formatVersion).toBe(11)
+    expect(migrated.formatVersion).toBe(12)
     expect(migrated.appearance.v.borderVisible).toBe(false)
     expect(migrated.appearance.v.orientationVisible).toBe(true)
     expect(migrated.appearance.v.bivectorShape).toBe('from-vectors')
@@ -156,7 +156,7 @@ describe('canonical document format', () => {
       view: { ...current.view, display: legacyDisplay },
     }
     const migrated = parseCanonicalDocument(JSON.stringify(legacy))
-    expect(migrated.formatVersion).toBe(11)
+    expect(migrated.formatVersion).toBe(12)
     // Preserves the pre-existing document's prior appearance: version 3 had
     // no toggle, so it always behaved as if residue were shown.
     expect(migrated.view.display.showApproximatedResidue).toBe(true)
@@ -173,7 +173,7 @@ describe('canonical document format', () => {
       })),
     }
     const migrated = parseCanonicalDocument(JSON.stringify(legacy))
-    expect(migrated.formatVersion).toBe(11)
+    expect(migrated.formatVersion).toBe(12)
     expect(migrated.appearance.v.idealPointDisplay).toBe('vector')
     expect(migrated.appearance.v.primitiveStyles.points.connection).toBe('none')
     expect(errorCode(() => parseCanonicalDocument(JSON.stringify({
@@ -192,7 +192,7 @@ describe('canonical document format', () => {
       })),
     }
     const migrated = parseCanonicalDocument(JSON.stringify(legacy))
-    expect(migrated.formatVersion).toBe(11)
+    expect(migrated.formatVersion).toBe(12)
     expect(migrated.appearance.v.primitiveStyles.points.connection).toBe('none')
     expect(migrated.appearance.v.primitiveStyles.points.visible).toBe(true)
     expect(errorCode(() => parseCanonicalDocument(JSON.stringify({
@@ -231,7 +231,7 @@ describe('canonical document format', () => {
     const legacy = version7(sample())
     expect('valuesVisible' in legacy.view.display).toBe(false)
     const migrated = parseCanonicalDocument(JSON.stringify(legacy))
-    expect(migrated.formatVersion).toBe(11)
+    expect(migrated.formatVersion).toBe(12)
     // Version 7 had no setting, so it always showed the values.
     expect(migrated.view.display.valuesVisible).toBe(true)
     // Nothing else changes.
@@ -269,7 +269,7 @@ describe('canonical document format', () => {
       { id: 'd', source: 'V = vector(2, 1)' },
     ]), 'light'))) as Record<string, unknown>
     const migrated = parseCanonicalDocument(JSON.stringify({ ...current, formatVersion: 8 }))
-    expect(migrated.formatVersion).toBe(11)
+    expect(migrated.formatVersion).toBe(12)
     expect(migrated.items.map(({ kind, source }) => [kind, source])).toEqual([
       ['annotation', 'Titre **gras**'],
       // Only the first # was the marker; what follows is the text version 8 showed.
@@ -286,7 +286,7 @@ describe('canonical document format', () => {
   })
 
   it('selects the version boundary before complete schema validation', () => {
-    expect(errorCode(() => parseCanonicalDocument('{"formatVersion":12,"future":true}'))).toBe('DOCUMENT_FORMAT_VERSION')
+    expect(errorCode(() => parseCanonicalDocument('{"formatVersion":13,"future":true}'))).toBe('DOCUMENT_FORMAT_VERSION')
   })
 
   it('rejects unknown fields and unregistered styles', () => {
@@ -457,13 +457,15 @@ describe('canonical document format version 7', () => {
     const legacy = legacyListDocument()
     expect(legacy.appearance['hidden-unconnected']).toEqual(expect.objectContaining({ pointListDisplay: 'none', pointMarkersVisible: false }))
     const migrated = parseCanonicalDocument(JSON.stringify(legacy))
-    expect(migrated.formatVersion).toBe(11)
+    expect(migrated.formatVersion).toBe(12)
     expect(migrated.items[0].normalization).toBe('natural')
     expect(migrated.appearance.plain).toEqual({
       visible: true, labelVisible: true, label: 'p', style: 'blue-4', borderVisible: false,
       orientationVisible: false, bivectorShape: 'from-vectors', idealPointDisplay: 'vector',
       strokeStyle: 'solid', strokeWidthSource: '', pointStyle: 'dot', pointSizeSource: '',
       opacitySource: '', labelAngleSource: '', labelSizeSource: '', labelDistanceSource: '',
+      // Version 11 labels are never drawn alone.
+      labelOnly: false, draggable: true, sliderInCanvas: false,
       // The fixed version 6 position, so existing labels do not move.
       labelAnchor: 'top-right',
       primitiveStyles: {
@@ -481,10 +483,45 @@ describe('canonical document format version 7', () => {
 
   it('migrates byte-stably: a migrated document serializes and reparses unchanged', () => {
     const encoded = serializeCanonicalDocument(parseCanonicalDocument(JSON.stringify(legacyListDocument())))
-    expect(encoded).toContain('"formatVersion":11')
+    expect(encoded).toContain('"formatVersion":12')
     expect(encoded).not.toContain('pointListDisplay')
     expect(encoded).not.toContain('pointMarkersVisible')
     expect(serializeCanonicalDocument(parseCanonicalDocument(encoded))).toBe(encoded)
+  })
+
+  it('migrates version 11 documents to labels drawn with their object, all shown', () => {
+    const current = JSON.parse(serializeCanonicalDocument(sample()))
+    const strip = ({ labelOnly: _only, draggable: _draggable, sliderInCanvas: _slider, ...rest }: Record<string, unknown>) => rest
+    const { labelsVisible: _labels, ...display } = current.view.display
+    const version11 = {
+      ...current, formatVersion: 11, view: { ...current.view, display },
+      appearance: Object.fromEntries(Object.entries(current.appearance).map(([id, entry]) => [id, strip(entry as Record<string, unknown>)])),
+    }
+    const migrated = parseCanonicalDocument(JSON.stringify(version11))
+    expect(migrated.formatVersion).toBe(12)
+    expect(migrated.appearance.v).toEqual(expect.objectContaining({ labelOnly: false, draggable: true, sliderInCanvas: false }))
+    expect(migrated.view.display.labelsVisible).toBe(true)
+    expect(migrated.appearance.v.labelAngleSource).toBe('')
+  })
+
+  it('migrates a version 11 label angle in degrees to the same angle in radians', () => {
+    const current = JSON.parse(serializeCanonicalDocument(sample()))
+    const { labelOnly: _only, ...appearance } = current.appearance.v
+    const { labelsVisible: _labels, ...display } = current.view.display
+    const angleIn = (labelAngleSource: string) => parseCanonicalDocument(JSON.stringify({
+      ...current, formatVersion: 11, view: { ...current.view, display },
+      appearance: { v: { ...appearance, labelAngleSource } },
+    })).appearance.v.labelAngleSource
+    expect(angleIn('30')).toBe('30 * pi / 180')
+    expect(angleIn(' -45.5 ')).toBe('-45.5 * pi / 180')
+    expect(angleIn('a + 10')).toBe('(a + 10) * pi / 180')
+  })
+
+  it('keeps a label drawn alone and a centred label', () => {
+    const current = sample()
+    const document = { ...current, appearance: { v: { ...current.appearance.v, labelOnly: true, labelAnchor: 'center' as const } } }
+    const reparsed = parseCanonicalDocument(serializeCanonicalDocument(document))
+    expect(reparsed.appearance.v).toEqual(expect.objectContaining({ labelOnly: true, labelAnchor: 'center' }))
   })
 
   it('saves a new line without orientation, and keeps a stored orientation', () => {
@@ -562,7 +599,8 @@ describe('canonical document format version 7', () => {
     })
     expect(errorCode(withAppearance({ strokeStyle: 'dash-dot' }))).toBe('DOCUMENT_SCHEMA')
     expect(errorCode(withAppearance({ pointStyle: 'star' }))).toBe('DOCUMENT_SCHEMA')
-    expect(errorCode(withAppearance({ labelAnchor: 'center' }))).toBe('DOCUMENT_SCHEMA')
+    expect(errorCode(withAppearance({ labelAnchor: 'middle' }))).toBe('DOCUMENT_SCHEMA')
+    expect(errorCode(withAppearance({ labelOnly: 'yes' }))).toBe('DOCUMENT_SCHEMA')
     for (const field of ['strokeWidthSource', 'pointSizeSource', 'opacitySource', 'labelAngleSource', 'labelSizeSource', 'labelDistanceSource']) {
       // Sources are text, like slider bounds: a bare number is not a source.
       expect(errorCode(withAppearance({ [field]: 2 })), field).toBe('DOCUMENT_SCHEMA')

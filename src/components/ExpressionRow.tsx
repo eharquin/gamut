@@ -234,10 +234,16 @@ export function ExpressionRow({
     kind,
     declaredName(item.source),
   )
-  const objectName = annotation ? `Annotation ${position}` : displayLabel ?? kind
+  // A label with `${…}` insertions is named by the text it shows.
+  const labelText = appearanceSources.label
+  const objectName = annotation ? `Annotation ${position}` : labelText?.text ?? displayLabel ?? kind
+  const labelErrorId = `label-error-${item.id}`
   const noteTextId = `annotation-text-${item.id}`
-  const labelFieldShown = drawable && labelVisible && evaluation?.status === 'valid' &&
+  // Every object that can have a label shows its switch under the
+  // expression; the text field follows while the label is shown (#226).
+  const labelRowShown = drawable && evaluation?.status === 'valid' &&
     evaluation.valueType !== 'list'
+  const labelFieldShown = labelRowShown && labelVisible
   const valid = evaluation?.status === 'valid'
   const approximated = valid && evaluation.valueType === 'single' &&
     evaluation.entity.kind !== 'mixed-multivector' &&
@@ -477,24 +483,6 @@ export function ExpressionRow({
               onClose={closeNormalizationChoice}
             />
           )}
-          {/* The label text is edited under the expression while the label is shown (#226). */}
-          {labelFieldShown && !noViz && (
-            <label className="expression-label-row">
-              <span aria-hidden="true">Label</span>
-              <input
-                className="expression-label-input"
-                aria-label={`Label of ${annotation ? 'annotation' : 'expression'} ${position}`}
-                value={label}
-                placeholder={declaredName(item.source) ?? ''}
-                onChange={(event) => executeCommand({
-                  kind: 'update-appearance', itemId: item.id, appearance: { label: event.target.value },
-                }, `appearance-label:${item.id}`)}
-                onBlur={() => dispatchHistory({ type: 'boundary' })}
-                spellCheck={false}
-                autoComplete="off"
-              />
-            </label>
-          )}
 
           {evaluation || positionEvaluation ? (
             <div
@@ -701,6 +689,44 @@ export function ExpressionRow({
               />
             </div>
           )}
+          {/* The switch does what the Label switch of the menu does; the text
+              is edited beside it while the label is shown (#226). It comes last
+              in the row, after the value and the position. */}
+          {/* Hidden while the graph's Labels setting is off, which draws no label. */}
+          {labelRowShown && !noViz && display.labelsVisible && (
+            <div className={`expression-label-row${labelVisible ? '' : ' is-off'}`}>
+              <label className="expression-label-toggle">
+                <input
+                  type="checkbox"
+                  aria-label={`Show label of ${objectName}`}
+                  checked={labelVisible}
+                  onChange={(event) => executeCommand({
+                    kind: 'update-appearance', itemId: item.id,
+                    appearance: { labelVisible: event.target.checked },
+                  })}
+                />
+                <span aria-hidden="true">Label</span>
+              </label>
+              {labelFieldShown && <input
+                className="expression-label-input"
+                aria-label={`Label of ${annotation ? 'annotation' : 'expression'} ${position}`}
+                value={label}
+                placeholder={declaredName(item.source) ?? ''}
+                title="Insert a value with ${expression}, as in A = ${t}"
+                aria-invalid={labelText?.error ? true : undefined}
+                aria-describedby={labelText?.error ? labelErrorId : undefined}
+                onChange={(event) => executeCommand({
+                  kind: 'update-appearance', itemId: item.id, appearance: { label: event.target.value },
+                }, `appearance-label:${item.id}`)}
+                onBlur={() => dispatchHistory({ type: 'boundary' })}
+                spellCheck={false}
+                autoComplete="off"
+              />}
+            </div>
+          )}
+          {labelRowShown && !noViz && display.labelsVisible && labelVisible && labelText?.error && (
+            <p id={labelErrorId} className="expression-label-error" role="status">{labelText.error}</p>
+          )}
         </div>
         <button
           type="button"
@@ -717,6 +743,7 @@ export function ExpressionRow({
           styleId={styleId}
           visible={visible}
           labelVisible={labelVisible}
+          labelsDisabled={!display.labelsVisible}
           borderVisible={appearance?.borderVisible ?? false}
           orientationVisible={resolveItemAppearance(appearance, kind, null).orientationVisible}
           bivectorShape={appearance?.bivectorShape ?? 'from-vectors'}

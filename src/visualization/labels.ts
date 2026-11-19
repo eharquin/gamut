@@ -1,14 +1,14 @@
 import type { LabelAnchor } from '../document/expressionDocument'
 import type { Point2d } from '../geometry/interpretation'
 
-/** Label size and offset drawn before format version 7, in screen pixels. */
+/** Default label size (as before format version 7) and distance (from version 12), in screen pixels. */
 export const DEFAULT_LABEL_SIZE = 13
-export const DEFAULT_LABEL_DISTANCE = 8
+export const DEFAULT_LABEL_DISTANCE = 20
 
 /** Placement settings of one object's label; `null` selects the default. */
 export type LabelSettings = Readonly<{
   anchor: LabelAnchor
-  /** Degrees, counterclockwise. */
+  /** Radians, counterclockwise, in (−π, π]. */
   angle: number | null
   /** Font size in reference pixels. */
   size: number | null
@@ -55,13 +55,15 @@ const DIRECTIONS: Readonly<Record<FixedAnchor, readonly [number, number]>> = {
   'top-left': [-1, -1], top: [0, -1], 'top-right': [1, -1],
   left: [-1, 0], right: [1, 0],
   'bottom-left': [-1, 1], bottom: [0, 1], 'bottom-right': [1, 1],
+  // Centred on the anchor point, where the distance has no direction to act in.
+  center: [0, 0],
 }
 
 /**
- * Places a label at a fixed anchor. Top right with default settings is the
- * label drawn before version 7: 8 px right of and 8 px above the anchor
- * point, with no other attribute. Sizes and distances are multiplied by the
- * object scale; the defaults are drawn as before at every scale.
+ * Places a label at a fixed anchor. The eight positions lie on the circle
+ * whose radius is the label distance, 20 px by default: a diagonal position is
+ * the distance divided by √2 along each axis. Sizes and distances are
+ * multiplied by the object scale; the defaults are drawn alike at every scale.
  */
 export function labelAt(
   request: LabelRequest,
@@ -71,10 +73,12 @@ export function labelAt(
   const { settings } = request
   const distance = settings.distance === null ? DEFAULT_LABEL_DISTANCE : settings.distance * objectScale
   const [dx, dy] = DIRECTIONS[anchor]
+  // The eight positions lie on the circle of radius `distance` around the anchor point.
+  const length = Math.hypot(dx, dy) || 1
   return {
     text: request.text,
-    x: request.at.x + dx * distance,
-    y: request.at.y + dy * distance,
+    x: request.at.x + dx / length * distance,
+    y: request.at.y + dy / length * distance,
     ...(dx === 0 ? { textAnchor: 'middle' as const } : dx < 0 ? { textAnchor: 'end' as const } : {}),
     ...(dy === 0 ? { baseline: 'middle' as const } : dy > 0 ? { baseline: 'hanging' as const } : {}),
     ...(settings.size === null ? {} : { fontSize: settings.size * objectScale }),

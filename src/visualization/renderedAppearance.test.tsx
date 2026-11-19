@@ -11,7 +11,7 @@ import { DEFAULT_STROKE_WIDTHS, strokePattern } from './stroke'
 
 const engine = createPga2Engine()
 
-function rendered(items: readonly (readonly [string, string])[], appearance: Readonly<Record<string, ExpressionAppearance>>) {
+function rendered(items: readonly (readonly [string, string])[], appearance: Readonly<Record<string, ExpressionAppearance>>, labelsVisible = true) {
   const document = {
     ...expressionDocument(items.map(([id, source]) => ({ id, source })), appearance),
     algebra: { algebraId: 'org.multivector.pga', definitionVersion: 1, conventionVersion: 1, parameters: { dimension: 2 } },
@@ -21,6 +21,7 @@ function rendered(items: readonly (readonly [string, string])[], appearance: Rea
     evaluated, document.appearance, PGA_2D_INTERPRETATION,
     (source) => /^\s*([A-Za-z_]\w*)\s*=/.exec(source)?.[1] ?? null,
     evaluateAppearanceSources(document, evaluated, engine),
+    labelsVisible,
   )
 }
 
@@ -219,6 +220,15 @@ describe('point glyphs', () => {
     expect(radius(large, '.manipulation-focus-ring')).toBeCloseTo(outer * 1.3 + 6)
   })
 
+  it('fade the drawn point with its opacity, keeping the focusable contour out of the faded group', () => {
+    const dot = point({ opacity: 0.3 })
+    expect(dot.querySelector('g[opacity="0.3"] .manipulation-base-point')).not.toBeNull()
+    expect(dot.querySelector('g[opacity="0.3"] .manipulation-base-contour')).toBeNull()
+    expect((dot.querySelector('.manipulation-base-contour') as SVGCircleElement).style.fillOpacity).toBe('0.06')
+    const square = point({ pointStyle: 'square', pointSize: 6, opacity: 0.3 })
+    expect(square.querySelector('g[opacity="0.3"] .point-outer')).not.toBeNull()
+  })
+
   it('grow the core of any style on hover, through the hovered class', () => {
     const host = point({ pointStyle: 'diamond', controller: { ...controller, hoveredKey: 'a:base' } })
     expect(host.querySelector('path.manipulation-base-point')).toHaveClass('is-hovered')
@@ -228,10 +238,44 @@ describe('point glyphs', () => {
 describe('label settings (#226)', () => {
   it('carries the evaluated placement settings of an item', () => {
     const { rendered: [point] } = rendered([['a', 'A = point(1, 1)']], { a: {
-      labelVisible: true, labelAnchor: 'left', labelAngleSource: '45', labelSizeSource: '18', labelDistanceSource: '99',
+      labelVisible: true, labelAnchor: 'left', labelAngleSource: '0.5', labelSizeSource: '18', labelDistanceSource: '99',
     } })
     expect(point.label).toBe('A')
-    expect(point.labelSettings).toEqual({ anchor: 'left', angle: 45, size: 18, distance: null })
+    expect(point.labelSettings).toEqual({ anchor: 'left', angle: 0.5, size: 18, distance: null })
+  })
+
+  it('takes the label angle in radians, any angle, brought into (−π, π]', () => {
+    const angle = (labelAngleSource: string) =>
+      rendered([['a', 'A = point(1, 1)']], { a: { labelVisible: true, labelAngleSource } }).rendered[0].labelSettings.angle
+    expect(angle('pi / 4')).toBeCloseTo(Math.PI / 4)
+    expect(angle('2 * pi + 0.5')).toBeCloseTo(0.5)
+    expect(angle('-0.5 - 4 * pi')).toBeCloseTo(-0.5)
+    expect(angle('3 * pi')).toBeCloseTo(Math.PI)
+    expect(angle('-pi')).toBeCloseTo(Math.PI)
+    // A version 11 angle of 30°, as the migration rewrites it.
+    expect(angle('30 * pi / 180')).toBeCloseTo(Math.PI / 6)
+  })
+
+  it('draws only the label of an object set to label only, while its label is shown', () => {
+    const { rendered: [only, hiddenLabel] } = rendered(
+      [['a', 'A = point(1, 1)'], ['b', 'B = point(2, 2)']],
+      { a: { labelVisible: true, labelOnly: true, opacitySource: '70' }, b: { labelVisible: false, labelOnly: true } },
+    )
+    // The object is drawn at no opacity, so its handle stays; the label keeps the object's opacity.
+    expect(only).toMatchObject({ opacity: 0, labelOpacity: 0.7, label: 'A' })
+    // Without its label, the object is drawn as usual.
+    expect(hiddenLabel).toMatchObject({ opacity: null, label: null })
+  })
+
+  it('draws no label and no object as its label only while the Labels setting is off', () => {
+    const { rendered: [only] } = rendered([['a', 'A = point(1, 1)']], { a: { labelVisible: true, labelOnly: true } }, false)
+    expect(only).toMatchObject({ label: null, opacity: null })
+  })
+
+  it('fades the label apart from the marks', () => {
+    const host = point({ opacity: 0, labelOpacity: 0.5, label: { text: 'A', x: 58, y: 32 } })
+    expect(host.querySelector('g[opacity="0"] .manipulation-base-point')).not.toBeNull()
+    expect(host.querySelector('g[opacity="0.5"] .object-label')).toHaveTextContent('A')
   })
 
   it('places a new label automatically, and draws no label for the elements of a list', () => {

@@ -151,7 +151,7 @@
 <circle aria-label="Move head of V" class="manipulation-hit-target vector-head-target" cx="464" cy="168" data-handle-key="v:head" r="12" role="button" tabindex="0"></circle>
 <circle aria-keyshortcuts="Enter Delete" aria-label="Move base of V" class="manipulation-base-contour is-movable" cx="320" cy="240" data-handle-key="v:base" r="15" role="button" style="stroke-width: 0;" tabindex="0"></circle>
 <circle aria-hidden="true" class="manipulation-base-point" cx="320" cy="240" r="6.75"></circle>
-<text class="object-label" x="472" y="160">V</text>
+<text class="object-label" x="478.14213562373095" y="153.85786437626905">V</text>
 </g>
 <g style="color: rgb(20, 130, 200);">
 <line aria-label="W" class="vector" stroke-width="6" x1="320" x2="256.1332650270356" y1="240" y2="112.26653005407115"></line>

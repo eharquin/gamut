@@ -81,10 +81,15 @@ a leading `#`, decided on 2026-10-11 in #187 and replaced on 2026-11-16). The fo
 7 appearance fields and list primitive styles are validated, migrated, and
 preserved. `strokeStyle`, `strokeWidthSource`, `opacitySource`,
 `pointStyle`, `pointSizeSource`, both `primitiveStyles` blocks, and the label
-settings affect the drawing. A label distance is an offset along each axis
-(8 pixels right and 8 pixels up for `top-right`), and a set label size or
-distance is multiplied by `objectScale`; the empty defaults keep the fixed
-13-pixel font and 8-pixel offset. `auto` estimates each label's box from its
+settings affect the drawing. A label distance is the radius of the circle,
+around the label's anchor point, on which the eight positions lie: `right` is
+the distance to the right, and `top-right` the distance divided by √2 along
+each axis (format version 12; earlier releases offset a diagonal label by the
+distance along each axis). A set label size or distance is multiplied by
+`objectScale`; the empty defaults are a fixed 13-pixel font and a fixed
+20-pixel radius (8 pixels before format version 12). A label angle, in
+radians from format version 12 (degrees before), turns the label
+counterclockwise about the centre of its text; angles 2π apart are the same. `auto` estimates each label's box from its
 text and tries the eight positions from `top-right` clockwise, avoiding other
 labels and the points and handles of other objects. Appearance sources are
 evaluated after the value nodes they read, which is equivalent to the graph
@@ -168,6 +173,9 @@ classDiagram
       +string labelSizeSource
       +string labelDistanceSource
       +LabelAnchor labelAnchor
+      +boolean labelOnly
+      +boolean draggable
+      +boolean sliderInCanvas
       +PrimitiveStyles primitiveStyles
     }
     class PrimitiveStyles {
@@ -221,7 +229,7 @@ unknown field as an implicit extension.
 | Field | Type | Rule |
 | --- | --- | --- |
 | `id` | string | Non-empty opaque immutable document identity. |
-| `formatVersion` | positive integer | Exactly the current version (`11`) after migration (section 4.1). |
+| `formatVersion` | positive integer | Exactly the current version (`12`) after migration (section 4.1). |
 | `languageVersion` | positive integer | Selects source syntax and semantics. |
 | `algebra` | `AlgebraReference` | Selects one validated algebra configuration. |
 | `interpretation` | `InterpretationReference \| null` | At most one active interpretation. |
@@ -284,7 +292,12 @@ when the source returns to a literal.
 An `Appearance` has exactly the fields of the diagram above. `visible`,
 `labelVisible`, `borderVisible`, and `orientationVisible` are booleans.
 `label` is stored plain text; an empty value uses the deterministic semantic
-default. `style` is a registered non-empty, palette-independent style
+default. When drawn, each `${expression}` in it is replaced by the value of
+the expression, evaluated like an appearance source and formatted like the
+values of the panel; one that cannot be evaluated shows `?`. `\$` writes a
+dollar sign. Any other `$` is reserved for inline math: it is drawn as
+written for now, with a warning, and a later format version may read it
+differently. `style` is a registered non-empty, palette-independent style
 identifier. `bivectorShape` and `idealPointDisplay` take the values of the
 diagram. Appearance is item-level; list elements do not have independent
 stored appearance, and the primitives of a list are styled per primitive type
@@ -293,10 +306,22 @@ stored appearance, and the primitives of a list are styled per primitive type
 `strokeStyle` is `solid`, `dashed`, or `dotted`, and applies to every stroked
 drawing of the item: lines, vectors, bivector outlines, and ideal-point
 arrows. `pointStyle` is `dot`, `ring`, `cross`, `plus`, `square`, or
-`diamond`. `labelAnchor` is `auto` or one of the eight positions `top-left`,
+`diamond`. `labelAnchor` is `auto`, one of the eight positions `top-left`,
 `top`, `top-right`, `left`, `right`, `bottom-left`, `bottom`, and
-`bottom-right` around the label's anchor point; `auto` places the label at the
-first of those positions where it overlaps nothing.
+`bottom-right` around the label's anchor point, or `center`, which centres the
+label on that point and ignores the label distance; `auto` places the label at
+the first of the eight positions where it overlaps nothing, never at the
+centre. `labelOnly` true, while `labelVisible` is true, draws the label without
+its object: the object is drawn at zero opacity, so it keeps its handles and
+can still be moved. It has no effect while the label is hidden. `draggable`,
+`true` for new objects, says whether the handles of an object that a drag can
+move (a point, a vector or a line whose source a drag rewrites) move it on the
+canvas; `false` holds it in place, with no handle, and changes nothing else.
+It is set per row: a folder that overwrites the appearance of its rows leaves
+it to each row. `sliderInCanvas`, `false` for new objects, draws the slider of
+a scalar that declares a numeric literal on the canvas as well as in its row,
+with the same bounds, step and animation; it has no effect on any other
+value, and is also set per row.
 
 The fields whose names end in `Source` are **appearance sources**: numeric
 settings stored verbatim as source text, like the bounds of a numeric control.
@@ -311,7 +336,7 @@ the kind default with a diagnostic and never makes the document invalid.
 | `strokeWidthSource` | reference px | 0.25 to 10 | kind default |
 | `pointSizeSource` | reference px | 1 to 20 | kind default |
 | `opacitySource` | % | 0 to 100 | 100 |
-| `labelAngleSource` | degrees | −180 to 180 | 0 |
+| `labelAngleSource` | radians | any, brought into (−π, π] | 0 |
 | `labelSizeSource` | reference px | 6 to 36 | 13 |
 | `labelDistanceSource` | reference px | 0 to 40 | kind default |
 
@@ -319,9 +344,10 @@ Ranges are inclusive and owned by the
 [limits and interaction constants](limits-and-constants.md). Pixel values are
 reference screen pixels multiplied by the document's `objectScale`, like the
 fixed sizes they replace. A kind default is the value drawn before format
-version 7 (for example a point radius of 4.5 reference pixels, and a label
-offset of 8 pixels right and 8 pixels up), so an empty source never changes a
-drawing. Opacity applies to fill and stroke together. A list has no label: its
+version 7 (for example a point radius of 4.5 reference pixels), so an empty
+source never changes a drawing; the label distance is the exception, 20 pixels
+from format version 12.
+Opacity applies to fill and stroke together. A list has no label: its
 label fields are stored and ignored.
 
 New objects default to `strokeStyle: solid`, `pointStyle: dot`, empty sources,
@@ -403,8 +429,9 @@ step.
 
 `DisplaySettings` has exactly `decimalPlaces`, `axisLabelsVisible`,
 `graduationsVisible`, `gridVisible`, `objectScale`,
-`showApproximatedResidue`, and `theme` in format versions 4 through 7, and
-additionally `valuesVisible` from format version 8.
+`showApproximatedResidue`, and `theme` in format versions 4 through 7,
+additionally `valuesVisible` from format version 8, and `labelsVisible` from
+format version 12.
 `decimalPlaces` is an integer from 0 through 15 and defaults to 4 for new
 documents. It controls presentation only: trailing zeroes are omitted, negative
 zero is displayed as zero, and a non-zero magnitude that would round to zero is
@@ -424,6 +451,12 @@ turning the setting back on reveals every value at once. Like the other
 display settings, it is saved, exported, and carried by scene links and
 library graphs; it is a teaching aid, not a protection: the values remain in
 the document.
+`labelsVisible` is a boolean, `true` for new documents: when it is `false`, the
+canvas draws no label, and an object set to `labelOnly` is drawn as usual;
+the expression rows hide their label line and the appearance menu disables its
+label switch.
+Each item keeps its own `labelVisible`, which shows again when the setting is
+turned back on.
 Later format versions may add viewport variants through migration.
 
 ### 2.4 Expression folders
@@ -547,9 +580,10 @@ previous one; the implementation records the migrations in
 | 9 | **Planned for 0.3.0; may change until 0.3.0 is published.** The source of an annotation is its text only: `kind` is stored and no longer follows from a leading `#`. Version 8, which was never released, kept that `#` in the source; the migration removes the first `#` of each annotation and the whitespace around its text, which is the text version 8 displayed, so that it does not become a heading. Expressions are unchanged. |
 | 10 | **Planned for 0.3.0; may change until 0.3.0 is published.** Each `Folder` gains `overwriteAppearance`, a boolean, and `appearance`, `null` or a complete `Appearance` record (section 2.2). `appearance.visible` false hides every item of the folder; the rest of the record is drawn instead of that of its items while `overwriteAppearance` is true, except the label fields. The migration sets `overwriteAppearance: false` and `appearance: null`. |
 | 11 | **Planned for 0.3.0; may change until 0.3.0 is published.** Each `Folder` gains `before`, `null` or an item identity: a folder whose subtree holds no item shows just before the row, or the folder, that holds that item at its level; empty folders before one item keep the order of `folders`. With items, a folder shows at its first item and `before` is ignored; `null`, or an identity that names no item, shows an empty folder after the rows of its parent, as in version 10. A folder emptied by a move or a deletion keeps its place. The migration sets `before: null`. |
+| 12 | **Planned for 0.3.0; may change until 0.3.0 is published.** `Appearance.labelOnly`, a boolean that draws the label without its object, and `labelAnchor` adds `center`; `labelOnly` is a label setting, so a folder that overwrites the appearance of its rows leaves it to each row. `Appearance.draggable` holds an object in place on the canvas when it is `false`. `Appearance.sliderInCanvas` draws a scalar's slider on the canvas when it is `true`. `ViewState.display.labelsVisible` turns every label of the graph on or off. The eight label positions move onto the circle of radius the label distance, and the default distance becomes 20 pixels. The label angle is in radians and periodic, taking any finite value. The migration sets `labelOnly: false`, `draggable: true` and `sliderInCanvas: false` in every item and folder appearance and `labelsVisible: true`, and rewrites a non-empty `labelAngleSource` `s`, which was in degrees, as `s * pi / 180` for a number and `(s) * pi / 180` otherwise, so the label keeps its angle. |
 
 A release can open only the format versions it knows. Release 0.2.0 cannot
-open a version 8, 9, 10, or 11 document; protecting an older release against a document
+open a version 8, 9, 10, 11, or 12 document; protecting an older release against a document
 stored in a newer format is deferred to
 [#275](https://github.com/eharquin/gamut/issues/275) and accepted while GAMUT
 has no users.

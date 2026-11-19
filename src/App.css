@@ -1315,6 +1315,23 @@ body.reordering-items .reorder-handle {
   font-size: 0.7rem;
 }
 
+.expression-label-toggle {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  cursor: pointer;
+}
+
+.expression-label-toggle input {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
 .expression-label-input {
   flex: 1;
   min-width: 0;
@@ -1325,6 +1342,18 @@ body.reordering-items .reorder-handle {
   border: 1px solid var(--border);
   border-radius: 5px;
   font: 500 0.74rem var(--font-mono);
+}
+
+.expression-label-input[aria-invalid="true"] {
+  border-color: var(--error-border);
+}
+
+/* Why an inserted value shows “?”, or why a “$” is not read as written. */
+.expression-label-error {
+  margin: 0 4px 4px 0;
+  color: var(--error);
+  font-size: 0.68rem;
+  line-height: 1.3;
 }
 
 .expression-label-input::placeholder {
@@ -2400,7 +2429,6 @@ span.object-kind {
 }
 
 .appearance-anchor-grid {
-  justify-self: center;
   display: grid;
   grid-template-columns: repeat(3, 18px);
   grid-template-rows: repeat(3, 18px);
@@ -2444,19 +2472,31 @@ span.object-kind {
   background: var(--accent);
 }
 
-.appearance-anchor-grid button.is-auto::after {
-  width: 10px;
-  height: 10px;
+.appearance-anchor {
+  justify-self: center;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Auto sits beside the grid, whose centre places the label on the object. */
+.appearance-anchor-auto {
+  padding: 3px 7px;
+  color: var(--muted);
+  font: 600 10px var(--font-sans);
   background: transparent;
-  border: 1.5px dashed var(--muted);
-  border-radius: 2px;
+  border: 1.5px dashed var(--border);
+  border-radius: 5px;
+  cursor: pointer;
 }
 
-.appearance-anchor-grid button.is-auto:hover::after {
-  border-color: var(--text);
+.appearance-anchor-auto:hover {
+  color: var(--text);
+  border-color: var(--muted);
 }
 
-.appearance-anchor-grid button.is-auto[aria-pressed='true']::after {
+.appearance-anchor-auto[aria-pressed='true'] {
+  color: var(--accent);
   background: var(--accent-soft);
   border: 1.5px solid var(--accent);
 }

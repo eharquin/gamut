@@ -429,6 +429,24 @@ describe('folder appearance', () => {
     expect(history.present.folders?.[0].overwriteAppearance).toBeUndefined()
   })
 
+  it('migrates the appearance of a version 11 folder with Only label, which it never overwrites', () => {
+    const document = apply(styled(), { kind: 'update-folder-appearance', path: ['F'], appearance: { style: 'purple-3' }, overwriteAppearance: true })
+    const current = JSON.parse(serializeCanonicalDocument(toCanonicalDocument(document, 'light'))) as Record<string, unknown>
+    const strip = (appearance: Record<string, unknown>) => {
+      const { labelOnly: _only, ...rest } = appearance
+      return rest
+    }
+    const folders = (current.folders as Record<string, unknown>[]).map((folder) =>
+      folder.appearance ? { ...folder, appearance: strip(folder.appearance as Record<string, unknown>) } : folder)
+    const appearance = Object.fromEntries(Object.entries(current.appearance as Record<string, Record<string, unknown>>)
+      .map(([id, entry]) => [id, strip(entry)]))
+    const migrated = parseCanonicalDocument(JSON.stringify({ ...current, formatVersion: 11, folders, appearance }))
+    expect(migrated.folders[0].appearance).toMatchObject({ style: 'purple-3', labelOnly: false })
+    // Label settings stay with each row while the folder overwrites the rest.
+    const labelled = { ...document, appearance: { ...document.appearance, b: { ...document.appearance.b, labelOnly: true } } }
+    expect(drawnAppearances(labelled).b).toMatchObject({ style: 'purple-3', labelOnly: true })
+  })
+
   it('migrates version 9 folders as having no appearance of their own', () => {
     const current = JSON.parse(serializeCanonicalDocument(toCanonicalDocument(sample(), 'light'))) as Record<string, unknown>
     const folders = (current.folders as Record<string, unknown>[]).map(({ overwriteAppearance: _o, appearance: _a, ...folder }) => folder)

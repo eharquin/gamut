@@ -27,6 +27,12 @@ export type ExpressionAppearance = Readonly<{
   labelSizeSource?: string
   labelDistanceSource?: string
   labelAnchor?: LabelAnchor
+  /** The label is drawn and the object is not, though it can still be moved. */
+  labelOnly?: boolean
+  /** Whether the object's handles move it on the canvas; false holds it in place. */
+  draggable?: boolean
+  /** Whether a scalar's slider is also drawn on the canvas; off by default. */
+  sliderInCanvas?: boolean
   /** Styles of the primitives a list holds, one block per primitive type. */
   primitiveStyles?: ExpressionPrimitiveStyles
 }>
@@ -38,6 +44,7 @@ export type LabelAnchor =
   | 'top-left' | 'top' | 'top-right'
   | 'left' | 'right'
   | 'bottom-left' | 'bottom' | 'bottom-right'
+  | 'center'
 export type PointListDisplay = 'none' | 'open-polyline' | 'closed-loop'
 export type ItemNormalization = 'natural' | 'euclidean' | 'ideal'
 
@@ -149,6 +156,8 @@ export type ExpressionDocument = Readonly<{
       showApproximatedResidue: boolean
       /** Whether the multivector values are shown under the expressions (#191). */
       valuesVisible: boolean
+      /** Whether the canvas draws the labels of the objects; each keeps its own setting. */
+      labelsVisible: boolean
     }>
   }>
   items: readonly ExpressionItem[]
@@ -195,6 +204,7 @@ export function expressionDocument(
         objectScale: 1,
         showApproximatedResidue: false,
         valuesVisible: true,
+        labelsVisible: true,
       },
     },
     items: retainedItems.map((item) => ({ ...item })),

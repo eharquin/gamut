@@ -51,14 +51,19 @@ function Marks({ opacity, children }: Readonly<{ opacity: number | null | undefi
  */
 export function ObjectLabel({ label }: Readonly<{ label: PlacedLabel | null }>) {
   if (!label) return null
+  // A rotated label turns about the centre of its text, measured by the
+  // browser through its bounding box, not about the point it is aligned on.
+  const style: CSSProperties = {
+    ...(label.fontSize === undefined ? {} : { fontSize: label.fontSize }),
+    ...(label.angle ? { transform: `rotate(${-label.angle}rad)`, transformBox: 'fill-box', transformOrigin: 'center' } : {}),
+  }
   return <text
     className="object-label"
     x={label.x}
     y={label.y}
     textAnchor={label.textAnchor}
     dominantBaseline={label.baseline}
-    style={label.fontSize === undefined ? undefined : { fontSize: label.fontSize }}
-    transform={label.angle ? `rotate(${-label.angle} ${label.x} ${label.y})` : undefined}
+    style={Object.keys(style).length === 0 ? undefined : style}
   >{label.text}</text>
 }
 
@@ -101,6 +106,8 @@ type BaseHandleProps = Readonly<{
   pointStyle?: PointStyle
   /** Core radius in reference pixels; `null` keeps the default 4.5. */
   pointSize?: number | null
+  /** The object's opacity; the contour's focus outline and the focus ring keep full opacity. */
+  opacity?: number | null
 }>
 
 /**
@@ -112,7 +119,7 @@ type BaseHandleProps = Readonly<{
  */
 function BaseHandle({
   itemId, point, mathematical, accessibleName, movable, scale, controller, yieldToHead,
-  handleLabel = 'Move base of', pointStyle = 'dot', pointSize = null,
+  handleLabel = 'Move base of', pointStyle = 'dot', pointSize = null, opacity,
 }: BaseHandleProps) {
   const key = `${itemId}:base`
   // Written apart for the default so that the untouched drawing is unchanged.
@@ -124,18 +131,24 @@ function BaseHandle({
   const shaped = pointStyle !== 'dot' || pointSize !== null
   const extent = outerRadius * (pointStyle === 'diamond' || pointStyle === 'plus' ? 1.3 : 1)
   const hitRadius = shaped ? Math.max(extent, 10 * scale) : outerRadius
+  // The drawn shapes fade with the object; the contour, which takes focus,
+  // stays out of the faded group and only fades its aura.
+  const faded = opacity !== null && opacity !== undefined
   return <>
+    <Marks opacity={opacity}>
     {movable && shaped && <PointShape
       className="point-outer"
       pointStyle={pointStyle}
       x={point.x} y={point.y} radius={outerRadius}
       aria-hidden="true"
     />}
+    </Marks>
     <circle
       className={`manipulation-base-contour${movable ? ' is-movable' : ''}${shaped ? ' is-shaped' : ''}`}
       cx={point.x} cy={point.y} r={hitRadius}
       style={{
         strokeWidth: Math.max(0, 24 - 20 * scale),
+        ...(faded && movable && !shaped ? { fillOpacity: 0.2 * opacity } : {}),
         ...(yieldToHead ? { pointerEvents: 'none' as const } : {}),
       }}
       tabIndex={movable ? 0 : undefined}
@@ -150,12 +163,14 @@ function BaseHandle({
       onPointerDown={movable ? (event) => controller.pointerDown(event, itemId, 'base') : undefined}
       onKeyDown={movable ? (event) => controller.keyDown(event, itemId, 'base', mathematical) : undefined}
     />
+    <Marks opacity={opacity}>
     <PointShape
       className={`manipulation-base-point${controller.hoveredKey === key ? ' is-hovered' : ''}`}
       pointStyle={pointStyle}
       x={point.x} y={point.y} radius={coreRadius}
       aria-hidden="true"
     />
+    </Marks>
     {controller.focusRingKey === key && <circle
       className="manipulation-focus-ring"
       cx={point.x} cy={point.y} r={Math.max(14 * scale, extent + 4 * scale)}
@@ -180,11 +195,13 @@ export type OrientedSegmentGlyphProps = Readonly<{
   /** Shaft width in reference pixels; `null` keeps the default 4 screen pixels. */
   strokeWidth?: number | null
   opacity?: number | null
+  /** The label's opacity; the object's when not given. */
+  labelOpacity?: number | null
 }>
 
 export function OrientedSegmentGlyph({
   id, primitive, layout, color, label, scale, itemPresent, headMovable, baseMovable, controller,
-  strokeStyle = 'solid', strokeWidth = null, opacity,
+  strokeStyle = 'solid', strokeWidth = null, opacity, labelOpacity = opacity,
 }: OrientedSegmentGlyphProps) {
   const { start, end, shaftEnd, arrowPoints } = layout
   const headKey = `${id}:head`
@@ -248,6 +265,7 @@ export function OrientedSegmentGlyph({
       />
     </>}
     {itemPresent && <BaseHandle
+      opacity={opacity}
       itemId={id}
       point={start}
       mathematical={primitive.start}
@@ -257,7 +275,7 @@ export function OrientedSegmentGlyph({
       controller={controller}
       yieldToHead={headMovable && headAndBaseCoincide}
     />}
-    {label && <Marks opacity={opacity}><ObjectLabel label={label} /></Marks>}
+    {label && <Marks opacity={labelOpacity}><ObjectLabel label={label} /></Marks>}
   </g>
 }
 
@@ -322,11 +340,13 @@ export type OrientedAreaGlyphProps = Readonly<{
   /** Outline width in reference pixels; `null` keeps the default 3 screen pixels. */
   strokeWidth?: number | null
   opacity?: number | null
+  /** The label's opacity; the object's when not given. */
+  labelOpacity?: number | null
 }>
 
 export function OrientedAreaGlyph({
   id, primitive, layout, color, label, scale, borderVisible, orientationVisible, itemPresent, baseMovable, controller,
-  strokeStyle = 'solid', strokeWidth = null, opacity,
+  strokeStyle = 'solid', strokeWidth = null, opacity, labelOpacity = opacity,
 }: OrientedAreaGlyphProps) {
   const { path, orientationCenter, base } = layout
   return <g style={{ color }}>
@@ -348,6 +368,7 @@ export function OrientedAreaGlyph({
     />}
     </Marks>
     {itemPresent && <BaseHandle
+      opacity={opacity}
       itemId={id}
       point={base}
       mathematical={primitive.shape.kind === 'loop' ? primitive.shape.center : primitive.shape.vertices[0]}
@@ -356,7 +377,7 @@ export function OrientedAreaGlyph({
       scale={scale}
       controller={controller}
     />}
-    {label && <Marks opacity={opacity}><ObjectLabel label={label} /></Marks>}
+    {label && <Marks opacity={labelOpacity}><ObjectLabel label={label} /></Marks>}
   </g>
 }
 
@@ -373,6 +394,8 @@ export type PointMarkerGlyphProps = Readonly<{
   markerVisible?: boolean
   controller: HandleController
   opacity?: number | null
+  /** The label's opacity; the object's when not given. */
+  labelOpacity?: number | null
   pointStyle?: PointStyle
   /** Core radius in reference pixels; `null` keeps the default 4.5. */
   pointSize?: number | null
@@ -380,7 +403,7 @@ export type PointMarkerGlyphProps = Readonly<{
 
 /** A located point: a marker of the chosen style whose handle moves the point itself. */
 export function PointMarkerGlyph({
-  id, primitive, point, color, label, scale, itemPresent, movable, markerVisible = true, controller, opacity,
+  id, primitive, point, color, label, scale, itemPresent, movable, markerVisible = true, controller, opacity, labelOpacity = opacity,
   pointStyle = 'dot', pointSize = null,
 }: PointMarkerGlyphProps) {
   return <g style={{ color }}>
@@ -393,6 +416,7 @@ export function PointMarkerGlyph({
     />}
     </Marks>
     {itemPresent && <BaseHandle
+      opacity={opacity}
       itemId={id}
       point={point}
       mathematical={primitive.point}
@@ -404,7 +428,7 @@ export function PointMarkerGlyph({
       pointStyle={pointStyle}
       pointSize={pointSize}
     />}
-    {label && <Marks opacity={opacity}><ObjectLabel label={label} /></Marks>}
+    {label && <Marks opacity={labelOpacity}><ObjectLabel label={label} /></Marks>}
   </g>
 }
 
@@ -464,6 +488,8 @@ export type UnboundedLineGlyphProps = Readonly<{
   /** Width in reference pixels; `null` keeps the kind default. */
   strokeWidth?: number | null
   opacity?: number | null
+  /** The label's opacity; the object's when not given. */
+  labelOpacity?: number | null
 }>
 
 /**
@@ -473,7 +499,7 @@ export type UnboundedLineGlyphProps = Readonly<{
  */
 export function UnboundedLineGlyph({
   id, primitive, layout, color, label, scale, itemPresent, movable, orientationVisible, orientationTicks, selection, controller,
-  strokeStyle = 'solid', strokeWidth = null, opacity,
+  strokeStyle = 'solid', strokeWidth = null, opacity, labelOpacity = opacity,
 }: UnboundedLineGlyphProps) {
   const lineKey = `${id}:line`
   const normalKey = `${id}:normal`
@@ -568,7 +594,7 @@ export function UnboundedLineGlyph({
         onKeyDown={(event) => controller.keyDown(event, id, 'normal', selection.mathematicalAnchor)}
       />
     </g>}
-    {label && <Marks opacity={opacity}><ObjectLabel label={label} /></Marks>}
+    {label && <Marks opacity={labelOpacity}><ObjectLabel label={label} /></Marks>}
   </g>
 }
 
@@ -579,10 +605,12 @@ export type DirectionMarkerGlyphProps = Readonly<{
   label: PlacedLabel | null
   scale: number
   opacity?: number | null
+  /** The label's opacity; the object's when not given. */
+  labelOpacity?: number | null
 }>
 
 /** An ideal point on the line at infinity: an outward arrow whose tip sits on the ellipse. */
-export function DirectionMarkerGlyph({ accessibleName, layout, color, label, scale, opacity }: DirectionMarkerGlyphProps) {
+export function DirectionMarkerGlyph({ accessibleName, layout, color, label, scale, opacity, labelOpacity = opacity }: DirectionMarkerGlyphProps) {
   const headLength = 10 * scale
   const spread = Math.PI / 6
   const head = [
@@ -590,7 +618,8 @@ export function DirectionMarkerGlyph({ accessibleName, layout, color, label, sca
     `${layout.tip.x - headLength * Math.cos(layout.angle - spread)},${layout.tip.y - headLength * Math.sin(layout.angle - spread)}`,
     `${layout.tip.x - headLength * Math.cos(layout.angle + spread)},${layout.tip.y - headLength * Math.sin(layout.angle + spread)}`,
   ].join(' ')
-  return <g style={glyphStyle(color, opacity)}>
+  return <g style={{ color }}>
+    <Marks opacity={opacity}>
     <line
       className="direction-marker"
       x1={layout.tail.x} y1={layout.tail.y}
@@ -600,7 +629,8 @@ export function DirectionMarkerGlyph({ accessibleName, layout, color, label, sca
       aria-label={`${accessibleName} at infinity`}
     />
     <polygon className="direction-marker-head" points={head} aria-hidden="true" />
-    <ObjectLabel label={label} />
+    </Marks>
+    <Marks opacity={labelOpacity}><ObjectLabel label={label} /></Marks>
   </g>
 }
 
@@ -611,11 +641,14 @@ export type LineAtInfinityGlyphProps = Readonly<{
   label: PlacedLabel | null
   scale: number
   opacity?: number | null
+  /** The label's opacity; the object's when not given. */
+  labelOpacity?: number | null
 }>
 
 /** The line at infinity: a dashed ellipse inscribed in the viewport. */
-export function LineAtInfinityGlyph({ accessibleName, layout, color, label, scale, opacity }: LineAtInfinityGlyphProps) {
-  return <g style={glyphStyle(color, opacity)}>
+export function LineAtInfinityGlyph({ accessibleName, layout, color, label, scale, opacity, labelOpacity = opacity }: LineAtInfinityGlyphProps) {
+  return <g style={{ color }}>
+    <Marks opacity={opacity}>
     <ellipse
       className="line-at-infinity"
       cx={layout.center.x} cy={layout.center.y}
@@ -624,6 +657,7 @@ export function LineAtInfinityGlyph({ accessibleName, layout, color, label, scal
       strokeDasharray={`${6 * scale} ${5 * scale}`}
       aria-label={accessibleName}
     />
-    <ObjectLabel label={label} />
+    </Marks>
+    <Marks opacity={labelOpacity}><ObjectLabel label={label} /></Marks>
   </g>
 }

@@ -24,7 +24,7 @@ export const MAX_DOCUMENT_BYTES = 4 * 1024 * 1024
 export const MAX_SOURCE_LENGTH = 65_536
 export const MAX_MIGRATION_STEPS = 32
 export type ThemeMode = 'system' | 'light' | 'dark'
-export const CURRENT_FORMAT_VERSION = 11
+export const CURRENT_FORMAT_VERSION = 12
 export type CanonicalPrimitiveStyles = Readonly<{ points: PointPrimitiveStyle; lines: LinePrimitiveStyle }>
 export type CanonicalAppearance = Readonly<{
   visible: boolean
@@ -44,6 +44,9 @@ export type CanonicalAppearance = Readonly<{
   labelSizeSource: string
   labelDistanceSource: string
   labelAnchor: LabelAnchor
+  labelOnly: boolean
+  draggable: boolean
+  sliderInCanvas: boolean
   primitiveStyles: CanonicalPrimitiveStyles
 }>
 type Appearance = CanonicalAppearance
@@ -67,7 +70,7 @@ export type CanonicalDocument = Readonly<{
     visualizerId: string | null
     positionEnabled: boolean
     viewport: CanonicalViewport
-    display: Readonly<{ decimalPlaces: number; axisLabelsVisible: boolean; graduationsVisible: boolean; gridVisible: boolean; objectScale: number; showApproximatedResidue: boolean; valuesVisible: boolean; theme: ThemeMode }>
+    display: Readonly<{ decimalPlaces: number; axisLabelsVisible: boolean; graduationsVisible: boolean; gridVisible: boolean; objectScale: number; showApproximatedResidue: boolean; valuesVisible: boolean; labelsVisible: boolean; theme: ThemeMode }>
   }>
 }>
 
@@ -83,12 +86,12 @@ export class DocumentFormatError extends Error {
 const registeredStyles = new Set(STUDIO_COLORS.map(({ id }) => id))
 export const STROKE_STYLES: readonly StrokeStyle[] = ['solid', 'dashed', 'dotted']
 export const POINT_STYLES: readonly PointStyle[] = ['dot', 'ring', 'cross', 'plus', 'square', 'diamond']
-export const LABEL_ANCHORS: readonly LabelAnchor[] = ['auto', 'top-left', 'top', 'top-right', 'left', 'right', 'bottom-left', 'bottom', 'bottom-right']
+export const LABEL_ANCHORS: readonly LabelAnchor[] = ['auto', 'top-left', 'top', 'top-right', 'left', 'right', 'bottom-left', 'bottom', 'bottom-right', 'center']
 const POINT_LIST_DISPLAYS = ['none', 'open-polyline', 'closed-loop'] as const
 const NORMALIZATIONS: readonly ItemNormalization[] = ['natural', 'euclidean', 'ideal']
 /** Appearance sources: numeric settings stored as source text; empty selects the kind default. */
 export const APPEARANCE_SOURCE_FIELDS = ['strokeWidthSource', 'pointSizeSource', 'opacitySource', 'labelAngleSource', 'labelSizeSource', 'labelDistanceSource'] as const
-const APPEARANCE_FIELDS = ['visible', 'labelVisible', 'label', 'style', 'borderVisible', 'orientationVisible', 'bivectorShape', 'idealPointDisplay', 'strokeStyle', 'pointStyle', 'labelAnchor', 'primitiveStyles', ...APPEARANCE_SOURCE_FIELDS]
+const APPEARANCE_FIELDS = ['visible', 'labelVisible', 'label', 'style', 'borderVisible', 'orientationVisible', 'bivectorShape', 'idealPointDisplay', 'strokeStyle', 'pointStyle', 'labelAnchor', 'labelOnly', 'draggable', 'sliderInCanvas', 'primitiveStyles', ...APPEARANCE_SOURCE_FIELDS]
 const requiredRoot = ['id', 'formatVersion', 'languageVersion', 'algebra', 'interpretation', 'metadata', 'items', 'appearance', 'folders', 'view']
 
 function fail(code: string, message: string): never {
@@ -350,9 +353,60 @@ export function migrateDocument(value: unknown): unknown {
       }
       continue
     }
+    if (version === 11) {
+      // Version 11 labels were never drawn alone.
+      const withLabelSettings = (appearance: unknown) => {
+        if (appearance === null || typeof appearance !== 'object' || Array.isArray(appearance)) return appearance
+        const { labelAngleSource } = appearance as Record<string, unknown>
+        return {
+          ...appearance,
+          labelOnly: false,
+          // Every object that could be dragged was.
+          draggable: true,
+          // Scalars were only controlled from their rows.
+          sliderInCanvas: false,
+          // Label angles were in degrees and are now in radians: the source is
+          // converted in place, so that the label keeps its angle.
+          ...(typeof labelAngleSource === 'string' && labelAngleSource.trim() !== ''
+            ? { labelAngleSource: degreesToRadiansSource(labelAngleSource) }
+            : {}),
+        }
+      }
+      const appearance = document.appearance
+      const view = document.view
+      const display = view !== null && typeof view === 'object' ? (view as Record<string, unknown>).display : undefined
+      current = {
+        ...document,
+        formatVersion: 12,
+        // Version 11 always drew the labels its objects showed.
+        view: display !== null && typeof display === 'object'
+          ? { ...(view as Record<string, unknown>), display: { ...display, labelsVisible: true } }
+          : view,
+        appearance: appearance !== null && typeof appearance === 'object' && !Array.isArray(appearance)
+          ? Object.fromEntries(Object.entries(appearance).map(([id, entry]) => [id, withLabelSettings(entry)]))
+          : appearance,
+        folders: Array.isArray(document.folders)
+          ? document.folders.map((folder: unknown) => folder !== null && typeof folder === 'object' && !Array.isArray(folder) &&
+            'appearance' in folder
+            ? { ...folder, appearance: withLabelSettings((folder as Record<string, unknown>).appearance) }
+            : folder)
+          : document.folders,
+      }
+      continue
+    }
     fail('DOCUMENT_FORMAT_VERSION', 'Unsupported format version ' + String(version) + '.')
   }
   fail('DOCUMENT_FORMAT_VERSION', 'Migration exceeded the maximum number of steps.')
+}
+
+/**
+ * Version 11 to 12: a label angle source in degrees, as the same angle in
+ * radians. A plain number keeps its digits (`30` becomes `30 * pi / 180`); an
+ * expression is put in parentheses.
+ */
+function degreesToRadiansSource(source: string): string {
+  const trimmed = source.trim()
+  return /^-?\d+(\.\d+)?$/.test(trimmed) ? `${trimmed} * pi / 180` : `(${trimmed}) * pi / 180`
 }
 
 /**
@@ -468,6 +522,9 @@ function appearanceRecord(value: unknown, path: string): Appearance {
     labelSizeSource: appearanceSource(item.labelSizeSource, path + '.labelSizeSource'),
     labelDistanceSource: appearanceSource(item.labelDistanceSource, path + '.labelDistanceSource'),
     labelAnchor: oneOf(item.labelAnchor, LABEL_ANCHORS, path + '.labelAnchor'),
+    labelOnly: truth(item.labelOnly, path + '.labelOnly'),
+    draggable: truth(item.draggable, path + '.draggable'),
+    sliderInCanvas: truth(item.sliderInCanvas, path + '.sliderInCanvas'),
     primitiveStyles: primitiveStyles(item.primitiveStyles, path + '.primitiveStyles'),
   }
 }
@@ -598,7 +655,7 @@ export function validateCanonicalDocument(value: unknown): CanonicalDocument {
   } else {
     fail('DOCUMENT_VIEWPORT', 'view.viewport.kind must be “none” or “two-dimensional”.')
   }
-  const display = record(view.display, 'view.display', ['decimalPlaces', 'axisLabelsVisible', 'graduationsVisible', 'gridVisible', 'objectScale', 'showApproximatedResidue', 'valuesVisible', 'theme'])
+  const display = record(view.display, 'view.display', ['decimalPlaces', 'axisLabelsVisible', 'graduationsVisible', 'gridVisible', 'objectScale', 'showApproximatedResidue', 'valuesVisible', 'labelsVisible', 'theme'])
   const decimalPlaces = finite(display.decimalPlaces, 'view.display.decimalPlaces')
   if (!Number.isInteger(decimalPlaces) || decimalPlaces < 0 || decimalPlaces > 15)
     fail('DOCUMENT_SCHEMA', 'decimalPlaces must be an integer from 0 through 15.')
@@ -615,7 +672,7 @@ export function validateCanonicalDocument(value: unknown): CanonicalDocument {
       visualizerId: view.visualizerId === null ? null : text(view.visualizerId, 'view.visualizerId', true),
       positionEnabled: truth(view.positionEnabled, 'view.positionEnabled'),
       viewport,
-      display: { decimalPlaces, axisLabelsVisible: truth(display.axisLabelsVisible, 'view.display.axisLabelsVisible'), graduationsVisible: truth(display.graduationsVisible, 'view.display.graduationsVisible'), gridVisible: truth(display.gridVisible, 'view.display.gridVisible'), objectScale: finite(display.objectScale, 'view.display.objectScale', true), showApproximatedResidue: truth(display.showApproximatedResidue, 'view.display.showApproximatedResidue'), valuesVisible: truth(display.valuesVisible, 'view.display.valuesVisible'), theme: display.theme as ThemeMode },
+      display: { decimalPlaces, axisLabelsVisible: truth(display.axisLabelsVisible, 'view.display.axisLabelsVisible'), graduationsVisible: truth(display.graduationsVisible, 'view.display.graduationsVisible'), gridVisible: truth(display.gridVisible, 'view.display.gridVisible'), objectScale: finite(display.objectScale, 'view.display.objectScale', true), showApproximatedResidue: truth(display.showApproximatedResidue, 'view.display.showApproximatedResidue'), valuesVisible: truth(display.valuesVisible, 'view.display.valuesVisible'), labelsVisible: truth(display.labelsVisible, 'view.display.labelsVisible'), theme: display.theme as ThemeMode },
     },
   }
 }
@@ -674,6 +731,9 @@ function canonicalAppearance(stored: ExpressionAppearance | undefined, style?: s
       labelAngleSource: stored?.labelAngleSource ?? '',
       labelSizeSource: stored?.labelSizeSource ?? '',
       labelDistanceSource: stored?.labelDistanceSource ?? '',
+      labelOnly: stored?.labelOnly ?? false,
+      draggable: stored?.draggable ?? true,
+      sliderInCanvas: stored?.sliderInCanvas ?? false,
       // New objects place their label automatically; migrated documents
       // store the version 6 position explicitly.
       labelAnchor: stored?.labelAnchor ?? 'auto',
