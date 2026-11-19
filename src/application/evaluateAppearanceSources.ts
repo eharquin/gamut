@@ -16,21 +16,24 @@ export type AppearanceSetting =
 
 /**
  * Ranges, from limits and interaction constants §5.1. A bounded setting
- * refuses a value outside its inclusive range. A periodic setting (the label
- * angle, in radians) takes any finite scalar, brought into (−π, π].
+ * refuses a value outside its inclusive range. An open setting (width, size,
+ * label size, distance) has no maximum and takes any finite scalar, a negative one
+ * drawing as 0. A periodic setting (the label angle, in radians) takes any
+ * finite scalar, brought into (−π, π].
  */
 export const APPEARANCE_SETTING_RANGES: Readonly<Record<AppearanceSetting, Readonly<{
   minimum: number
   maximum: number
   unit: string
+  open?: boolean
   periodic?: boolean
 }>>> = {
-  strokeWidth: { minimum: 0.25, maximum: 10, unit: 'px' },
-  pointSize: { minimum: 1, maximum: 20, unit: 'px' },
+  strokeWidth: { minimum: 0, maximum: Infinity, unit: 'px', open: true },
+  pointSize: { minimum: 0, maximum: Infinity, unit: 'px', open: true },
   opacity: { minimum: 0, maximum: 100, unit: '%' },
   labelAngle: { minimum: -Math.PI, maximum: Math.PI, unit: 'rad', periodic: true },
-  labelSize: { minimum: 6, maximum: 36, unit: 'px' },
-  labelDistance: { minimum: 0, maximum: 40, unit: 'px' },
+  labelSize: { minimum: 0, maximum: Infinity, unit: 'px', open: true },
+  labelDistance: { minimum: 0, maximum: Infinity, unit: 'px', open: true },
 }
 
 /**
@@ -104,7 +107,8 @@ export function resolveAppearanceSource(
       : message
     return { value: null, error: `${reason} Default used.` }
   }
-  const { minimum, maximum, periodic } = APPEARANCE_SETTING_RANGES[setting]
+  const { minimum, maximum, open, periodic } = APPEARANCE_SETTING_RANGES[setting]
+  if (open) return { value: Math.max(minimum, result.value), error: null }
   if (periodic) return { value: wrappedAngle(result.value), error: null }
   if (result.value < minimum || result.value > maximum) return {
     value: null,

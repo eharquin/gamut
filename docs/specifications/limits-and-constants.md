@@ -193,19 +193,20 @@ textual inspection and export.
 
 The numeric appearance settings of the
 [document format](document-format.md) accept a value in these inclusive
-ranges, except the label angle, which takes any finite real scalar, 2π apart
-being the same angle. A source whose value falls outside its range, or is not a finite
+ranges. Width, size, label size and distance take any finite real scalar, a negative value
+drawing as 0; the label angle takes any finite real scalar, 2π apart being
+the same angle. A source whose value falls outside its range, or is not a finite
 real scalar, uses the default of the object kind and reports a diagnostic on
 the setting; the document stays valid.
 
 | Setting | Unit | Range | Default |
 | --- | --- | ---: | --- |
-| Stroke width | reference px | 0.25 to 10 | object kind |
-| Point size | reference px | 1 to 20 | object kind |
+| Stroke width | reference px | any, below 0 drawn as 0 | object kind |
+| Point size | reference px | any, below 0 drawn as 0 | object kind |
 | Opacity | % | 0 to 100 | 100 |
 | Label angle | radians | any, brought into (−π, π] | 0 |
-| Label size | reference px | 6 to 36 | 13 |
-| Label distance | reference px | 0 to 40 | 20 |
+| Label size | reference px | any, below 0 drawn as 0 | 13 |
+| Label distance | reference px | any, below 0 drawn as 0 | 20 |
 
 Pixel values are multiplied by the document's object scale.
 

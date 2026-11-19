@@ -7,7 +7,7 @@ import type {
 import type { PointStyle, StrokeStyle } from '../document/expressionDocument'
 import type { PlacedLabel } from './labels'
 import { PointShape } from './PointShape'
-import { DEFAULT_STROKE_WIDTHS, POINT_OUTER_SCALE, strokePattern } from './stroke'
+import { DEFAULT_POINT_SIZE, DEFAULT_STROKE_WIDTHS, POINT_OUTER_SCALE, segmentSizeFactor, strokePattern } from './stroke'
 import type { Point2d } from '../geometry/interpretation'
 import type { AreaLayout, DirectionLayout, InfinityLayout, LineLayout, SegmentLayout } from './layout'
 import type {
@@ -194,6 +194,8 @@ export type OrientedSegmentGlyphProps = Readonly<{
   strokeStyle?: StrokeStyle
   /** Shaft width in reference pixels; `null` keeps the default 4 screen pixels. */
   strokeWidth?: number | null
+  /** The vector's size, as a point's size; `null` keeps the default. */
+  pointSize?: number | null
   opacity?: number | null
   /** The label's opacity; the object's when not given. */
   labelOpacity?: number | null
@@ -201,9 +203,14 @@ export type OrientedSegmentGlyphProps = Readonly<{
 
 export function OrientedSegmentGlyph({
   id, primitive, layout, color, label, scale, itemPresent, headMovable, baseMovable, controller,
-  strokeStyle = 'solid', strokeWidth = null, opacity, labelOpacity = opacity,
+  strokeStyle = 'solid', strokeWidth = null, pointSize = null, opacity, labelOpacity = opacity,
 }: OrientedSegmentGlyphProps) {
   const { start, end, shaftEnd, arrowPoints } = layout
+  // The vector's size scales the whole glyph; its anchor is the point of that size.
+  const sizeFactor = segmentSizeFactor(pointSize, strokeWidth)
+  const sized = pointSize !== null || strokeWidth !== null
+  const sizedScale = scale * sizeFactor
+  const shaftWidth = sized ? DEFAULT_STROKE_WIDTHS.segment * sizeFactor : null
   const headKey = `${id}:head`
   const headAndBaseCoincide = Math.hypot(end.x - start.x, end.y - start.y) < 1
   const headHovered = controller.hoveredKey === headKey
@@ -211,7 +218,7 @@ export function OrientedSegmentGlyph({
   // hovered; a set width grows in the same proportion.
   const shaft = strokeOverride(
     strokeStyle,
-    strokeWidth === null ? null : strokeWidth * scale * (headHovered ? 1.25 : 1),
+    shaftWidth === null ? null : shaftWidth * scale * (headHovered ? 1.25 : 1),
     headHovered ? 5 : 4,
   )
   return <g style={{ color }}>
@@ -234,24 +241,24 @@ export function OrientedSegmentGlyph({
     {headMovable && <circle
       className="vector-head-point"
       cx={end.x} cy={end.y}
-      r={1.25 * scale}
+      r={1.25 * sizedScale}
       aria-hidden="true"
     />}
     </Marks>
     {headMovable && <>
       {controller.focusRingKey === headKey && <circle
         className="manipulation-focus-ring"
-        cx={end.x} cy={end.y} r={14 * scale}
+        cx={end.x} cy={end.y} r={14 * sizedScale}
         aria-hidden="true"
       />}
       {arrowPoints && controller.hoveredKey === headKey && <circle
         className="vector-head-indicator"
-        cx={end.x} cy={end.y} r={5 * scale}
+        cx={end.x} cy={end.y} r={5 * sizedScale}
         aria-hidden="true"
       />}
       <circle
         className="manipulation-hit-target vector-head-target"
-        cx={end.x} cy={end.y} r="12"
+        cx={end.x} cy={end.y} r={12 * Math.max(1, sizeFactor)}
         tabIndex={0}
         data-handle-key={headKey}
         role="button"
@@ -272,6 +279,7 @@ export function OrientedSegmentGlyph({
       accessibleName={primitive.accessibleName}
       movable={baseMovable}
       scale={scale}
+      pointSize={sized ? DEFAULT_POINT_SIZE * sizeFactor : null}
       controller={controller}
       yieldToHead={headMovable && headAndBaseCoincide}
     />}
@@ -408,8 +416,10 @@ export function PointMarkerGlyph({
 }: PointMarkerGlyphProps) {
   return <g style={{ color }}>
     <Marks opacity={opacity}>
+    {/* The marker grows with the base point it lies under, so that a ring
+        never leaves its small copy inside the grown one. */}
     {markerVisible && <PointShape
-      className="point-marker"
+      className={`point-marker${itemPresent && controller.hoveredKey === `${id}:base` ? ' is-hovered' : ''}`}
       pointStyle={pointStyle}
       x={point.x} y={point.y} radius={pointSize === null ? 4.5 * scale : pointSize * scale}
       aria-label={primitive.accessibleName}
@@ -497,6 +507,14 @@ export type UnboundedLineGlyphProps = Readonly<{
  * border on hover, translates when dragged, and once selected shows its unit
  * normal, whose head rotates it about the anchor (PGA-VIZ-004).
  */
+/** The signed distance from `start` to the projection of `point` on the segment's direction. */
+function distanceAlong(start: Point2d, end: Point2d, point: Point2d): number {
+  const dx = end.x - start.x
+  const dy = end.y - start.y
+  const length = Math.hypot(dx, dy)
+  return length === 0 ? 0 : ((point.x - start.x) * dx + (point.y - start.y) * dy) / length
+}
+
 export function UnboundedLineGlyph({
   id, primitive, layout, color, label, scale, itemPresent, movable, orientationVisible, orientationTicks, selection, controller,
   strokeStyle = 'solid', strokeWidth = null, opacity, labelOpacity = opacity,
@@ -525,7 +543,7 @@ export function UnboundedLineGlyph({
       x1={layout.start.x} y1={layout.start.y}
       x2={layout.end.x} y2={layout.end.y}
       strokeWidth={width}
-      style={strokeStyle === 'solid' ? undefined : strokePattern(strokeStyle, width)}
+      style={strokeStyle === 'solid' ? undefined : strokePattern(strokeStyle, width, distanceAlong(layout.start, layout.end, layout.foot))}
       aria-label={primitive.accessibleName}
     />
     </Marks>

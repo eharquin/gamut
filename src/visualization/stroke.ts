@@ -15,12 +15,39 @@ export const DEFAULT_STROKE_WIDTHS = Object.freeze({
 })
 
 /**
+ * A vector's size, in the units of a point's size: its anchor is the point of
+ * that size, and its shaft, arrowhead and head point grow in proportion. A
+ * width set before sizes existed still sizes the vector by its shaft. This is
+ * the factor applied to the object scale; 1 when neither is set.
+ */
+export function segmentSizeFactor(
+  pointSize: number | null | undefined,
+  strokeWidth: number | null | undefined,
+): number {
+  if (pointSize !== null && pointSize !== undefined && pointSize >= 0) return pointSize / DEFAULT_POINT_SIZE
+  if (strokeWidth !== null && strokeWidth !== undefined && strokeWidth >= 0) return strokeWidth / DEFAULT_STROKE_WIDTHS.segment
+  return 1
+}
+
+/**
  * The dash pattern of a stroke style for a drawn width, so that dashes and
  * dots grow with the stroke. Dots are zero-length dashes with round caps.
+ *
+ * `anchor` is the distance along the path, from its start, of a fixed point
+ * on which a dash or a dot is centred: a wider stroke then scales the pattern
+ * around that point instead of from the start of the path, which for a
+ * clipped line lies on the viewport edge.
  */
-export function strokePattern(style: StrokeStyle, width: number): CSSProperties {
-  if (style === 'dashed') return { strokeDasharray: `${4 * width} ${3 * width}` }
-  if (style === 'dotted') return { strokeDasharray: `0 ${2 * width}`, strokeLinecap: 'round' }
+export function strokePattern(style: StrokeStyle, width: number, anchor = 0): CSSProperties {
+  if (style === 'dashed') return {
+    strokeDasharray: `${4 * width} ${3 * width}`,
+    ...(anchor === 0 ? {} : { strokeDashoffset: 2 * width - anchor }),
+  }
+  if (style === 'dotted') return {
+    strokeDasharray: `0 ${2 * width}`,
+    strokeLinecap: 'round',
+    ...(anchor === 0 ? {} : { strokeDashoffset: -anchor }),
+  }
   return {}
 }
 

@@ -3922,20 +3922,22 @@ describe('stroke width and opacity from the appearance menu (#221)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open Vector menu for V' }))
     const dialog = screen.getByRole('dialog', { name: 'Vector' })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Dashed' }))
-    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Width' }), { target: { value: 'w' } })
-    // 2 reference pixels at object scale 1 (render scale 1.5); dashes follow the width.
-    expect(shaft().style.strokeWidth).toBe('3')
-    expect(shaft().style.strokeDasharray).toBe('12 9')
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 2' }), { target: { value: 'w = 2.25' } })
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Size' }), { target: { value: 'w' } })
+    // Size 2.25 is half the default point size: half the default 4 px shaft
+    // at object scale 1 (render scale 1.5); dashes follow the drawn width.
+    expect(Number(shaft().style.strokeWidth)).toBeCloseTo(2)
+    expect(shaft().style.strokeDasharray).toBe('8 6')
     expect(dialog.querySelector('.appearance-error')).toBeNull()
 
-    // The width follows the scalar, as it would while a slider animates.
-    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 2' }), { target: { value: 'w = 4' } })
-    expect(shaft().style.strokeWidth).toBe('6')
+    // The size follows the scalar, as it would while a slider animates.
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 2' }), { target: { value: 'w = 9' } })
+    expect(Number(shaft().style.strokeWidth)).toBeCloseTo(8)
 
-    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Width' }), { target: { value: 'zz' } })
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Size' }), { target: { value: 'zz' } })
     expect(shaft().style.strokeWidth).toBe('')
-    expect(within(dialog).getByRole('textbox', { name: 'Width' })).toHaveAttribute('aria-invalid', 'true')
-    expect(dialog.querySelector('.appearance-error')).toHaveTextContent('Width: The name “zz” is not defined. Default used.')
+    expect(within(dialog).getByRole('textbox', { name: 'Size' })).toHaveAttribute('aria-invalid', 'true')
+    expect(dialog.querySelector('.appearance-error')).toHaveTextContent('Size: The name “zz” is not defined. Default used.')
 
     fireEvent.change(within(dialog).getByRole('textbox', { name: 'Opacity' }), { target: { value: '25' } })
     // Opacity fades the drawn marks only; handles stay fully visible.
@@ -3966,9 +3968,40 @@ describe('point style and size from the appearance menu (#222)', () => {
     expect(document.querySelector('rect.manipulation-base-point')).toHaveAttribute('width', '18')
     expect(Number(document.querySelector('rect.point-outer')!.getAttribute('width'))).toBeCloseTo(40)
 
+    // Any scalar is a size: 40 is drawn, with no error.
     fireEvent.change(within(dialog).getByRole('textbox', { name: 'Size' }), { target: { value: '40' } })
-    expect(document.querySelector('rect.manipulation-base-point')).toHaveAttribute('width', '13.5')
-    expect(dialog.querySelector('.appearance-error')).toHaveTextContent('Size: 40 is outside 1 to 20. Default used.')
+    expect(document.querySelector('rect.manipulation-base-point')).toHaveAttribute('width', '120')
+    expect(dialog.querySelector('.appearance-error')).toBeNull()
+  })
+})
+
+describe('objects held in place', () => {
+  it('holds a vector in place from its row or its menu, and lets it be dragged again', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: 'V = vector(2, 1)' } })
+    const toggle = () => screen.getByRole('button', { name: 'Drag V on the canvas' })
+    expect(toggle()).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Move head of V' })).toBeInTheDocument()
+
+    fireEvent.click(toggle())
+    expect(toggle()).toHaveAttribute('aria-pressed', 'false')
+    expect(toggle()).toHaveClass('is-held')
+    // Held in place, it offers no handle that moves it.
+    expect(screen.queryByRole('button', { name: 'Move head of V' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Move base of V' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Vector menu for V' }))
+    const draggable = within(screen.getByRole('dialog', { name: 'Vector' })).getByRole('switch', { name: 'Draggable' })
+    expect(draggable).toHaveAttribute('aria-checked', 'false')
+    fireEvent.click(draggable)
+    expect(toggle()).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Move head of V' })).toBeInTheDocument()
+  })
+
+  it('offers no drag setting for an object that a drag cannot move', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: 'a = 3' } })
+    expect(screen.queryByRole('button', { name: /on the canvas$/ })).not.toBeInTheDocument()
   })
 })
 

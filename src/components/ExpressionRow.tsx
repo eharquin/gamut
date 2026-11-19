@@ -99,6 +99,8 @@ type ExpressionRowProps = Readonly<{
   objectRenderScale: number
   /** The document has no visualizer: appearance is kept but dormant. */
   noViz: boolean
+  /** A drag on the canvas can move the object: its row offers to hold it in place. */
+  draggableAvailable: boolean
   reducedMotion: boolean
   dropBefore: boolean
   dropAfter: boolean
@@ -132,6 +134,7 @@ export function ExpressionRow({
   display,
   objectRenderScale,
   noViz,
+  draggableAvailable,
   reducedMotion,
   dropBefore,
   dropAfter,
@@ -229,6 +232,7 @@ export function ExpressionRow({
     labelVisible,
     label,
     displayLabel,
+    draggable,
   } = resolveItemAppearance(
     appearance,
     kind,
@@ -354,6 +358,24 @@ export function ExpressionRow({
               className={`expression-status-pastille${empty ? ' is-empty' : ' is-error'}`}
               aria-hidden="true"
             />
+          )}
+          {/* Under the swatch: whether a drag on the canvas moves the object. */}
+          {draggableAvailable && valid && (
+              <button
+                type="button"
+                className={`drag-toggle${draggable ? '' : ' is-held'}`}
+                aria-label={`Drag ${objectName} on the canvas`}
+                aria-pressed={draggable}
+                title={draggable ? 'Draggable: click to hold in place' : 'Held in place: click to make draggable'}
+                onClick={() => executeCommand({
+                  kind: 'update-appearance', itemId: item.id, appearance: { draggable: !draggable },
+                })}
+              >
+                <svg className="drag-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M8 2v12M2 8h12M6.2 3.8 8 2l1.8 1.8M6.2 12.2 8 14l1.8-1.8M3.8 6.2 2 8l1.8 1.8M12.2 6.2 14 8l-1.8 1.8" />
+                  {!draggable && <path className="drag-icon-slash" d="M2.5 13.5 13.5 2.5" />}
+                </svg>
+              </button>
           )}
         </div>
         <div className="expression-body">
@@ -744,6 +766,10 @@ export function ExpressionRow({
           visible={visible}
           labelVisible={labelVisible}
           labelsDisabled={!display.labelsVisible}
+          draggable={draggableAvailable ? draggable : undefined}
+          onDraggableChange={draggableAvailable ? (nextDraggable) => executeCommand({
+            kind: 'update-appearance', itemId: item.id, appearance: { draggable: nextDraggable },
+          }) : undefined}
           borderVisible={appearance?.borderVisible ?? false}
           orientationVisible={resolveItemAppearance(appearance, kind, null).orientationVisible}
           bivectorShape={appearance?.bivectorShape ?? 'from-vectors'}

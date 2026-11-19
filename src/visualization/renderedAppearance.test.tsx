@@ -37,7 +37,7 @@ describe('rendered stroke and opacity', () => {
   it('keeps the kind default for an untouched or refused setting', () => {
     const { rendered: [untouched, refused] } = rendered(
       [['l', 'L = line(1, 1, 0)'], ['m', 'M = line(1, -1, 0)']],
-      { m: { strokeWidthSource: '50', opacitySource: 'nope' } },
+      { m: { strokeWidthSource: 'e1', opacitySource: 'nope' } },
     )
     expect(untouched).toMatchObject({ strokeStyle: 'solid', strokeWidth: null, opacity: null })
     expect(refused).toMatchObject({ strokeWidth: null, opacity: null })
@@ -83,6 +83,13 @@ describe('stroke patterns', () => {
     expect(strokePattern('dotted', 3)).toEqual({ strokeDasharray: '0 6', strokeLinecap: 'round' })
   })
 
+  it('centres a dash or a dot on the anchor, so that a wider stroke scales the pattern around it', () => {
+    // A dash runs over [-2w, 2w] around the anchor at 30 along the path, whatever the width.
+    expect(strokePattern('dashed', 2, 30)).toEqual({ strokeDasharray: '8 6', strokeDashoffset: -26 })
+    expect(strokePattern('dashed', 5, 30)).toEqual({ strokeDasharray: '20 15', strokeDashoffset: -20 })
+    expect(strokePattern('dotted', 3, 30)).toEqual({ strokeDasharray: '0 6', strokeLinecap: 'round', strokeDashoffset: -30 })
+  })
+
   it('names the kind defaults drawn before version 7', () => {
     expect(DEFAULT_STROKE_WIDTHS.line * 1.5).toBe(3.75)
     expect(DEFAULT_STROKE_WIDTHS.segment * 1.5).toBeCloseTo(4)
@@ -124,6 +131,19 @@ describe('stroked glyphs', () => {
     for (const handle of ['manipulation-focus-ring', 'vector-head-target', 'manipulation-base-contour'])
       expect(faded).not.toContain(handle)
     expect(markup).toContain('manipulation-focus-ring')
+  })
+
+  it('size a vector as a point: its anchor is the point of that size, and its shaft and head grow with it', () => {
+    const host = (markup: string) => Object.assign(document.createElement('div'), { innerHTML: markup })
+    const sized = host(vector({ pointSize: 9, itemPresent: true, baseMovable: true }))
+    const dot = point({ pointSize: 9 })
+    for (const selector of ['.manipulation-base-point', '.point-outer', '.manipulation-base-contour'])
+      expect(sized.querySelector(selector)!.getAttribute('r')).toBe(dot.querySelector(selector)!.getAttribute('r'))
+    // Twice the default size: twice the default 4 px shaft.
+    expect(Number((sized.querySelector('line.vector') as SVGLineElement).style.strokeWidth)).toBeCloseTo(8)
+    // A width saved before sizes existed still sizes the vector by its shaft.
+    const legacy = host(vector({ strokeWidth: 2, itemPresent: true }))
+    expect(Number(legacy.querySelector('.manipulation-base-point')!.getAttribute('r'))).toBeCloseTo(4.5 * 1.5 * 0.75)
   })
 
   it('dot the default shaft without changing its width', () => {
@@ -233,6 +253,12 @@ describe('point glyphs', () => {
     const host = point({ pointStyle: 'diamond', controller: { ...controller, hoveredKey: 'a:base' } })
     expect(host.querySelector('path.manipulation-base-point')).toHaveClass('is-hovered')
   })
+
+  it('grow the marker with the core, so that a ring leaves no small ring inside the grown one', () => {
+    const hovered = point({ pointStyle: 'ring', controller: { ...controller, hoveredKey: 'a:base' } })
+    expect(hovered.querySelector('circle.point-marker')).toHaveClass('is-hovered')
+    expect(point({ pointStyle: 'ring' }).querySelector('circle.point-marker')).not.toHaveClass('is-hovered')
+  })
 })
 
 describe('label settings (#226)', () => {
@@ -241,7 +267,7 @@ describe('label settings (#226)', () => {
       labelVisible: true, labelAnchor: 'left', labelAngleSource: '0.5', labelSizeSource: '18', labelDistanceSource: '99',
     } })
     expect(point.label).toBe('A')
-    expect(point.labelSettings).toEqual({ anchor: 'left', angle: 0.5, size: 18, distance: null })
+    expect(point.labelSettings).toEqual({ anchor: 'left', angle: 0.5, size: 18, distance: 99 })
   })
 
   it('takes the label angle in radians, any angle, brought into (−π, π]', () => {

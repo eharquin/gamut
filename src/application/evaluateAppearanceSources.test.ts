@@ -43,15 +43,24 @@ describe('appearance sources', () => {
     expect(refused({ strokeWidthSource: 'k' })).toEqual({ value: null, error: 'The name “k” is not defined. Default used.' })
     expect(refused({ strokeWidthSource: 'e1' })).toEqual({ value: null, error: 'The value is not a real scalar. Default used.' })
     expect(refused({ strokeWidthSource: 'V' })).toEqual({ value: null, error: 'The value is not a real scalar. Default used.' })
-    expect(refused({ strokeWidthSource: '0.1' })).toEqual({ value: null, error: '0.1 is outside 0.25 to 10. Default used.' })
     expect(refused({ opacitySource: '120' })).toEqual({ value: null, error: '120 is outside 0 to 100. Default used.' })
     expect(refused({ strokeWidthSource: 'w' }, ['w = 2', 'w = 3'])?.error).toMatch(/declared more than once/)
   })
 
   it('accepts the limits of each range', () => {
-    expect(sourcesOf({ strokeWidthSource: '0.25' })?.strokeWidth.value).toBe(0.25)
-    expect(sourcesOf({ strokeWidthSource: '10' })?.strokeWidth.value).toBe(10)
     expect(sourcesOf({ opacitySource: '0' })?.opacity.value).toBe(0)
+    expect(sourcesOf({ opacitySource: '100' })?.opacity.value).toBe(100)
+  })
+
+  it('takes any finite scalar as a width, a size, a label size or a distance, a negative one drawing as 0', () => {
+    expect(sourcesOf({ strokeWidthSource: '0.1' })?.strokeWidth).toEqual({ value: 0.1, error: null })
+    expect(sourcesOf({ strokeWidthSource: '250' })?.strokeWidth).toEqual({ value: 250, error: null })
+    expect(sourcesOf({ pointSizeSource: '60' })?.pointSize).toEqual({ value: 60, error: null })
+    expect(sourcesOf({ labelDistanceSource: '500' })?.labelDistance).toEqual({ value: 500, error: null })
+    expect(sourcesOf({ labelSizeSource: '72' })?.labelSize).toEqual({ value: 72, error: null })
+    expect(sourcesOf({ labelSizeSource: '2' })?.labelSize).toEqual({ value: 2, error: null })
+    expect(sourcesOf({ pointSizeSource: '-3' })?.pointSize).toEqual({ value: 0, error: null })
+    expect(sourcesOf({ strokeWidthSource: 'e1' })?.strokeWidth.error).toBe('The value is not a real scalar. Default used.')
   })
 
   it('evaluates the sources of a list primitive type on their own', () => {

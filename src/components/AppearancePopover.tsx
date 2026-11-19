@@ -24,6 +24,9 @@ type AppearancePopoverProps = Readonly<{
   labelVisible: boolean
   /** The graph's Labels setting is off: the label switch is greyed out and the settings hidden. */
   labelsDisabled?: boolean
+  /** Whether a drag on the canvas moves the object; undefined when no drag can. */
+  draggable?: boolean
+  onDraggableChange?(draggable: boolean): void
   borderVisible?: boolean
   orientationVisible?: boolean
   bivectorShape?: 'from-vectors' | 'disk' | 'square'
@@ -86,6 +89,8 @@ export function AppearancePopover({
   visible,
   labelVisible,
   labelsDisabled = false,
+  draggable,
+  onDraggableChange,
   borderVisible = false,
   orientationVisible = true,
   bivectorShape = 'from-vectors',
@@ -197,17 +202,32 @@ export function AppearancePopover({
   const connected = pointListDisplayAvailable && pointListDisplay !== 'none'
   const change = (update: ExpressionAppearance, coalesceKey?: string) => onAppearanceChange?.(update, coalesceKey)
   // The item's own stroke: lines, vectors, bivector outlines, ideal-point arrows.
+  const strokeStyleField = (
+    <Segmented label="Stroke style" value={appearance.strokeStyle ?? 'solid'} options={STROKE_OPTIONS}
+      onChange={(strokeStyle) => change({ strokeStyle })} />
+  )
   const strokeRow = (defaultWidth: number) => onAppearanceChange && (
-    <SourceFields leading={
-      <Segmented label="Stroke style" value={appearance.strokeStyle ?? 'solid'} options={STROKE_OPTIONS}
-        onChange={(strokeStyle) => change({ strokeStyle })} />
-    } fields={[{
+    <SourceFields leading={strokeStyleField} fields={[{
       setting: 'strokeWidth',
       label: 'Width',
       source: appearance.strokeWidthSource ?? '',
       placeholder: defaultWidth,
       error: sources.strokeWidth.error,
       onChange: (strokeWidthSource) => change({ strokeWidthSource }, 'strokeWidth'),
+    }]} />
+  )
+  // A vector has a size, as a point has: its anchor is the point of that
+  // size, and its shaft and arrowhead grow with it. Setting it clears the
+  // width a document may keep from before sizes existed.
+  const vectorRow = () => onAppearanceChange && (
+    <SourceFields leading={strokeStyleField} fields={[{
+      setting: 'pointSize',
+      label: 'Size',
+      source: appearance.pointSizeSource ?? '',
+      placeholder: DEFAULT_POINT_SIZE,
+      error: sources.pointSize.error,
+      onChange: (pointSizeSource) => change(
+        appearance.strokeWidthSource ? { pointSizeSource, strokeWidthSource: '' } : { pointSizeSource }, 'pointSize'),
     }]} />
   )
   const styleFor = (kind: string) => kind === 'Bivector' ? (
@@ -241,7 +261,7 @@ export function AppearancePopover({
       </div>}
     </>
   ) : kind === 'Vector' ? (
-    strokeRow(DEFAULT_STROKE_WIDTHS.segment) ?? null
+    vectorRow() ?? null
   ) : kind === 'Ideal point' && onIdealPointDisplayChange ? (
     <>
       <Segmented label="Ideal point display" value={idealPointDisplay} onChange={onIdealPointDisplayChange} options={[
@@ -250,7 +270,7 @@ export function AppearancePopover({
         ['both', 'Both', IDEAL_ICONS.both],
       ]} />
       {/* The stroke row sets the arrow, drawn while the direction shows. */}
-      {idealPointDisplay !== 'ideal' && strokeRow(DEFAULT_STROKE_WIDTHS.segment)}
+      {idealPointDisplay !== 'ideal' && vectorRow()}
     </>
   ) : kind === 'Point' && onAppearanceChange ? (
     <>
@@ -280,25 +300,48 @@ export function AppearancePopover({
     >
       <header className="appearance-header">
         <strong>{title}</strong>
-        {!colorOnly && (
-          // The same setting as the eye of the expression row.
-          <button
-            ref={visibilityRef}
-            type="button"
-            className="appearance-visible"
-            role="switch"
-            aria-checked={visible}
-            aria-label="Visible"
-            title={visible ? 'Hide' : 'Show'}
-            onClick={() => onVisibleChange(!visible)}
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-              <path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8z" />
-              <circle cx="8" cy="8" r="2" />
-              {!visible && <path d="M2.5 13.5 13.5 2.5" />}
-            </svg>
-          </button>
+        {(!colorOnly || (onDraggableChange && draggable !== undefined)) && (
+          // Under the kind: the same settings as the eye and the drag button of the expression row.
+          <div className="appearance-header-toggles">
+            {!colorOnly && (
+              <button
+                ref={visibilityRef}
+                type="button"
+                className="appearance-visible"
+                role="switch"
+                aria-checked={visible}
+                aria-label="Visible"
+                title={visible ? 'Hide' : 'Show'}
+                onClick={() => onVisibleChange(!visible)}
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8z" />
+                  <circle cx="8" cy="8" r="2" />
+                  {!visible && <path d="M2.5 13.5 13.5 2.5" />}
+                </svg>
+                <span aria-hidden="true">Visible</span>
+              </button>
+            )}
+            {onDraggableChange && draggable !== undefined && (
+              <button
+                type="button"
+                className="appearance-visible"
+                role="switch"
+                aria-checked={draggable}
+                aria-label="Draggable"
+                title={draggable ? 'Hold in place' : 'Make draggable'}
+                onClick={() => onDraggableChange(!draggable)}
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M8 2v12M2 8h12M6.2 3.8 8 2l1.8 1.8M6.2 12.2 8 14l1.8-1.8M3.8 6.2 2 8l1.8 1.8M12.2 6.2 14 8l-1.8 1.8" />
+                  {!draggable && <path d="M2.5 13.5 13.5 2.5" />}
+                </svg>
+                <span aria-hidden="true">Draggable</span>
+              </button>
+            )}
+          </div>
         )}
+        {/* Last in the tab order, drawn at the top right. */}
         <button ref={closeRef} type="button" className="appearance-close" onClick={onClose}
           aria-label={`Close ${title} menu`} title="Close">×</button>
       </header>
@@ -587,7 +630,7 @@ function SourceFields({ fields, leading, trailing, className }: Readonly<{
     <div className={[leading ? 'appearance-row' : 'appearance-pair', className].filter(Boolean).join(' ')}>
       {leading}
       {fields.map((field, index) => {
-        const { minimum, maximum, unit, periodic } = APPEARANCE_SETTING_RANGES[field.setting]
+        const { minimum, maximum, unit, open, periodic } = APPEARANCE_SETTING_RANGES[field.setting]
         return (
           <label key={field.setting} className={`appearance-field${leading ? ' is-narrow' : ''}`}>
             <span>{field.label}</span>
@@ -601,7 +644,9 @@ function SourceFields({ fields, leading, trailing, className }: Readonly<{
                 placeholder={String(Number(field.placeholder.toFixed(2)))}
                 title={periodic
                   ? `Any angle in ${unit}, or a scalar expression such as pi / 4; 2π apart, angles are the same`
-                  : `${minimum} to ${maximum} ${unit}, or a scalar expression`}
+                  : open
+                    ? `Any number of ${unit} or scalar expression; below ${minimum} draws as ${minimum}`
+                    : `${minimum} to ${maximum} ${unit}, or a scalar expression`}
                 aria-invalid={field.error ? true : undefined}
                 aria-describedby={field.error ? `${id}-error-${index}` : undefined}
                 onChange={(event) => field.onChange(event.target.value)}

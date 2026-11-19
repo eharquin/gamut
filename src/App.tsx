@@ -128,7 +128,7 @@ import { formatDisplayNumber } from './presentation/formatNumber'
 import { evaluateScalarControl } from './application/evaluateScalarControl'
 import { DEFAULT_APPEARANCE_SOURCES, evaluateAppearanceSources } from './application/evaluateAppearanceSources'
 import { placeLabels, type LabelObstacle } from './visualization/labels'
-import { DEFAULT_POINT_SIZE, POINT_OUTER_SCALE } from './visualization/stroke'
+import { DEFAULT_POINT_SIZE, POINT_OUTER_SCALE, segmentSizeFactor } from './visualization/stroke'
 import { directScalarEdit } from './language/directScalarEdit'
 import {
   directConstructorComponents,
@@ -995,7 +995,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
     dispatchHistory({ type: 'begin-transaction' })
     setViewportAnnouncement(`${gestureLabel(kind)} drag started.`)
   }
-  const lineMovable = (item: ExpressionItem, entity: InterpretedEntity): boolean =>
+  const lineMovableByConstruction = (item: ExpressionItem, entity: InterpretedEntity): boolean =>
     interpretation.literalEdit(entity)?.constructor === 'line' &&
     componentsMovable(literalEditComponents(item, entity))
   const componentsMovable = (
@@ -1037,9 +1037,24 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
    */
   const positionComponents = (positionSource: string) =>
     directConstructorComponents(positionSource, interpretation.creation.constructor, 2, engine.tuple ?? null)
-  const headMovable = (item: ExpressionItem, entity: InterpretedEntity): boolean =>
+  const headMovableByConstruction = (item: ExpressionItem, entity: InterpretedEntity): boolean =>
     interpretation.supportsHead(entity) && componentsMovable(literalEditComponents(item, entity))
-  const objectBaseMovable = (item: ExpressionItem, entity: InterpretedEntity): boolean =>
+  /**
+   * An object whose source a drag can rewrite can be held in place from its
+   * row or its menu: its handles then neither show as movable nor move it.
+   */
+  const heldInPlace = (item: ExpressionItem) => expressionDoc.appearance[item.id]?.draggable === false
+  const lineMovable = (item: ExpressionItem, entity: InterpretedEntity) =>
+    !heldInPlace(item) && lineMovableByConstruction(item, entity)
+  const headMovable = (item: ExpressionItem, entity: InterpretedEntity) =>
+    !heldInPlace(item) && headMovableByConstruction(item, entity)
+  const objectBaseMovable = (item: ExpressionItem, entity: InterpretedEntity) =>
+    !heldInPlace(item) && objectBaseMovableByConstruction(item, entity)
+  /** Whether a drag could move the object at all, held in place or not. */
+  const draggableByConstruction = (item: ExpressionItem, entity: InterpretedEntity) =>
+    lineMovableByConstruction(item, entity) || headMovableByConstruction(item, entity) ||
+    objectBaseMovableByConstruction(item, entity)
+  const objectBaseMovableByConstruction = (item: ExpressionItem, entity: InterpretedEntity): boolean =>
     interpretation.supportsPosition(entity)
       ? !item.positionSource ||
         directPositionAnchorReference(item.positionSource) !== null ||
@@ -1598,7 +1613,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
       )
   const renderedVectors = renderedPrimitives.flatMap((entry) =>
     entry.primitive.kind === 'oriented-segment'
-      ? [{ ...entry, primitive: entry.primitive, layout: layoutOrientedSegment(entry.primitive, viewport, objectRenderScale) }]
+      ? [{ ...entry, primitive: entry.primitive, layout: layoutOrientedSegment(entry.primitive, viewport, objectRenderScale * segmentSizeFactor(entry.pointSize, entry.strokeWidth)) }]
       : [])
   const renderedAreas = renderedPrimitives.flatMap((entry) =>
     entry.primitive.kind === 'oriented-area'
@@ -1619,7 +1634,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
       ? [{
           ...entry,
           primitive: entry.primitive,
-          arrow: entry.idealPointDisplay === 'ideal' ? null : layoutIdealArrow(entry.primitive, viewport, objectRenderScale),
+          arrow: entry.idealPointDisplay === 'ideal' ? null : layoutIdealArrow(entry.primitive, viewport, objectRenderScale * segmentSizeFactor(entry.pointSize, entry.strokeWidth)),
           marker: entry.idealPointDisplay === 'vector' ? null : layoutIdealMarker(entry.primitive.direction, viewport, objectRenderScale),
         }]
       : [])
@@ -2922,6 +2937,9 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
                 display={expressionDoc.view.display}
                 objectRenderScale={objectRenderScale}
                 noViz={noViz}
+                draggableAvailable={!noViz && entry.evaluation?.status === 'valid' &&
+                  entry.evaluation.valueType === 'single' && entry.evaluation.primitive !== null &&
+                  draggableByConstruction(entry.item, entry.evaluation.entity)}
                 reducedMotion={reducedMotion}
                 dropBefore={target?.kind === 'before' && target.itemId === itemId}
                 dropAfter={(target?.kind === 'after' && target.itemId === itemId) ||
@@ -3183,7 +3201,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
               </g>}
 
               {raiseSelectedGlyphs([
-                ...renderedVectors.map(({ id, primitive, entity, layout, color, strokeStyle, strokeWidth, opacity, labelOpacity }) => {
+                ...renderedVectors.map(({ id, primitive, entity, layout, color, strokeStyle, strokeWidth, pointSize, opacity, labelOpacity }) => {
                   const item = expressionDoc.items.find((candidate) => candidate.id === id)
                   return <OrientedSegmentGlyph
                     key={id}
@@ -3199,6 +3217,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
                     controller={handleController}
                     strokeStyle={strokeStyle}
                     strokeWidth={strokeWidth}
+                    pointSize={pointSize}
                     opacity={opacity}
                     labelOpacity={labelOpacity}
                   />
@@ -3252,7 +3271,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
                 ...renderedInfinity.map(({ id, primitive, layout, color, opacity, labelOpacity }) => (
                   <LineAtInfinityGlyph key={id} accessibleName={primitive.accessibleName} layout={layout} color={color} label={placedLabel(id)} scale={objectRenderScale} opacity={opacity} labelOpacity={labelOpacity} />
                 )),
-                ...renderedIdealPoints.map(({ id, primitive, entity, arrow, marker, color, strokeStyle, strokeWidth, opacity, labelOpacity }) => {
+                ...renderedIdealPoints.map(({ id, primitive, entity, arrow, marker, color, strokeStyle, strokeWidth, pointSize, opacity, labelOpacity }) => {
                   const item = expressionDoc.items.find((candidate) => candidate.id === id)
                   return <g key={id}>
                     {marker && <DirectionMarkerGlyph
@@ -3280,6 +3299,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
                       controller={handleController}
                       strokeStyle={strokeStyle}
                       strokeWidth={strokeWidth}
+                      pointSize={pointSize}
                       opacity={opacity}
                       labelOpacity={labelOpacity}
                     />}
