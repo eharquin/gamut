@@ -11,6 +11,7 @@ import {
 import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { revealActions } from './test/libraryActions'
 import {
   DEFAULT_OBJECT_STYLES,
   paletteEntry,
@@ -4745,6 +4746,7 @@ describe('local library of named graphs (#212)', () => {
 
     fireEvent.change(source(), { target: { value: 'V1 = vector(9, 9)' } })
     const menu = openLibrary()
+    revealActions(menu, 'More library actions')
     fireEvent.click(within(menu).getByRole('button', { name: 'Save as new graph…' }))
     const name = within(menu).getByRole('textbox', { name: 'Graph name' })
     expect(name).toHaveValue('Rotation talk copy')
@@ -4954,21 +4956,27 @@ describe('local library of named graphs (#212)', () => {
     expect(saveButton()).toHaveAccessibleName('Save')
 
     menu = openLibrary()
+    revealActions(menu, 'Actions for Second')
     fireEvent.click(within(menu).getByRole('button', { name: 'Rename Second' }))
     fireEvent.change(within(menu).getByRole('textbox', { name: 'New name for Second' }), { target: { value: 'Second, renamed' } })
     fireEvent.click(within(menu).getByRole('button', { name: 'Rename' }))
+    revealActions(menu, 'Actions for First')
     fireEvent.click(within(menu).getByRole('button', { name: 'Duplicate First' }))
+    revealActions(menu, 'Actions for First')
     fireEvent.click(within(menu).getByRole('button', { name: 'Duplicate First' }))
     expect(within(menu).getByRole('button', { name: 'Open First copy' })).toBeInTheDocument()
     expect(within(menu).getByRole('button', { name: 'Open First copy 2' })).toBeInTheDocument()
 
+    revealActions(menu, 'Actions for First copy 2')
     fireEvent.click(within(menu).getByRole('button', { name: 'Delete First copy 2' }))
     fireEvent.click(within(within(menu).getByRole('alertdialog', { name: 'Confirm' })).getByRole('button', { name: 'Delete' }))
+    revealActions(menu, 'Actions for First copy')
     fireEvent.click(within(menu).getByRole('button', { name: 'Delete First copy' }))
     const deletion = within(menu).getByRole('alertdialog', { name: 'Confirm' })
     expect(deletion).toHaveTextContent('Delete “First copy” from the library?')
     fireEvent.click(within(deletion).getByRole('button', { name: 'Cancel' }))
     expect(within(menu).getByRole('button', { name: 'Open First copy' })).toBeInTheDocument()
+    revealActions(menu, 'Actions for First copy')
     fireEvent.click(within(menu).getByRole('button', { name: 'Delete First copy' }))
     fireEvent.click(within(within(menu).getByRole('alertdialog', { name: 'Confirm' })).getByRole('button', { name: 'Delete' }))
     expect(within(menu).queryByRole('button', { name: 'Open First copy' })).not.toBeInTheDocument()
@@ -5159,6 +5167,7 @@ describe('local library of named graphs (#212)', () => {
       render(<App />)
       saveAs('Kept')
       const panel = openLibrary()
+      revealActions(panel, 'Actions for Kept')
       fireEvent.click(within(panel).getByRole('button', { name: 'Delete Kept' }))
       expect(within(panel).getByRole('alertdialog', { name: 'Confirm' })).toBeInTheDocument()
       fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
@@ -5253,6 +5262,7 @@ describe('local library of named graphs (#212)', () => {
     render(<App />)
     saveAs('Escaped')
     const menu = openLibrary()
+    revealActions(menu, 'Actions for Escaped')
     fireEvent.click(within(menu).getByRole('button', { name: 'Delete Escaped' }))
     expect(within(menu).getByRole('alertdialog', { name: 'Confirm' })).toBeInTheDocument()
     fireEvent.keyDown(document, { key: 'Escape' })
@@ -5290,6 +5300,7 @@ describe('local library of named graphs (#212)', () => {
     saveAs('Broken')
     window.localStorage.setItem('gamut.library.v1.document.local-document', '{"broken"')
     const menu = openLibrary()
+    revealActions(menu, 'Actions for Broken')
     fireEvent.click(within(menu).getByRole('button', { name: 'Duplicate Broken' }))
     expect(within(menu).getByRole('alert')).toHaveTextContent(/^LIBRARY_ENTRY_INVALID/)
   })

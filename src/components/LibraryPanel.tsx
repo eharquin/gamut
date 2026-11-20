@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
+import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { entryFolder, filterLibraryEntries, libraryFolderEntries, type LibraryEntry } from '../document/documentLibrary'
 import { ancestorPaths, describeFolder, folderKey, samePath, withAncestors, type FolderPath } from '../document/folderModel'
@@ -96,10 +96,125 @@ const dateFormat = (() => {
   }
 })()
 
+const dayFormat = (() => {
+  try {
+    return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' })
+  } catch {
+    return null
+  }
+})()
+
+/** The day of a date, for a card; its time shows on hover. */
+function formatDay(iso: string): string {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return iso
+  return dayFormat ? dayFormat.format(date) : date.toISOString().slice(0, 10)
+}
+
 function formatDate(iso: string): string {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return iso
   return dateFormat ? dateFormat.format(date) : date.toISOString()
+}
+
+/** The docked panel's width, in CSS pixels: 420 by default, never narrower than 320. */
+export const LIBRARY_DEFAULT_WIDTH = 420
+export const LIBRARY_MIN_WIDTH = 320
+/** The width the panel always leaves to the canvas, or to the expressions in NoViz. */
+export const LIBRARY_RESERVED_WIDTH = 320
+/** How far an arrow key moves the panel's edge; with Shift, four times as far. */
+const LIBRARY_WIDTH_STEP = 20
+/** Per-browser preference: the width of the docked library panel. */
+export const LIBRARY_WIDTH_STORAGE_KEY = 'gamut.libraryWidth'
+
+function restoredLibraryWidth(temporarySession: boolean): number {
+  if (temporarySession) return LIBRARY_DEFAULT_WIDTH
+  try {
+    const stored = Number(window.localStorage.getItem(LIBRARY_WIDTH_STORAGE_KEY))
+    return Number.isFinite(stored) && stored >= LIBRARY_MIN_WIDTH ? Math.round(stored) : LIBRARY_DEFAULT_WIDTH
+  } catch {
+    return LIBRARY_DEFAULT_WIDTH
+  }
+}
+
+function persistLibraryWidth(width: number): void {
+  try {
+    if (width === LIBRARY_DEFAULT_WIDTH) window.localStorage.removeItem(LIBRARY_WIDTH_STORAGE_KEY)
+    else window.localStorage.setItem(LIBRARY_WIDTH_STORAGE_KEY, String(width))
+  } catch {
+    // The width still applies for this visit when browser storage is unavailable.
+  }
+}
+
+/** Three dots: the button of a group of further actions. */
+const moreIcon = (
+  <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+    <circle cx="3.5" cy="8" r="1.3" /><circle cx="8" cy="8" r="1.3" /><circle cx="12.5" cy="8" r="1.3" />
+  </svg>
+)
+
+/**
+ * A button that shows a group of further actions below it, and hides it on a
+ * second press, on Escape (which then answers nothing else), on a press
+ * outside, or once one of its buttons is used.
+ */
+function ActionsDisclosure({ label, title, className, children }: Readonly<{
+  label: string
+  title?: string
+  className?: string
+  children: ReactNode
+}>) {
+  const [open, setOpen] = useState(false)
+  const wrapperRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const id = useId()
+  useEffect(() => {
+    if (!open) return
+    const onPointerDown = (event: globalThis.PointerEvent) => {
+      if (!wrapperRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown, true)
+    return () => document.removeEventListener('pointerdown', onPointerDown, true)
+  }, [open])
+  return (
+    <div
+      ref={wrapperRef}
+      className={`library-disclosure${className ? ` ${className}` : ''}${open ? ' is-open' : ''}`}
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape' || !open) return
+        event.preventDefault()
+        setOpen(false)
+        buttonRef.current?.focus()
+      }}
+    >
+      <button
+        ref={buttonRef}
+        type="button"
+        className="library-more"
+        aria-label={label}
+        title={title ?? label}
+        aria-expanded={open}
+        aria-controls={id}
+        onClick={() => setOpen((current) => !current)}
+      >{moreIcon}</button>
+      <div
+        id={id}
+        className="library-popover"
+        role="group"
+        aria-label={label}
+        hidden={!open}
+        onClick={(event) => {
+          if ((event.target as HTMLElement).closest('button')) setOpen(false)
+        }}
+      >{children}</div>
+    </div>
+  )
+}
+
+/** Whether a name or description holds the searched text, whatever its case. */
+function matches(query: string, ...texts: readonly (string | undefined)[]): boolean {
+  const needle = query.trim().toLocaleLowerCase()
+  return needle === '' || texts.some((text) => text?.toLocaleLowerCase().includes(needle))
 }
 
 const SECTIONS: readonly Readonly<{ id: Section; label: string }>[] = [
@@ -128,6 +243,8 @@ export function LibraryPanel({
   const overlay = useMediaQuery(LIBRARY_OVERLAY_QUERY)
   const [section, setSection] = useState<Section>('mine')
   const [algebraId, setAlgebraId] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [width, setWidth] = useState(() => restoredLibraryWidth(temporarySession))
   const [pending, setPending] = useState<Pending | null>(null)
   // Escape answers a confirmation first, and closes the panel only without one.
   const pendingRef = useRef<Pending | null>(null)
@@ -153,7 +270,10 @@ export function LibraryPanel({
   // Focus moves into the panel on open and returns to the button that opened it.
   useEffect(() => {
     const returnFocusTarget = returnFocusRef.current
-    ref.current?.querySelector<HTMLElement>('.library-naming input, [role="tab"][aria-selected="true"]')?.focus()
+    // The name asked for by Save first, else the selected section's tab.
+    const target = ref.current?.querySelector<HTMLElement>('.library-naming input') ??
+      ref.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
+    target?.focus()
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key !== 'Escape' || event.defaultPrevented) return
       // Docked, the panel answers Escape only while it holds the focus; laid
@@ -285,12 +405,15 @@ export function LibraryPanel({
     )
   })()
 
-  const shownEntries = filterLibraryEntries(entries, algebraId)
-  const shownExamples = examples.filter((example) => algebraId === null || example.algebraId === algebraId)
+  const searching = query.trim() !== ''
+  const shownEntries = filterLibraryEntries(entries, algebraId).filter((entry) => matches(query, entry.name))
+  const shownExamples = examples.filter((example) => (algebraId === null || example.algebraId === algebraId) &&
+    matches(query, example.name, example.description))
   // A filtered list shows the folders that hold a graph of that algebra, and
   // those that hold no graph at all, so that a new folder is not hidden.
-  const shownFolders = algebraId === null ? folders : withAncestors([
-    ...folders.filter((path) => libraryFolderEntries(entries, path).length === 0),
+  // A search shows only the folders that hold a match.
+  const shownFolders = algebraId === null && !searching ? folders : withAncestors([
+    ...(searching ? [] : folders.filter((path) => libraryFolderEntries(entries, path).length === 0)),
     ...shownEntries.map(entryFolder),
   ])
   const createFolder = (parent: FolderPath) => {
@@ -329,19 +452,147 @@ export function LibraryPanel({
     ...[...folders].sort((left, right) => describeFolder(left).localeCompare(describeFolder(right)))
       .map((path) => ({ key: folderKey(path), path, label: describeFolder(path) }))]
 
+  // The docked panel widens to the left from its edge, and keeps the canvas
+  // (or, in NoViz, the expressions) at least LIBRARY_RESERVED_WIDTH wide.
+  const maximumWidth = () => {
+    const frame = ref.current?.parentElement
+    const frameWidth = frame?.getBoundingClientRect().width ?? 0
+    // Without a layout (as in tests), only the minimum applies.
+    if (!frame || frameWidth <= 0) return Number.POSITIVE_INFINITY
+    const expressions = frame.querySelector('.visualizer') ? document.getElementById('expression-panel') : null
+    const reserved = LIBRARY_RESERVED_WIDTH + (expressions?.getBoundingClientRect().width ?? 0)
+    return Math.max(LIBRARY_MIN_WIDTH, frameWidth - reserved)
+  }
+  const resize = (next: number, persist: boolean) => {
+    const clamped = Math.round(Math.max(LIBRARY_MIN_WIDTH, Math.min(maximumWidth(), next)))
+    setWidth(clamped)
+    if (persist && !temporarySession) persistLibraryWidth(clamped)
+  }
+  const resizeDrag = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null)
+  const beginResize = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return
+    event.preventDefault()
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+    resizeDrag.current = { pointerId: event.pointerId, startX: event.clientX, startWidth: width }
+  }
+  const moveResize = (event: PointerEvent<HTMLDivElement>) => {
+    const drag = resizeDrag.current
+    if (drag?.pointerId !== event.pointerId) return
+    resize(drag.startWidth + drag.startX - event.clientX, false)
+  }
+  const endResize = (event: PointerEvent<HTMLDivElement>) => {
+    if (resizeDrag.current?.pointerId !== event.pointerId) return
+    resizeDrag.current = null
+    resize(width, true)
+  }
+  const resizeWithKeyboard = (event: KeyboardEvent<HTMLDivElement>) => {
+    const step = event.shiftKey ? LIBRARY_WIDTH_STEP * 4 : LIBRARY_WIDTH_STEP
+    const next = event.key === 'ArrowLeft' ? width + step
+      : event.key === 'ArrowRight' ? width - step
+        : event.key === 'Home' ? LIBRARY_MIN_WIDTH
+          : event.key === 'End' ? Number.POSITIVE_INFINITY
+            : null
+    if (next === null) return
+    event.preventDefault()
+    resize(next, true)
+  }
+
   const panel = (
     <section
       ref={ref}
       id="library-panel"
       className={`library-panel${overlay ? ' is-overlay' : ''}`}
       aria-label="Library"
+      style={overlay ? undefined : { '--library-width': `${width}px` } as CSSProperties}
     >
-      <header className="appearance-header library-panel-header">
-        <strong>Library</strong>
-        <span />
-        <button type="button" className="appearance-close" onClick={onClose}
+      {!overlay && (
+        <div
+          className="library-resizer"
+          role="separator"
+          aria-label="Resize library panel"
+          aria-orientation="vertical"
+          aria-valuemin={LIBRARY_MIN_WIDTH}
+          aria-valuenow={width}
+          tabIndex={0}
+          title="Drag to widen the library; double-click to reset its width"
+          onPointerDown={beginResize}
+          onPointerMove={moveResize}
+          onPointerUp={endResize}
+          onPointerCancel={endResize}
+          onDoubleClick={() => resize(LIBRARY_DEFAULT_WIDTH, true)}
+          onKeyDown={resizeWithKeyboard}
+        />
+      )}
+      <header className="library-panel-header">
+        <h2>Library</h2>
+        <div className="library-tabs" role="tablist" aria-label="Library sections">
+          {SECTIONS.map((candidate) => (
+            <button
+              key={candidate.id}
+              id={`library-tab-${candidate.id}`}
+              type="button"
+              role="tab"
+              aria-selected={section === candidate.id}
+              aria-controls={`library-section-${candidate.id}`}
+              tabIndex={section === candidate.id ? 0 : -1}
+              onClick={() => selectSection(candidate.id)}
+              onKeyDown={onTabKeyDown}
+            >{candidate.label}</button>
+          ))}
+        </div>
+        <button type="button" className="library-close" onClick={onClose}
           aria-label="Close library" title="Close">×</button>
       </header>
+      <div className="library-toolbar">
+        <label className="library-search">
+          <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="7" cy="7" r="4.5" fill="none" />
+            <path d="M10.5 10.5 14 14" />
+          </svg>
+          <input
+            type="search"
+            aria-label={section === 'mine' ? 'Search my library' : 'Search the examples'}
+            placeholder={section === 'mine' ? 'Search graphs' : 'Search examples'}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+        {section === 'mine' && <>
+          <button type="button" className="library-new" onClick={requestNew}>+ New graph</button>
+          <button type="button" className="library-new-folder" onClick={() => createFolder([])}>New folder</button>
+          <ActionsDisclosure label="More library actions" title="Save as new graph, export or import the library">
+            {!naming && !savingAsNew && (
+              <button
+                type="button"
+                className="library-save-as"
+                onClick={() => { setNameDraft(`${currentName} copy`); setSavingAsNew(true) }}
+              >Save as new graph…</button>
+            )}
+            <button type="button" className="library-archive" onClick={onExportLibrary}>Export library</button>
+            <button
+              type="button"
+              className="library-archive"
+              aria-disabled={temporarySession || undefined}
+              aria-describedby={temporarySession ? 'library-import-unavailable' : undefined}
+              onClick={() => { if (!temporarySession) archiveInputRef.current?.click() }}
+            >Import library</button>
+          </ActionsDisclosure>
+          <input
+            ref={archiveInputRef}
+            className="visually-hidden"
+            type="file"
+            accept=".zip,application/zip,application/x-zip-compressed"
+            aria-label="Library archive to import"
+            tabIndex={-1}
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              // The same archive can be chosen again.
+              event.target.value = ''
+              if (file) onImportLibrary(file)
+            }}
+          />
+        </>}
+      </div>
       <div className="library-body">
         {showNaming && (
           <form className="library-confirm library-naming" onSubmit={submitName}>
@@ -361,21 +612,6 @@ export function LibraryPanel({
             </div>
           </form>
         )}
-        <div className="library-tabs" role="tablist" aria-label="Library sections">
-          {SECTIONS.map((candidate) => (
-            <button
-              key={candidate.id}
-              id={`library-tab-${candidate.id}`}
-              type="button"
-              role="tab"
-              aria-selected={section === candidate.id}
-              aria-controls={`library-section-${candidate.id}`}
-              tabIndex={section === candidate.id ? 0 : -1}
-              onClick={() => selectSection(candidate.id)}
-              onKeyDown={onTabKeyDown}
-            >{candidate.label}</button>
-          ))}
-        </div>
         <div className="library-filter" role="group" aria-label="Filter by algebra">
           {filters.map((filter) => (
             <button
@@ -397,39 +633,6 @@ export function LibraryPanel({
             </div>
           )}
           {diagnostic && <p className="library-diagnostic" role="alert">{diagnostic}</p>}
-          <div className="library-commands">
-            <button type="button" className="library-new" onClick={requestNew}>+ New graph</button>
-            <button type="button" className="library-new-folder" onClick={() => createFolder([])}>+ New folder</button>
-            {!naming && !savingAsNew && (
-              <button
-                type="button"
-                className="library-save-as"
-                onClick={() => { setNameDraft(`${currentName} copy`); setSavingAsNew(true) }}
-              >Save as new graph…</button>
-            )}
-            <button type="button" className="library-archive" onClick={onExportLibrary}>Export library</button>
-            <button
-              type="button"
-              className="library-archive"
-              aria-disabled={temporarySession || undefined}
-              aria-describedby={temporarySession ? 'library-import-unavailable' : undefined}
-              onClick={() => { if (!temporarySession) archiveInputRef.current?.click() }}
-            >Import library</button>
-            <input
-              ref={archiveInputRef}
-              className="visually-hidden"
-              type="file"
-              accept=".zip,application/zip,application/x-zip-compressed"
-              aria-label="Library archive to import"
-              tabIndex={-1}
-              onChange={(event) => {
-                const file = event.target.files?.[0]
-                // The same archive can be chosen again.
-                event.target.value = ''
-                if (file) onImportLibrary(file)
-              }}
-            />
-          </div>
           {temporarySession && (
             <p id="library-import-unavailable" className="library-archive-note">
               Import library is unavailable in a temporary shared scene, which does not use browser storage.
@@ -445,9 +648,11 @@ export function LibraryPanel({
             </div>
           )}
           {shownEntries.length === 0 && shownFolders.length === 0 ? (
-            <p className="library-empty">{entries.length === 0
-              ? 'No saved graphs yet. Save keeps the open graph here.'
-              : 'No saved graphs in this algebra.'}</p>
+            <p className="library-empty">{searching
+              ? `No saved graph matches “${query.trim()}”.`
+              : entries.length === 0
+                ? 'No saved graphs yet. Save keeps the open graph here.'
+                : 'No saved graphs in this algebra.'}</p>
           ) : (
             <LibraryTree
               label="Saved graphs"
@@ -455,7 +660,8 @@ export function LibraryPanel({
               entryId={(entry) => entry.id}
               entryFolder={entryFolder}
               folders={shownFolders}
-              isCollapsed={(path) => collapse.isCollapsed('mine', path)}
+              // A search shows every match, inside collapsed folders too.
+              isCollapsed={(path) => !searching && collapse.isCollapsed('mine', path)}
               onToggle={(path) => collapse.toggle('mine', path)}
               entryClassName={(entry) => entry.id === openId ? 'is-open' : undefined}
               onMoveEntry={(id, folder) => {
@@ -482,25 +688,28 @@ export function LibraryPanel({
                   aria-label={`Open ${entry.name}`}
                   onClick={() => requestOpen(entry)}
                 >
-                  <span className="library-thumbnail">{graphThumbnail?.(entry)}</span>
+                  <span className="library-thumbnail">
+                    {graphThumbnail?.(entry)}
+                    {entry.id === openId && <span className="library-open-badge" aria-hidden="true">Open</span>}
+                  </span>
                   <span className="library-name">{entry.name}</span>
+                  <span className="library-meta">
+                    <span className="library-algebra">{label(entry.algebraId)}</span>
+                    <time dateTime={entry.updatedAt} title={formatDate(entry.updatedAt)}>{formatDay(entry.updatedAt)}</time>
+                  </span>
                 </button>
-                <div className="library-meta">
-                  <span className="library-algebra">{label(entry.algebraId)}</span>
-                  <time dateTime={entry.updatedAt}>{formatDate(entry.updatedAt)}</time>
-                  <div className="library-actions">
-                    <button type="button" aria-label={`Rename ${entry.name}`} title="Rename"
-                      onClick={() => setPending({ kind: 'rename', entry, draft: entry.name })}>Rename</button>
-                    <button type="button" aria-label={`Duplicate ${entry.name}`} title="Duplicate"
-                      onClick={() => onDuplicate(entry)}>Duplicate</button>
-                    <button type="button" aria-label={`Delete ${entry.name}`} title="Delete"
-                      onClick={() => setPending({ kind: 'delete', entry })}>Delete</button>
-                    {folders.length > 0 && (
+                <ActionsDisclosure label={`Actions for ${entry.name}`} className="library-card-actions">
+                  <button type="button" aria-label={`Rename ${entry.name}`}
+                    onClick={() => setPending({ kind: 'rename', entry, draft: entry.name })}>Rename</button>
+                  <button type="button" aria-label={`Duplicate ${entry.name}`}
+                    onClick={() => onDuplicate(entry)}>Duplicate</button>
+                  {folders.length > 0 && (
+                    <label className="library-move-field">
+                      <span aria-hidden="true">Move to</span>
                       <select
                         id={`library-move-${entry.id}`}
                         className="library-move"
                         aria-label={`Move ${entry.name} to folder`}
-                        title="Move to folder"
                         value={folderKey(entryFolder(entry))}
                         onChange={(event) => {
                           const option = folderOptions.find((candidate) => candidate.key === event.target.value)
@@ -511,9 +720,11 @@ export function LibraryPanel({
                           <option key={option.key} value={option.key}>{option.label}</option>
                         ))}
                       </select>
-                    )}
-                  </div>
-                </div>
+                    </label>
+                  )}
+                  <button type="button" className="is-destructive" aria-label={`Delete ${entry.name}`}
+                    onClick={() => setPending({ kind: 'delete', entry })}>Delete</button>
+                </ActionsDisclosure>
               </>}
             />
           )}
@@ -524,7 +735,9 @@ export function LibraryPanel({
           {examplesDiagnostic && <p className="library-diagnostic" role="alert">{examplesDiagnostic}</p>}
           <p className="library-note">Examples are read-only. Add one to your library to keep your changes.</p>
           {shownExamples.length === 0 ? (
-            <p className="library-empty">No examples in this algebra.</p>
+            <p className="library-empty">{searching
+              ? `No example matches “${query.trim()}”.`
+              : 'No examples in this algebra.'}</p>
           ) : (
             <LibraryTree
               label="Examples"
@@ -534,7 +747,7 @@ export function LibraryPanel({
               folders={[]}
               // The examples keep the order of their index.
               order="entries"
-              isCollapsed={(path) => collapse.isCollapsed('examples', path)}
+              isCollapsed={(path) => !searching && collapse.isCollapsed('examples', path)}
               onToggle={(path) => collapse.toggle('examples', path)}
               renderEntry={(example) => <>
                 <button
@@ -546,14 +759,14 @@ export function LibraryPanel({
                   <span className="library-thumbnail">{exampleThumbnail?.(example)}</span>
                   <span className="library-name">{example.name}</span>
                   {example.description && <span className="library-description">{example.description}</span>}
+                  <span className="library-meta">
+                    <span className="library-algebra">{label(example.algebraId)}</span>
+                  </span>
                 </button>
-                <div className="library-meta">
-                  <span className="library-algebra">{label(example.algebraId)}</span>
-                  <div className="library-actions">
-                    <button type="button" aria-label={`Add ${example.name} to my library`} title="Add to my library"
-                      onClick={() => onAddExample(example)}>Add to my library</button>
-                  </div>
-                </div>
+                <button type="button" className="library-add-example" aria-label={`Add ${example.name} to my library`}
+                  title="Add to my library" onClick={() => onAddExample(example)}>
+                  <span aria-hidden="true">+</span> Add to my library
+                </button>
               </>}
             />
           )}

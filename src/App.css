@@ -3870,14 +3870,16 @@ line.manipulation-focus-ring {
 }
 
 .library-panel {
-  flex: 0 0 320px;
-  width: 320px;
+  position: relative;
+  flex: 0 1 var(--library-width, 420px);
+  width: var(--library-width, 420px);
+  min-width: 320px;
   min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   color: var(--text);
-  background: var(--surface);
+  background: var(--background);
   border-left: 1px solid var(--border);
 }
 
@@ -3894,46 +3896,264 @@ line.manipulation-focus-ring {
   bottom: 0;
   z-index: 14;
   width: min(340px, 100%);
+  min-width: 0;
   border-left-color: var(--border-strong);
   box-shadow: var(--shadow-modal);
 }
 
-.library-tabs,
-.library-filter {
+/* The left edge of the docked panel: dragged, or moved with the arrow keys,
+   it widens the panel to the left. */
+.library-resizer {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.library-resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  background: transparent;
+  transition: background 120ms ease;
+}
+
+.library-resizer:hover::before,
+.library-resizer:focus-visible::before,
+.library-resizer:active::before {
+  background: var(--accent);
+}
+
+.library-panel .library-resizer:focus-visible {
+  outline: none;
+}
+
+/* The title, the sections and Close on one line; search and commands below. */
+.library-panel-header {
   display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px 0 16px;
+  background: var(--surface);
+}
+
+.library-panel-header h2 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
 }
 
 .library-tabs {
-  border-bottom: 1px solid var(--border);
+  display: flex;
+  margin-right: auto;
+  padding: 2px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
 }
 
 .library-tabs button {
-  margin-bottom: -1px;
-  padding: 6px 10px;
+  padding: 4px 10px;
   color: var(--muted);
   background: transparent;
   border: 0;
-  border-bottom: 2px solid transparent;
-  font-size: 0.78rem;
-  font-weight: 600;
-  font-family: inherit;
+  border-radius: 6px;
+  font: 600 0.78rem var(--font-sans);
   cursor: pointer;
 }
 
 .library-tabs button[aria-selected='true'] {
-  color: var(--text-strong);
-  border-bottom-color: var(--accent);
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgb(30 36 51 / 14%);
+}
+
+.library-close {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.library-close:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.library-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px 12px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.library-search {
+  flex: 1 1 140px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border-input);
+  border-radius: 6px;
+}
+
+.library-search svg {
+  flex: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.library-search:focus-within {
+  border-color: var(--accent);
+}
+
+.library-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 0;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font: 0.78rem var(--font-sans);
+}
+
+.library-new,
+.library-new-folder {
+  padding: 5px 10px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: 600 0.76rem var(--font-sans);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* The surface colour on the strong text colour reads at 4.5:1 or more in both themes. */
+.library-new {
+  color: var(--surface);
+  background: var(--text-strong);
+  border-color: var(--text-strong);
+}
+
+.library-new:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.library-new-folder:hover {
+  background: var(--surface-hover);
+}
+
+/* A ⋯ button and the group of actions it shows below it. */
+.library-disclosure {
+  position: relative;
+}
+
+.library-more {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.library-more svg {
+  fill: currentColor;
+}
+
+.library-more:hover,
+.library-disclosure.is-open > .library-more {
+  color: var(--accent);
+  border-color: var(--accent-border);
+}
+
+.library-popover {
+  position: absolute;
+  z-index: 6;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 176px;
+  display: grid;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgb(30 36 51 / 18%);
+}
+
+.library-popover[hidden] {
+  display: none;
+}
+
+.library-popover > button {
+  padding: 6px 10px;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  font: 0.8rem var(--font-sans);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.library-popover > button:hover {
+  background: var(--surface-hover);
+}
+
+.library-popover > .is-destructive {
+  color: var(--error);
+}
+
+.library-move-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  white-space: nowrap;
+}
+
+.library-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 .library-filter button {
-  padding: 2px 8px;
+  padding: 2px 9px;
   color: var(--muted);
   background: transparent;
   border: 1px solid var(--border);
   border-radius: 999px;
-  font: 0.68rem var(--font-mono);
+  font: 0.7rem var(--font-mono);
   cursor: pointer;
 }
 
@@ -3946,7 +4166,7 @@ line.manipulation-focus-ring {
 .library-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .library-section[hidden] {
@@ -3980,50 +4200,32 @@ line.manipulation-focus-ring {
 }
 
 .library-algebra {
+  padding: 1px 6px;
   color: var(--muted);
-  font: 0.62rem var(--font-mono);
+  background: var(--surface-soft);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  font: 500 0.64rem var(--font-mono);
   white-space: nowrap;
 }
 
 .library-description {
   color: var(--muted);
   font-size: 0.72rem;
+  line-height: 1.4;
 }
 
-/* Local library of named graphs (#212). */
+/* Local library of named graphs (#212): the body scrolls under the header. */
 .library-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 0 10px 10px;
+  gap: 12px;
+  padding: 12px 14px 16px 16px;
   font-size: 0.78rem;
-}
-
-.library-commands {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.library-new,
-.library-new-folder,
-.library-archive,
-.library-save-as {
-  align-self: flex-start;
-  padding: 4px 8px;
-  color: var(--accent);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  font: 700 0.74rem var(--font-mono);
-  cursor: pointer;
-}
-
-.library-new:hover,
-.library-new-folder:hover,
-.library-save-as:hover {
-  background: var(--accent-soft);
-  border-color: var(--accent-border);
 }
 
 .library-list {
@@ -4034,31 +4236,19 @@ line.manipulation-focus-ring {
   gap: 2px;
 }
 
-/* The name takes the whole width; date and actions share the line below. */
 .library-list li {
   display: grid;
-  border-radius: 6px;
-}
-
-.library-list li.is-open {
-  background: var(--accent-soft);
 }
 
 .library-open {
   min-width: 0;
   display: grid;
-  padding: 5px 6px 1px;
   color: var(--text);
   background: transparent;
   border: 0;
-  border-radius: 6px;
   font: inherit;
   text-align: left;
   cursor: pointer;
-}
-
-.library-open:hover {
-  background: var(--surface-hover);
 }
 
 .library-name {
@@ -4068,28 +4258,20 @@ line.manipulation-focus-ring {
 }
 
 .library-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 2px 8px;
-  padding: 0 2px 3px 6px;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .library-meta time {
+  overflow: hidden;
   color: var(--muted);
   font: 0.66rem var(--font-mono);
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.library-actions {
-  display: flex;
-  gap: 2px;
-  margin-left: auto;
-}
-
-.library-actions button,
 .library-confirm-actions button {
   padding: 3px 6px;
   color: var(--muted);
@@ -4100,7 +4282,6 @@ line.manipulation-focus-ring {
   cursor: pointer;
 }
 
-.library-actions button:hover,
 .library-confirm-actions button:hover:not(:disabled) {
   color: var(--accent);
   background: var(--surface-hover);
@@ -4562,9 +4743,9 @@ body.reordering-items .folder-handle {
 }
 
 .library-move {
-  max-width: 9rem;
+  max-width: 11rem;
   padding: 2px 4px;
-  color: var(--muted);
+  color: var(--text);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -4620,25 +4801,37 @@ body.reordering-items .folder-handle {
   cursor: pointer;
 }
 
-/* The library as a gallery (STORE-014): folders span the panel, and each
-   graph or example is a card with a drawing of its scene. */
+/* The library as a gallery (STORE-014): folders span the panel as headings,
+   and each graph or example is a card with a drawing of its scene, in as many
+   columns as the panel's width holds. */
 .library-tree {
-  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 12px;
 }
 
 .library-tree > li.library-folder {
   grid-column: 1 / -1;
 }
 
+.library-tree > li.library-folder:not(:first-child) {
+  margin-top: 6px;
+}
+
 .library-tree > li.library-card {
+  position: relative;
   min-width: 0;
   align-content: start;
   margin-inline-start: 0;
-  overflow: hidden;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
+  transition: box-shadow 120ms ease, border-color 120ms ease;
+}
+
+.library-tree > li.library-card:hover,
+.library-tree > li.library-card:focus-within {
+  border-color: var(--border-strong);
+  box-shadow: 0 6px 18px rgb(30 36 51 / 10%);
 }
 
 .library-tree > li.library-card.is-group-start {
@@ -4646,19 +4839,25 @@ body.reordering-items .folder-handle {
 }
 
 .library-tree > li.library-card.is-open {
-  border-color: var(--accent-border);
-  box-shadow: 0 0 0 1px var(--accent-border);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 
 .library-tree .library-open {
-  gap: 2px;
-  padding: 0 0 2px;
-  border-radius: 0;
+  gap: 6px;
+  padding: 0 0 10px;
+  border-radius: 9px;
 }
 
 .library-tree .library-open > .library-name,
-.library-tree .library-open > .library-description {
-  padding-inline: 7px;
+.library-tree .library-open > .library-description,
+.library-tree .library-open > .library-meta {
+  padding-inline: 12px;
+}
+
+.library-tree .library-name {
+  font-size: 0.82rem;
+  font-weight: 600;
 }
 
 .library-tree .library-description {
@@ -4670,12 +4869,24 @@ body.reordering-items .folder-handle {
 }
 
 .library-thumbnail {
+  position: relative;
   display: block;
   aspect-ratio: 8 / 5;
-  margin-bottom: 4px;
   overflow: hidden;
   background: var(--canvas);
   border-bottom: 1px solid var(--border-subtle);
+  border-radius: 9px 9px 0 0;
+}
+
+.library-open-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 1px 7px;
+  color: var(--surface);
+  background: var(--text-strong);
+  border-radius: 4px;
+  font: 600 0.66rem var(--font-sans);
 }
 
 .scene-thumbnail {
@@ -4689,21 +4900,45 @@ body.reordering-items .folder-handle {
   stroke-width: 1;
 }
 
-.library-tree .library-meta {
-  padding: 0 5px 5px 7px;
+/* A card's ⋯ and an example's Add sit on its drawing, shown while the card is
+   hovered or holds the focus. */
+.library-card-actions,
+.library-add-example {
+  position: absolute;
+  top: 8px;
+  right: 8px;
 }
 
-.library-tree .library-actions {
-  flex-wrap: wrap;
-  margin-left: 0;
+.library-card-actions > .library-more {
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
 }
 
-.library-tree .library-actions button {
-  padding: 2px 4px;
+.library-add-example {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  color: var(--text-strong);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  border: 1px solid var(--accent-border);
+  border-radius: 6px;
+  font: 600 0.7rem var(--font-sans);
+  cursor: pointer;
 }
 
-.library-tree .library-move {
-  max-width: 100%;
+@media (hover: hover) {
+  .library-card-actions:not(.is-open),
+  .library-add-example {
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+
+  .library-card:hover .library-card-actions,
+  .library-card:focus-within .library-card-actions,
+  .library-card:hover .library-add-example,
+  .library-card:focus-within .library-add-example {
+    opacity: 1;
+  }
 }
 
 /* The cards style of the expression panel, a per-browser preference: the rows

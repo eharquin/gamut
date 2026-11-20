@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { revealActions } from './test/libraryActions'
 import { toCanonicalDocument } from './document/canonicalDocument'
 import { LIBRARY_INDEX_KEY } from './document/documentLibrary'
 import { expressionDocument } from './document/expressionDocument'
@@ -45,7 +46,9 @@ const archiveFile = (bytes: Uint8Array, name = 'library.zip') =>
   ({ name, type: 'application/zip', size: bytes.byteLength, arrayBuffer: async () => bytes.slice().buffer }) as unknown as File
 
 async function exportedArchive(): Promise<Uint8Array> {
-  fireEvent.click(within(openLibrary()).getByRole('button', { name: 'Export library' }))
+  const library = openLibrary()
+  revealActions(library, 'More library actions')
+  fireEvent.click(within(library).getByRole('button', { name: 'Export library' }))
   await waitFor(() => expect(blobs).toHaveLength(1))
   return new Uint8Array(await blobs[0].arrayBuffer())
 }
@@ -101,6 +104,7 @@ describe('library archives (STORE-017, STORE-018)', () => {
     render(<App />)
     await waitFor(() => expect(screen.getByRole('textbox', { name: 'Expression 1' })).toHaveValue('Shared = vector(3, 4)'))
     openLibrary()
+    revealActions(panel(), 'More library actions')
     const importButton = within(panel()).getByRole('button', { name: 'Import library' })
     expect(importButton).toHaveAttribute('aria-disabled', 'true')
     expect(importButton).toHaveAccessibleDescription('Import library is unavailable in a temporary shared scene, which does not use browser storage.')
