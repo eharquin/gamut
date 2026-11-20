@@ -247,6 +247,14 @@ breakpoint is a window width of 720 CSS pixels
 ([#266](https://github.com/eharquin/gamut/issues/266)): below 720 the panel is
 an overlay.
 
+Docked, the panel is 420 CSS pixels wide by default and never narrower than
+320. Dragging its left edge, or moving it with the arrow keys (20 pixels a
+step, 80 with Shift), widens it until 320 pixels are left to the viewport, or
+to the expression panel in NoViz; a double-click restores the default. The
+width is a preference of the browser (`gamut.libraryWidth`), not part of a
+graph, and a temporary session neither reads nor writes it. The gallery fits
+as many columns of cards at least 168 pixels wide as the width holds.
+
 Document history retains at most 100 complete pre-command document snapshots.
 When the limit is exceeded, the oldest snapshot is discarded first. Undo and
 redo stacks are transient application state and are never serialized.

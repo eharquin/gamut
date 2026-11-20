@@ -53,6 +53,14 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Interface and accessibility
 
+- The library panel is a gallery: 420 px wide by default instead of 320, it
+  widens to the left from its edge (drag, arrow keys, double-click to reset),
+  and its cards fill as many columns as it holds. A search field narrows My
+  library by name and Examples by name or description. New graph and New
+  folder sit beside the search; Save as new graph, Export library and Import
+  library move to a ⋯ menu, and each card's Rename, Duplicate, Move and Delete
+  to the card's own ⋯ menu. The open graph's card is marked **Open**, and an
+  example's card offers **Add to my library** on hover or focus (#328).
 - Settings gain a **Diagnostics** section with a **Performance monitoring**
   switch, off by default and kept by this browser (not by the graph), that
   shows a frame in the bottom-right corner of the canvas with the frame rate,

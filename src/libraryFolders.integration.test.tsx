@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { revealActions } from './test/libraryActions'
 import { serializeCanonicalDocument, toCanonicalDocument } from './document/canonicalDocument'
 import { LIBRARY_FOLDERS_KEY, LIBRARY_INDEX_KEY, libraryDocumentKey } from './document/documentLibrary'
 import { expressionDocument } from './document/expressionDocument'
@@ -32,7 +33,7 @@ const saveAs = (name: string) => {
 const index = () => JSON.parse(window.localStorage.getItem(LIBRARY_INDEX_KEY)!) as { version: number; entries: { name: string; folder?: string[] }[] }
 const folderButton = (name: string) => within(panel()).getByRole('button', { name: new RegExp(`^Folder ${name}, level`) })
 const createFolder = (name: string, inside?: string) => {
-  fireEvent.click(within(panel()).getByRole('button', { name: inside ? `New folder in ${inside}` : '+ New folder' }))
+  fireEvent.click(within(panel()).getByRole('button', { name: inside ? `New folder in ${inside}` : 'New folder' }))
   const field = within(panel()).getByRole('textbox', { name: /^Name of folder / })
   fireEvent.change(field, { target: { value: name } })
   fireEvent.keyDown(field, { key: 'Enter' })
@@ -49,6 +50,7 @@ describe('library folders (STORE-016, A11Y-011)', () => {
     expect(folderButton('2026')).toHaveAccessibleName('Folder 2026, level 2, 0 graphs')
     expect(JSON.parse(window.localStorage.getItem(LIBRARY_FOLDERS_KEY)!)).toEqual({ version: 1, folders: [['Talks'], ['Talks', '2026']] })
 
+    revealActions(panel(), 'Actions for Rotation talk')
     const move = within(panel()).getByRole('combobox', { name: 'Move Rotation talk to folder' })
     fireEvent.change(move, { target: { value: JSON.stringify(['Talks', '2026']) } })
     expect(index().entries[0].folder).toEqual(['Talks', '2026'])
@@ -69,6 +71,7 @@ describe('library folders (STORE-016, A11Y-011)', () => {
     saveAs('Rotation talk')
     openLibrary()
     createFolder('Talks')
+    revealActions(panel(), 'Actions for Rotation talk')
     fireEvent.change(within(panel()).getByRole('combobox', { name: 'Move Rotation talk to folder' }),
       { target: { value: JSON.stringify(['Talks']) } })
     fireEvent.click(folderButton('Talks'))
@@ -116,6 +119,7 @@ describe('library folders (STORE-016, A11Y-011)', () => {
     createFolder('Talks')
     createFolder('2026', 'Talks')
     fireEvent.click(folderButton('Talks'))
+    revealActions(panel(), 'Actions for Rotation talk')
     fireEvent.change(within(panel()).getByRole('combobox', { name: 'Move Rotation talk to folder' }),
       { target: { value: JSON.stringify(['Talks', '2026']) } })
     expect(folderButton('Talks')).toHaveAttribute('aria-expanded', 'true')
@@ -134,12 +138,14 @@ describe('library folders (STORE-016, A11Y-011)', () => {
     render(<App />)
     saveAs('One')
     openLibrary()
+    revealActions(panel(), 'More library actions')
     fireEvent.click(within(panel()).getByRole('button', { name: 'Save as new graph…' }))
     fireEvent.change(within(panel()).getByRole('textbox', { name: 'Graph name' }), { target: { value: 'Two' } })
     fireEvent.click(within(panel()).getByRole('button', { name: 'Save' }))
     openLibrary()
     createFolder('Old')
     for (const name of ['One', 'Two']) {
+      revealActions(panel(), `Actions for ${name}`)
       fireEvent.change(within(panel()).getByRole('combobox', { name: `Move ${name} to folder` }),
         { target: { value: JSON.stringify(['Old']) } })
     }

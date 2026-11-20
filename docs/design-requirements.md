@@ -534,7 +534,10 @@ unchanged.
   structure. **My library** lists the graphs of STORE-013
   with their name and last update and offers New, Open, Rename, Duplicate,
   Delete, and Save as new graph, with the confirmations of STORE-013 shown
-  inside the panel. Opening the panel reads storage and writes nothing. The
+  inside the panel. Graphs and examples are cards in a gallery whose number
+  of columns follows the panel's width, which the user widens to the left
+  from the panel's edge; a search narrows both sections by name, and by
+  description for examples. Opening the panel reads storage and writes nothing. The
   temporary-session behavior of the panel is specified in
   [scene links](specifications/scene-links.md#temporary-sessions-and-storage).
 - **STORE-015:** Examples shall be canonical documents shipped in the source
