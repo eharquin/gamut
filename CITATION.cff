@@ -2,8 +2,8 @@ cff-version: 1.2.0
 message: "If you use GAMUT in your research, please cite the software using the metadata below."
 type: software
 title: "GAMUT: Geometric Algebra Multivector Unveiling Tool"
-version: "0.2.0"
-date-released: "2026-11-10"
+version: "0.3.0"
+date-released: "2026-11-20"
 abstract: "A web environment for creating, visualizing, saving, and sharing reproducible geometric algebra constructions."
 authors:
   - family-names: "Harquin"

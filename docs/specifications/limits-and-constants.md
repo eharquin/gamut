@@ -40,10 +40,8 @@ metadata, appearance, parameters, and view state.
 
 ### 2.1 Folders
 
-**Proposed for 0.3.0** ([#272](https://github.com/eharquin/gamut/issues/272)):
-the values below may change through review until
-[#83](https://github.com/eharquin/gamut/issues/83) and
-[#267](https://github.com/eharquin/gamut/issues/267) land. Expression folders
+**Since 0.3.0** ([#83](https://github.com/eharquin/gamut/issues/83),
+[#267](https://github.com/eharquin/gamut/issues/267)). Expression folders
 (DOC-013) and library folders (STORE-016) share one folder model and these
 limits.
 
@@ -63,9 +61,7 @@ cross one is refused without changing the document or the library.
 
 ### 2.2 Library archives
 
-**Proposed for 0.3.0** ([#272](https://github.com/eharquin/gamut/issues/272)):
-the values below may change through review until
-[#268](https://github.com/eharquin/gamut/issues/268) lands. They bound the
+**Since 0.3.0** ([#268](https://github.com/eharquin/gamut/issues/268)). They bound the
 import of a library archive (STORE-018, SEC-010).
 
 | Quantity | Limit | Diagnostic |
