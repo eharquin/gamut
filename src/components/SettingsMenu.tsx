@@ -34,6 +34,9 @@ type SettingsMenuProps = Readonly<{
    * graduations, object size) are shown; false in NoViz, where nothing is drawn.
    */
   renderingSettings?: boolean
+  /** Whether the performance monitor is shown over the canvas, a per-browser preference. */
+  performanceMonitor?: boolean
+  onPerformanceMonitorChange?(shown: boolean): void
 }>
 
 type SwitchRowProps = Readonly<{
@@ -77,6 +80,8 @@ export function SettingsMenu({
   panelStyle,
   onPanelStyleChange,
   renderingSettings = true,
+  performanceMonitor = false,
+  onPerformanceMonitorChange,
 }: SettingsMenuProps) {
   const [open, setOpen] = useState(false)
   const wrapperRef = useRef<HTMLDivElement>(null)
@@ -257,6 +262,16 @@ export function SettingsMenu({
               </select>
             </label>
           </section>
+          {renderingSettings && onPerformanceMonitorChange && (
+            <section className="settings-section">
+              <h3>Diagnostics</h3>
+              <SwitchRow
+                label="Performance monitoring"
+                checked={performanceMonitor}
+                onChange={onPerformanceMonitorChange}
+              />
+            </section>
+          )}
         </div>
       )}
     </div>

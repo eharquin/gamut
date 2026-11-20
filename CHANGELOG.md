@@ -53,6 +53,13 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Interface and accessibility
 
+- Settings gain a **Diagnostics** section with a **Performance monitoring**
+  switch, off by default and kept by this browser (not by the graph), that
+  shows a frame in the bottom-right corner of the canvas with the frame rate,
+  the longest frame of the last second, the mean time to evaluate the
+  document and to render the app, the number of expressions and of drawn
+  SVG elements, and the JavaScript heap where the browser reports it. It is
+  not offered in NoViz nor in an embed (#326).
 - The **Label** section gains an **Only label** switch that draws the label
   without its object, which can still be dragged. The position grid gains
   **Center**, on the object itself; **Auto** moves beside the grid (#316).

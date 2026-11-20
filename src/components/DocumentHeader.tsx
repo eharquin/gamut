@@ -28,6 +28,7 @@ export type DocumentHeaderActions = Readonly<{
   changeTheme(theme: ThemeMode): void
   changeDisplay(change: Partial<DisplaySettings>): void
   changePanelStyle(style: PanelStyle): void
+  changePerformanceMonitor(shown: boolean): void
 }>
 
 export type DocumentHeaderProps = Readonly<{
@@ -46,6 +47,8 @@ export type DocumentHeaderProps = Readonly<{
   display: DisplaySettings
   /** How the rows of the expression panel are drawn, a per-browser preference. */
   panelStyle: PanelStyle
+  /** Whether the performance monitor is shown over the canvas, a per-browser preference. */
+  performanceMonitor: boolean
   /** Whether the display settings that only affect the canvas are offered. */
   renderingSettings: boolean
   refs: DocumentHeaderRefs
@@ -69,6 +72,7 @@ export function DocumentHeader({
   theme,
   display,
   panelStyle,
+  performanceMonitor,
   renderingSettings,
   refs,
   actions,
@@ -140,6 +144,8 @@ export function DocumentHeader({
             panelStyle={panelStyle}
             onPanelStyleChange={actions.changePanelStyle}
             renderingSettings={renderingSettings}
+            performanceMonitor={performanceMonitor}
+            onPerformanceMonitorChange={actions.changePerformanceMonitor}
           />
         </div>
       </div>
