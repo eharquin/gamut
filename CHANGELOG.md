@@ -57,6 +57,16 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   unfolds, or when a setting shows or hides options: placed once against its
   swatch, it stays where it is and moves up only as far as it needs to stay
   in the window (#330).
+- The **Points** section of a list's appearance menu has three rows of
+  buttons: **Points** (shown or hidden), **Border** (closed, open, or none)
+  and **Fill** (filled or not, offered from three points on), drawn independently: a list can show its
+  fill alone, its border alone, or hide its points without a border. Below
+  them come the style of each part drawn, with a **Fill opacity**, a share of
+  the list's color (20 % by default). The fill closes the polygon of at least
+  three finite points whatever the border, on the canvas and in library
+  thumbnails. Automatic labels keep out of a filled polygon when they can,
+  the labels of its own points included. Stored as `fill` and
+  `fillOpacitySource` in `primitiveStyles.points` (format 13, #332).
 - The library panel is a gallery: 420 px wide by default instead of 320, it
   widens to the left from its edge (drag, arrow keys, double-click to reset),
   and its cards fill as many columns as it holds. A search field narrows My

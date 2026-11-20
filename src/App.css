@@ -2382,6 +2382,16 @@ span.object-kind {
   transform: scale(1.14, 1.3);
 }
 
+/* A named choice on one row: the name on the left, the buttons beside it. */
+.appearance-choice-row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
 .appearance-segmented {
   min-width: 0;
   display: grid;
@@ -3649,6 +3659,13 @@ body.canvas-gesture .expression-panel {
   transform-box: fill-box;
   transform-origin: center;
   transition: transform 350ms ease;
+}
+
+/* The inside of a filled point list, in its color at the list's fill opacity. */
+.point-list-fill {
+  fill: currentColor;
+  stroke: none;
+  pointer-events: none;
 }
 
 .point-list-connection {

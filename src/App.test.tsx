@@ -3304,7 +3304,7 @@ describe('point-list connection eligibility outside PGA', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: 'Z = [e1, e2]' } })
     fireEvent.click(screen.getByRole('button', { name: 'Open List (2) menu for Z' }))
     expect(screen.getByRole('switch', { name: 'Visible' })).toBeInTheDocument()
-    expect(screen.queryByRole('group', { name: 'Point list display' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Border' })).not.toBeInTheDocument()
     expect(document.querySelector('.point-list-connection')).toBeNull()
     fireEvent.keyDown(document, { key: 'Escape' })
   })
@@ -3380,14 +3380,14 @@ describe('PGA 2D foundation workflow', () => {
 
     // No connection is the default: markers only.
     fireEvent.click(screen.getByRole('button', { name: 'Open List (3) menu for P' }))
-    const display = screen.getByRole('group', { name: 'Point list display' })
-    expect(within(display).getByRole('button', { name: 'No connection' })).toHaveAttribute('aria-pressed', 'true')
+    const display = screen.getByRole('group', { name: 'Border' })
+    expect(within(display).getByRole('button', { name: 'No border' })).toHaveAttribute('aria-pressed', 'true')
     expect(connection()).toBeNull()
 
-    fireEvent.click(within(display).getByRole('button', { name: 'Open polyline' }))
+    fireEvent.click(within(display).getByRole('button', { name: 'Open border' }))
     expect(segmentCount()).toBe(2)
     expect(screen.getAllByLabelText(/^P\[\d\]$/)).toHaveLength(3)
-    fireEvent.click(within(display).getByRole('button', { name: 'Closed loop' }))
+    fireEvent.click(within(display).getByRole('button', { name: 'Closed border' }))
     expect(segmentCount()).toBe(3)
     // The segments take the item's color, like the markers.
     const markerColor = (screen.getByLabelText('P[0]').parentElement as HTMLElement).style.color
@@ -3424,8 +3424,8 @@ describe('PGA 2D foundation workflow', () => {
     expect(label().getAttribute('dominant-baseline') ?? label().getAttribute('text-anchor')).not.toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: 'Open List (3) menu for P' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Open polyline' }))
-    fireEvent.click(screen.getByRole('switch', { name: 'Show point markers' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open border' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Hide the points' }))
     fireEvent.keyDown(document, { key: 'Escape' })
     // Hidden, it no longer does: the label returns to top right.
     expect(label()).not.toHaveAttribute('dominant-baseline')
@@ -3437,26 +3437,23 @@ describe('PGA 2D foundation workflow', () => {
     const first = screen.getByRole('textbox', { name: 'Expression 1' })
     fireEvent.change(first, { target: { value: 'P = [point(0, 0), point(1, 0), point(1, 1)]' } })
     fireEvent.click(screen.getByRole('button', { name: 'Open List (3) menu for P' }))
-    const markers = screen.getByRole('switch', { name: 'Show point markers' })
-    // Hiding markers only makes sense once the points are connected.
-    expect(markers).toBeChecked()
-    expect(markers).toBeDisabled()
+    const shown = screen.getByRole('button', { name: 'Show the points' })
+    const hidden = screen.getByRole('button', { name: 'Hide the points' })
+    expect(shown).toHaveAttribute('aria-pressed', 'true')
 
-    fireEvent.click(screen.getByRole('button', { name: 'Closed loop' }))
-    expect(markers).toBeEnabled()
-    fireEvent.click(markers)
-    expect(markers).not.toBeChecked()
+    fireEvent.click(screen.getByRole('button', { name: 'Closed border' }))
+    fireEvent.click(hidden)
+    expect(hidden).toHaveAttribute('aria-pressed', 'true')
     expect(screen.queryByLabelText(/^P\[\d\]$/)).not.toBeInTheDocument()
     expect(document.querySelector('.point-list-connection')!.getAttribute('d')!.match(/M/g)).toHaveLength(3)
     // A list has no label: no Label section and no numbered labels (#226).
     expect(screen.queryByRole('switch', { name: 'Show label' })).not.toBeInTheDocument()
     expect(document.querySelectorAll('.object-label')).toHaveLength(0)
 
-    // Without a connection, markers return, whatever the stored marker visibility.
-    fireEvent.click(screen.getByRole('button', { name: 'No connection' }))
-    expect(markers).toBeDisabled()
-    expect(markers).toBeChecked()
-    expect(screen.getAllByLabelText(/^P\[\d\]$/)).toHaveLength(3)
+    // The points stay hidden without a border: the list draws nothing.
+    fireEvent.click(screen.getByRole('button', { name: 'No border' }))
+    expect(hidden).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryByLabelText(/^P\[\d\]$/)).not.toBeInTheDocument()
     expect(document.querySelector('.point-list-connection')).toBeNull()
 
     // Undo restores the segments-only display.
@@ -3464,6 +3461,9 @@ describe('PGA 2D foundation workflow', () => {
     fireEvent.click(within(history).getByRole('button', { name: 'Undo document change' }))
     expect(screen.queryByLabelText(/^P\[\d\]$/)).not.toBeInTheDocument()
     expect(document.querySelector('.point-list-connection')).not.toBeNull()
+    // Showing the points draws them over the border.
+    fireEvent.click(shown)
+    expect(screen.getAllByLabelText(/^P\[\d\]$/)).toHaveLength(3)
     fireEvent.keyDown(document, { key: 'Escape' })
   })
 
@@ -3475,7 +3475,7 @@ describe('PGA 2D foundation workflow', () => {
     const second = screen.getByRole('textbox', { name: 'Expression 2' })
     fireEvent.change(second, { target: { value: 'Q = P[[3, 0, 0, 2]]' } })
     fireEvent.click(screen.getByRole('button', { name: 'Open List (4) menu for Q' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Open polyline' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open border' }))
     fireEvent.keyDown(document, { key: 'Escape' })
 
     // Gathered order, including the repeated point, gives the segment order.
@@ -3496,7 +3496,7 @@ describe('PGA 2D foundation workflow', () => {
       fireEvent.change(second, { target: { value: source } })
       const name = source.slice(0, 1)
       fireEvent.click(screen.getByRole('button', { name: new RegExp(`^Open .* menu for ${name}$`) }))
-      expect(screen.queryByRole('group', { name: 'Point list display' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('group', { name: 'Border' })).not.toBeInTheDocument()
       fireEvent.keyDown(document, { key: 'Escape' })
     }
   })
@@ -3506,7 +3506,7 @@ describe('PGA 2D foundation workflow', () => {
     const first = screen.getByRole('textbox', { name: 'Expression 1' })
     fireEvent.change(first, { target: { value: 'L = [point(-1, 0), e01, point(1, 0)]' } })
     fireEvent.click(screen.getByRole('button', { name: 'Open List (3) menu for L' }))
-    const display = screen.getByRole('group', { name: 'Point list display' })
+    const display = screen.getByRole('group', { name: 'Border' })
     const marker = (name: string) => {
       const circle = screen.getByLabelText(name)
       return { x: circle.getAttribute('cx'), y: circle.getAttribute('cy') }
@@ -3515,7 +3515,7 @@ describe('PGA 2D foundation workflow', () => {
       .split('M').slice(1).map((link) => link.trim().split(/\s+/))
 
     // Open polyline: the vertical rays from L[0] and L[2] towards e01, upwards.
-    fireEvent.click(within(display).getByRole('button', { name: 'Open polyline' }))
+    fireEvent.click(within(display).getByRole('button', { name: 'Open border' }))
     const [a, b] = [marker('L[0]'), marker('L[2]')]
     const rays = links()
     expect(rays).toHaveLength(2)
@@ -3525,7 +3525,7 @@ describe('PGA 2D foundation workflow', () => {
       expect(Number(ray[4])).toBeLessThan(Number(origin.y))
     }
     // Closed loop adds the segment from L[2] back to L[0].
-    fireEvent.click(within(display).getByRole('button', { name: 'Closed loop' }))
+    fireEvent.click(within(display).getByRole('button', { name: 'Closed border' }))
     expect(links()).toHaveLength(3)
     expect(links()[2]).toEqual([b.x, b.y, 'L', a.x, a.y])
     fireEvent.keyDown(document, { key: 'Escape' })
@@ -3540,7 +3540,7 @@ describe('PGA 2D foundation workflow', () => {
       if (index < rows.length - 1) fireEvent.keyDown(row, { key: 'Enter' })
     })
     fireEvent.click(screen.getByRole('button', { name: 'Open List (2) menu for L' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Open polyline' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open border' }))
     fireEvent.keyDown(document, { key: 'Escape' })
     const path = () => document.querySelector('.point-list-connection')!.getAttribute('d')
     const marker = (name: string) => {
@@ -3563,8 +3563,8 @@ describe('PGA 2D foundation workflow', () => {
     const points = 'P = [point(0, 0), point(1, 0), point(1, 1)]'
     fireEvent.change(first, { target: { value: points } })
     fireEvent.click(screen.getByRole('button', { name: 'Open List (3) menu for P' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Closed loop' }))
-    fireEvent.click(screen.getByRole('switch', { name: 'Show point markers' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Closed border' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Hide the points' }))
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.queryByLabelText(/^P\[\d\]$/)).not.toBeInTheDocument()
 
@@ -3585,16 +3585,16 @@ describe('PGA 2D foundation workflow', () => {
     const first = screen.getByRole('textbox', { name: 'Expression 1' })
     fireEvent.change(first, { target: { value: 'L = [point(-1, 0), e01, point(1, 0)]' } })
     fireEvent.click(screen.getByRole('button', { name: 'Open List (3) menu for L' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Open polyline' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open border' }))
     expect(screen.getByLabelText('L[1]')).toHaveClass('vector')
 
-    fireEvent.click(screen.getByRole('switch', { name: 'Show point markers' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Hide the points' }))
     expect(screen.queryByLabelText(/^L\[\d\]$/)).not.toBeInTheDocument()
     expect(screen.queryByLabelText('L[1] at infinity')).not.toBeInTheDocument()
     expect(document.querySelector('.point-list-connection')!.getAttribute('d')!.match(/M/g)).toHaveLength(2)
 
-    // Without a connection, the ideal point is drawn again.
-    fireEvent.click(screen.getByRole('button', { name: 'No connection' }))
+    // Shown again, the ideal point is drawn again.
+    fireEvent.click(screen.getByRole('button', { name: 'Show the points' }))
     expect(screen.getByLabelText('L[1]')).toHaveClass('vector')
     fireEvent.keyDown(document, { key: 'Escape' })
   })
@@ -3626,7 +3626,23 @@ describe('PGA 2D foundation workflow', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: 'P = [point(0, 0), point(1, 0)]' } })
     fireEvent.click(screen.getByRole('button', { name: 'Open List (2) menu for P' }))
     expect(screen.queryByRole('switch', { name: 'Show lines' })).not.toBeInTheDocument()
-    expect(screen.getByRole('switch', { name: 'Show point markers' })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Points' })).toBeInTheDocument()
+    fireEvent.keyDown(document, { key: 'Escape' })
+  })
+
+  it('offers a fill only to a list of more than two points', () => {
+    selectPga()
+    const first = screen.getByRole('textbox', { name: 'Expression 1' })
+    fireEvent.change(first, { target: { value: 'P = [point(0, 0), point(1, 0)]' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Open List (2) menu for P' }))
+    expect(screen.getByRole('group', { name: 'Border' })).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Fill' })).not.toBeInTheDocument()
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    fireEvent.change(first, { target: { value: 'P = [point(0, 0), point(1, 0), point(1, 1)]' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Open List (3) menu for P' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Fill the polygon' }))
+    expect(document.querySelector('.point-list-fill')).not.toBeNull()
     fireEvent.keyDown(document, { key: 'Escape' })
   })
 
@@ -3634,7 +3650,7 @@ describe('PGA 2D foundation workflow', () => {
     selectPga()
     fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: 'P = point(1, 2)' } })
     fireEvent.click(screen.getByRole('button', { name: /^Open .* menu for P$/ }))
-    expect(screen.queryByRole('group', { name: 'Point list display' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Border' })).not.toBeInTheDocument()
     fireEvent.keyDown(document, { key: 'Escape' })
   })
 
@@ -3643,7 +3659,7 @@ describe('PGA 2D foundation workflow', () => {
     const first = screen.getByRole('textbox', { name: 'Expression 1' })
     fireEvent.change(first, { target: { value: 'P = point([0...1199], 0)' } })
     fireEvent.click(screen.getByRole('button', { name: 'Open List (1200) menu for P' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Closed loop' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Closed border' }))
     expect(document.querySelector('.point-list-connection')!.getAttribute('d')!.match(/M/g)).toHaveLength(1_000)
     fireEvent.keyDown(document, { key: 'Escape' })
   })
@@ -3653,7 +3669,7 @@ describe('PGA 2D foundation workflow', () => {
     const first = screen.getByRole('textbox', { name: 'Expression 1' })
     fireEvent.change(first, { target: { value: 'S = [point(1, 1)]' } })
     fireEvent.click(screen.getByRole('button', { name: 'Open List (1) menu for S' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Closed loop' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Closed border' }))
     expect(document.querySelector('.point-list-connection')).toBeNull()
     expect(screen.getByLabelText('S[0]')).toHaveClass('point-marker')
     // Two points close to a single visible segment.

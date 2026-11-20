@@ -51,7 +51,7 @@ export type ItemAppearanceSources = Readonly<{
   labelAngle: AppearanceSourceResult
   labelSize: AppearanceSourceResult
   labelDistance: AppearanceSourceResult
-  points: Readonly<{ pointSize: AppearanceSourceResult; strokeWidth: AppearanceSourceResult }>
+  points: Readonly<{ pointSize: AppearanceSourceResult; strokeWidth: AppearanceSourceResult; fillOpacity: AppearanceSourceResult }>
   lines: Readonly<{ strokeWidth: AppearanceSourceResult }>
   /** The label with its `${…}` insertions replaced; `null` for a plain label. */
   label: LabelTextResult | null
@@ -66,7 +66,7 @@ export const DEFAULT_APPEARANCE_SOURCES: ItemAppearanceSources = Object.freeze({
   labelAngle: DEFAULT,
   labelSize: DEFAULT,
   labelDistance: DEFAULT,
-  points: Object.freeze({ pointSize: DEFAULT, strokeWidth: DEFAULT }),
+  points: Object.freeze({ pointSize: DEFAULT, strokeWidth: DEFAULT, fillOpacity: DEFAULT }),
   lines: Object.freeze({ strokeWidth: DEFAULT }),
   label: null,
 })
@@ -123,7 +123,7 @@ function hasSource(appearance: ExpressionAppearance | undefined): boolean {
   return [
     appearance.strokeWidthSource, appearance.pointSizeSource, appearance.opacitySource,
     appearance.labelAngleSource, appearance.labelSizeSource, appearance.labelDistanceSource,
-    points?.pointSizeSource, points?.strokeWidthSource, lines?.strokeWidthSource,
+    points?.pointSizeSource, points?.strokeWidthSource, points?.fillOpacitySource, lines?.strokeWidthSource,
   ].some((source) => source !== undefined && source.trim() !== '') ||
     isLabelTemplate(appearance.label ?? '')
 }
@@ -158,6 +158,8 @@ export function evaluateAppearanceSources(
       points: {
         pointSize: resolveAppearanceSource('pointSize', points?.pointSizeSource, evaluate),
         strokeWidth: resolveAppearanceSource('strokeWidth', points?.strokeWidthSource, evaluate),
+        // A share of the list's color, from 0 to 100 like the opacity.
+        fillOpacity: resolveAppearanceSource('opacity', points?.fillOpacitySource, evaluate),
       },
       lines: {
         strokeWidth: resolveAppearanceSource('strokeWidth', lines?.strokeWidthSource, evaluate),

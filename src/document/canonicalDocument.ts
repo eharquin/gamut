@@ -24,7 +24,7 @@ export const MAX_DOCUMENT_BYTES = 4 * 1024 * 1024
 export const MAX_SOURCE_LENGTH = 65_536
 export const MAX_MIGRATION_STEPS = 32
 export type ThemeMode = 'system' | 'light' | 'dark'
-export const CURRENT_FORMAT_VERSION = 12
+export const CURRENT_FORMAT_VERSION = 13
 export type CanonicalPrimitiveStyles = Readonly<{ points: PointPrimitiveStyle; lines: LinePrimitiveStyle }>
 export type CanonicalAppearance = Readonly<{
   visible: boolean
@@ -394,6 +394,35 @@ export function migrateDocument(value: unknown): unknown {
       }
       continue
     }
+    if (version === 12) {
+      // Version 12 lists never filled the polygon of their points.
+      const withFill = (appearance: unknown) => {
+        if (appearance === null || typeof appearance !== 'object' || Array.isArray(appearance)) return appearance
+        const styles = (appearance as Record<string, unknown>).primitiveStyles
+        if (styles === null || typeof styles !== 'object' || Array.isArray(styles)) return appearance
+        const points = (styles as Record<string, unknown>).points
+        if (points === null || typeof points !== 'object' || Array.isArray(points)) return appearance
+        return {
+          ...appearance,
+          primitiveStyles: { ...styles, points: { ...points, fill: false, fillOpacitySource: '' } },
+        }
+      }
+      const appearance = document.appearance
+      current = {
+        ...document,
+        formatVersion: 13,
+        appearance: appearance !== null && typeof appearance === 'object' && !Array.isArray(appearance)
+          ? Object.fromEntries(Object.entries(appearance).map(([id, entry]) => [id, withFill(entry)]))
+          : appearance,
+        folders: Array.isArray(document.folders)
+          ? document.folders.map((folder: unknown) => folder !== null && typeof folder === 'object' && !Array.isArray(folder) &&
+            'appearance' in folder
+            ? { ...folder, appearance: withFill((folder as Record<string, unknown>).appearance) }
+            : folder)
+          : document.folders,
+      }
+      continue
+    }
     fail('DOCUMENT_FORMAT_VERSION', 'Unsupported format version ' + String(version) + '.')
   }
   fail('DOCUMENT_FORMAT_VERSION', 'Migration exceeded the maximum number of steps.')
@@ -480,7 +509,7 @@ function appearanceSource(value: unknown, path: string): string {
 
 function primitiveStyles(value: unknown, path: string): CanonicalPrimitiveStyles {
   const styles = record(value, path, ['points', 'lines'])
-  const points = record(styles.points, path + '.points', ['visible', 'pointStyle', 'pointSizeSource', 'connection', 'strokeStyle', 'strokeWidthSource'])
+  const points = record(styles.points, path + '.points', ['visible', 'pointStyle', 'pointSizeSource', 'connection', 'strokeStyle', 'strokeWidthSource', 'fill', 'fillOpacitySource'])
   const lines = record(styles.lines, path + '.lines', ['visible', 'strokeStyle', 'strokeWidthSource', 'orientationVisible'])
   return {
     points: {
@@ -490,6 +519,8 @@ function primitiveStyles(value: unknown, path: string): CanonicalPrimitiveStyles
       connection: oneOf(points.connection, POINT_LIST_DISPLAYS, path + '.points.connection'),
       strokeStyle: oneOf(points.strokeStyle, STROKE_STYLES, path + '.points.strokeStyle'),
       strokeWidthSource: appearanceSource(points.strokeWidthSource, path + '.points.strokeWidthSource'),
+      fill: truth(points.fill, path + '.points.fill'),
+      fillOpacitySource: appearanceSource(points.fillOpacitySource, path + '.points.fillOpacitySource'),
     },
     lines: {
       visible: truth(lines.visible, path + '.lines.visible'),
@@ -745,6 +776,8 @@ function canonicalAppearance(stored: ExpressionAppearance | undefined, style?: s
           connection: points?.connection ?? 'none',
           strokeStyle: points?.strokeStyle ?? 'solid',
           strokeWidthSource: points?.strokeWidthSource ?? '',
+          fill: points?.fill ?? false,
+          fillOpacitySource: points?.fillOpacitySource ?? '',
         },
         lines: {
           visible: lines?.visible ?? true,

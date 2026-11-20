@@ -782,9 +782,13 @@ export function ExpressionRow({
           idealPointDisplay={appearance?.idealPointDisplay ?? 'vector'}
           pointListDisplay={appearance?.primitiveStyles?.points?.connection ?? 'none'}
           pointMarkersVisible={appearance?.primitiveStyles?.points?.visible ?? true}
+          pointListFilled={appearance?.primitiveStyles?.points?.fill ?? false}
           pointListDisplayAvailable={evaluation?.status === 'valid' &&
             evaluation.valueType === 'list' &&
             pointListVertices(evaluation.elements) !== null}
+          pointListFillable={evaluation?.status === 'valid' &&
+            evaluation.valueType === 'list' &&
+            (pointListVertices(evaluation.elements)?.length ?? 0) > 2}
           listPrimitives={evaluation?.status === 'valid' && evaluation.valueType === 'list'
             ? listPrimitiveTypes(evaluation.elements)
             : undefined}

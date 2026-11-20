@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AUTO_LABEL_ORDER, DEFAULT_LABEL_SETTINGS, labelAt, labelBox, placeLabels, type LabelRequest, type LabelSettings } from './labels'
+import { AUTO_LABEL_ORDER, boxOverlapsArea, DEFAULT_LABEL_SETTINGS, labelAt, labelBox, placeLabels, type LabelRequest, type LabelSettings } from './labels'
 
 /** A diagonal position on the circle of the default radius 20: 20 / √2 along each axis. */
 const diagonal = 1 / Math.hypot(1, 1) * 20
@@ -66,6 +66,32 @@ describe('label placement', () => {
   it('goes top right when every position collides', () => {
     const everywhere = [{ ownerId: 'b', center: { x: 100, y: 100 }, radius: 200 }]
     expect(placeLabels([request('a')], everywhere, 1).get('a')).toEqual({ text: 'P', x: 100 + diagonal, y: 100 - diagonal })
+  })
+
+  it('keeps an automatic label out of a filled polygon, its own object\'s included', () => {
+    // A square filled to the top right of the anchor (screen y grows downwards).
+    const square = [{ x: 100, y: 100 }, { x: 200, y: 100 }, { x: 200, y: 0 }, { x: 100, y: 0 }]
+    // Top right and right lie inside it; bottom right is the first outside.
+    expect(placeLabels([request('a')], [], 1, [square]).get('a')).toMatchObject({ baseline: 'hanging', x: 100 + diagonal })
+    // Without the area, the label stays top right, inside it.
+    expect(placeLabels([request('a')], [], 1).get('a')).toEqual({ text: 'P', x: 100 + diagonal, y: 100 - diagonal })
+  })
+
+  it('prefers a position clear of other labels and points to one outside a filled polygon', () => {
+    // Everything but the top right is taken by another object's point, and the top right is filled.
+    const square = [{ x: 100, y: 100 }, { x: 200, y: 100 }, { x: 200, y: 0 }, { x: 100, y: 0 }]
+    const ring = AUTO_LABEL_ORDER.filter((anchor) => anchor !== 'top-right')
+      .map((anchor) => ({ ownerId: 'b', center: labelAt(request('a'), anchor, 1), radius: 4 }))
+    expect(placeLabels([request('a')], ring, 1, [square]).get('a')).toEqual({ text: 'P', x: 100 + diagonal, y: 100 - diagonal })
+  })
+
+  it('tells when a box meets a polygon: a corner inside, a vertex inside, or crossing edges', () => {
+    const triangle = [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 0, y: 100 }]
+    expect(boxOverlapsArea({ left: 10, top: 10, right: 20, bottom: 20 }, triangle)).toBe(true)
+    expect(boxOverlapsArea({ left: -10, top: -10, right: 5, bottom: 5 }, triangle)).toBe(true)
+    // A thin box across the hypotenuse, with no corner inside and no vertex inside.
+    expect(boxOverlapsArea({ left: 40, top: 45, right: 60, bottom: 55 }, triangle)).toBe(true)
+    expect(boxOverlapsArea({ left: 60, top: 60, right: 90, bottom: 90 }, triangle)).toBe(false)
   })
 
   it('keeps a fixed anchor even when it collides', () => {

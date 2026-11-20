@@ -9,7 +9,7 @@ import {
   type AppearanceSetting,
   type ItemAppearanceSources,
 } from '../application/evaluateAppearanceSources'
-import { DEFAULT_POINT_SIZE, DEFAULT_STROKE_WIDTHS, POINT_OUTER_SCALE } from '../visualization/stroke'
+import { DEFAULT_FILL_OPACITY, DEFAULT_POINT_SIZE, DEFAULT_STROKE_WIDTHS, POINT_OUTER_SCALE } from '../visualization/stroke'
 import { PointShape } from '../visualization/PointShape'
 import { DEFAULT_LABEL_DISTANCE, DEFAULT_LABEL_SIZE } from '../visualization/labels'
 
@@ -39,6 +39,10 @@ type AppearancePopoverProps = Readonly<{
   /** The evaluated item is a list of finite and ideal points holding at least one finite point. */
   pointListDisplayAvailable?: boolean
   pointMarkersVisible?: boolean
+  /** Whether a list of points fills the polygon they bound. */
+  pointListFilled?: boolean
+  /** Whether the list holds more than two points, so that it bounds a polygon to fill. */
+  pointListFillable?: boolean
   /** Primitive types the evaluated list holds; each gets its own section. */
   listPrimitives?: Readonly<{ points: boolean; lines: boolean }>
   linesVisible?: boolean
@@ -104,6 +108,8 @@ export function AppearancePopover({
   pointListDisplay = 'none',
   pointListDisplayAvailable = false,
   pointMarkersVisible = true,
+  pointListFilled = false,
+  pointListFillable = false,
   listPrimitives,
   linesVisible = true,
   appearance = {},
@@ -311,7 +317,9 @@ export function AppearancePopover({
   ) : null
   const styleContent = folder ? null : styleFor(kind)
   const pointsBlock = appearance.primitiveStyles?.points
-  const markersShown = pointMarkersVisible || !connected
+  // A list holding other entities than points always draws its points.
+  const markersShown = pointMarkersVisible || !pointListDisplayAvailable
+  const filled = pointListDisplayAvailable && pointListFillable && pointListFilled
 
   return createPortal(
     <div
@@ -427,15 +435,32 @@ export function AppearancePopover({
         const content = styleFor(each)
         return content && <Fragment key={each}>{section(FOLDER_SECTION_TITLES[each] ?? each, content)}</Fragment>
       })}
-      {list && listPrimitives?.points && onPointMarkersVisibleChange && section('Points', (pointListDisplayAvailable && onPointListDisplayChange) || onAppearanceChange ? <>
-        {pointListDisplayAvailable && onPointListDisplayChange &&
-          <Segmented label="Point list display" value={pointListDisplay} onChange={onPointListDisplayChange} options={[
-            ['none', 'No connection', CONNECTION_ICONS.none],
-            ['open-polyline', 'Open polyline', CONNECTION_ICONS['open-polyline']],
-            ['closed-loop', 'Closed loop', CONNECTION_ICONS['closed-loop']],
-          ]} />}
-        {/* The points' own style: markers while drawn, then the links while connected. */}
-        {onAppearanceChange && (markersShown || connected) && <div className="appearance-sub">
+      {list && listPrimitives?.points && onPointMarkersVisibleChange && section('Points', <>
+        {/* A list of points only draws its points, its border and its fill independently. */}
+        {pointListDisplayAvailable && <>
+          <ChoiceRow label="Points">
+            <Segmented label="Points" value={pointMarkersVisible ? 'shown' : 'hidden'} options={[
+              ['shown', 'Show the points', POINT_PART_ICONS.shown],
+              ['hidden', 'Hide the points', POINT_PART_ICONS.hidden],
+            ]} onChange={(shown) => onPointMarkersVisibleChange(shown === 'shown')} />
+          </ChoiceRow>
+          {onPointListDisplayChange && <ChoiceRow label="Border">
+            <Segmented label="Border" value={pointListDisplay} onChange={onPointListDisplayChange} options={[
+              ['closed-loop', 'Closed border', POINT_PART_ICONS.loop],
+              ['open-polyline', 'Open border', POINT_PART_ICONS.open],
+              ['none', 'No border', POINT_PART_ICONS.noBorder],
+            ]} />
+          </ChoiceRow>}
+          {/* Only more than two points bound a polygon. */}
+          {onAppearanceChange && pointListFillable && <ChoiceRow label="Fill">
+            <Segmented label="Fill" value={filled ? 'filled' : 'empty'} options={[
+              ['filled', 'Fill the polygon', POINT_PART_ICONS.filled],
+              ['empty', 'No fill', POINT_PART_ICONS.empty],
+            ]} onChange={(fill) => change({ primitiveStyles: { points: { fill: fill === 'filled' } } })} />
+          </ChoiceRow>}
+        </>}
+        {/* The style of each part drawn: markers, border, fill. */}
+        {onAppearanceChange && (markersShown || connected || filled) && <div className="appearance-sub">
           <h4>Style</h4>
           {markersShown && <>
             <Segmented label="Point style" value={pointsBlock?.pointStyle ?? 'dot'} options={POINT_OPTIONS}
@@ -451,7 +476,7 @@ export function AppearancePopover({
             }]} />
           </>}
           {connected && <SourceFields leading={
-            <Segmented label="Connection style" value={pointsBlock?.strokeStyle ?? 'solid'} options={STROKE_OPTIONS}
+            <Segmented label="Border style" value={pointsBlock?.strokeStyle ?? 'solid'} options={STROKE_OPTIONS}
               onChange={(strokeStyle) => change({ primitiveStyles: { points: { strokeStyle } } })} />
           } fields={[{
             setting: 'strokeWidth',
@@ -462,16 +487,17 @@ export function AppearancePopover({
             onChange: (strokeWidthSource) => change(
               { primitiveStyles: { points: { strokeWidthSource } } }, 'points.strokeWidth'),
           }]} />}
+          {filled && <SourceFields fields={[{
+            setting: 'opacity',
+            label: 'Fill opacity',
+            source: pointsBlock?.fillOpacitySource ?? '',
+            placeholder: DEFAULT_FILL_OPACITY,
+            error: sources.points.fillOpacity.error,
+            onChange: (fillOpacitySource) => change(
+              { primitiveStyles: { points: { fillOpacitySource } } }, 'points.fillOpacity'),
+          }]} />}
         </div>}
-      </> : null,
-        // Markers can be hidden only while the points are connected (#205).
-        {
-          label: 'Show point markers',
-          checked: pointMarkersVisible || !connected,
-          disabled: !connected,
-          onChange: onPointMarkersVisibleChange,
-        },
-      )}
+      </>)}
       {list && listPrimitives?.lines && onLinesVisibleChange && section('Lines',
         linesVisible && onAppearanceChange ? (
           <div className="appearance-sub">
@@ -702,6 +728,16 @@ function Segmented<T extends string>({ label, value, options, onChange }: Readon
   )
 }
 
+/** A named row holding one choice, its name on the left. */
+function ChoiceRow({ label, children }: Readonly<{ label: string; children: ReactNode }>) {
+  return (
+    <div className="appearance-choice-row">
+      <span aria-hidden="true">{label}</span>
+      {children}
+    </div>
+  )
+}
+
 type SourceFieldSpec = Readonly<{
   setting: AppearanceSetting
   label: string
@@ -852,16 +888,15 @@ const IDEAL_ICONS = {
   </>,
 }
 
-const CONNECTION_ICONS = {
-  none: <><circle cx="6" cy="14" r="2.3" /><circle cx="14" cy="5" r="2.3" /><circle cx="22" cy="14" r="2.3" /></>,
-  'open-polyline': <>
-    <path d="M6 14 L14 5 L22 14" fill="none" />
-    <circle cx="6" cy="14" r="2.3" /><circle cx="14" cy="5" r="2.3" /><circle cx="22" cy="14" r="2.3" />
-  </>,
-  'closed-loop': <>
-    <path d="M6 14 L14 5 L22 14 Z" />
-    <circle cx="6" cy="14" r="2.3" /><circle cx="14" cy="5" r="2.3" /><circle cx="22" cy="14" r="2.3" />
-  </>,
+/** The three parts of a list of points, drawn or not: its points, its border, its fill. */
+const POINT_PART_ICONS = {
+  shown: <><circle cx="6" cy="14" r="2.3" fill="currentColor" /><circle cx="14" cy="5" r="2.3" fill="currentColor" /><circle cx="22" cy="14" r="2.3" fill="currentColor" /></>,
+  hidden: <g opacity=".45" fill="none" strokeDasharray="1.6 1.6"><circle cx="6" cy="14" r="2.3" /><circle cx="14" cy="5" r="2.3" /><circle cx="22" cy="14" r="2.3" /></g>,
+  loop: <path d="M6 14 L14 5 L22 14 Z" fill="none" />,
+  open: <path d="M6 14 L14 5 L22 14" fill="none" />,
+  noBorder: <path d="M6 14 L14 5 L22 14 Z" fill="none" opacity=".45" strokeDasharray="1.6 2" />,
+  filled: <path d="M6 14 L14 5 L22 14 Z" fill="currentColor" fillOpacity=".4" stroke="none" />,
+  empty: <path d="M6 14 L14 5 L22 14 Z" fill="none" opacity=".45" strokeDasharray="1.6 2" />,
 }
 
 const PLAYBACK_ICONS = {

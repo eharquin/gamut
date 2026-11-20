@@ -13,6 +13,7 @@ import {
   type VisualizationPrimitive,
 } from './primitives'
 import { toScreen, type Viewport2d } from './viewport'
+import { DEFAULT_FILL_OPACITY } from './stroke'
 import type { LabelSettings } from './labels'
 
 /** One primitive selected for rendering, with its resolved appearance. */
@@ -66,7 +67,15 @@ export type RenderedPointListConnection = Readonly<{
   strokeStyle: StrokeStyle
   strokeWidth: number | null
   segments: readonly PointListLink[]
+  /**
+   * The polygon a filled list fills, its finite points in order; null when the
+   * list is not filled, or holds an ideal point or fewer than three points.
+   */
+  fill: readonly Point2d[] | null
+  /** The fill's share of the list's color, from 0 to 1. */
+  fillOpacity: number
 }>
+
 
 const finitePoint = (point: Point2d) => Number.isFinite(point.x) && Number.isFinite(point.y)
 
@@ -167,6 +176,32 @@ function rayExit(
 }
 
 /**
+ * The polygon a filled point list fills: its vertices in order, when there are
+ * at least three and all are finite, since an ideal point bounds no area. The
+ * polygon is closed whatever the border, which may be open or absent.
+ */
+export function pointListFill(
+  vertices: readonly PointListVertex[],
+  filled: boolean,
+): readonly Point2d[] | null {
+  if (!filled || vertices.length < 3) return null
+  const points: Point2d[] = []
+  for (const vertex of vertices) {
+    if (vertex.kind !== 'finite') return null
+    points.push(vertex.point)
+  }
+  return points
+}
+
+/** Screen-space path of a filled point list's polygon. */
+export function layoutPointListFill(points: readonly Point2d[], viewport: Viewport2d): string {
+  return points.map((point, index) => {
+    const screen = toScreen(viewport, point)
+    return `${index === 0 ? 'M' : 'L'} ${screen.x} ${screen.y}`
+  }).join(' ') + ' Z'
+}
+
+/**
  * Screen-space path drawing every link of a point-list connection; rays are
  * clipped to the viewport and omitted when they do not cross it.
  */
@@ -220,7 +255,7 @@ export function collectRenderedPrimitives(
       : interpretation.describe(evaluated.evaluation.entity)
     const {
       visible, color, labelVisible: ownLabelVisible, displayLabel, borderVisible, orientationVisible, bivectorShape,
-      idealPointDisplay, pointListDisplay, pointMarkersVisible, linesVisible, strokeStyle,
+      idealPointDisplay, pointListDisplay, pointMarkersVisible, pointListFilled, linesVisible, strokeStyle,
       lineStrokeStyle, linesOrientationVisible, pointStyle, listPointStyle, connectionStrokeStyle, labelAnchor, labelOnly: ownLabelOnly,
     } = resolveItemAppearance(
       appearance[evaluated.item.id],
@@ -246,14 +281,15 @@ export function collectRenderedPrimitives(
       ).visible
       // Eligibility is decided on the whole list, so that a mixed list whose
       // other entities have no primitive is never connected.
-      const vertices = pointListDisplay === 'none'
-        ? null
-        : pointListVertices(evaluated.evaluation.elements)
-      const segments = vertices
-        ? pointListSegments(vertices.slice(0, elements.length), pointListDisplay)
-        : []
-      if (segments.length > 0) connections.push({
-        id: evaluated.item.id, color, opacity, segments,
+      // A list of points only draws its points, its border and its fill
+      // independently; a list holding other entities always draws its points.
+      const vertices = pointListVertices(evaluated.evaluation.elements)
+      const shownVertices = vertices?.slice(0, elements.length) ?? null
+      const segments = shownVertices ? pointListSegments(shownVertices, pointListDisplay) : []
+      const fill = shownVertices ? pointListFill(shownVertices, pointListFilled) : null
+      if (segments.length > 0 || fill) connections.push({
+        id: evaluated.item.id, color, opacity, segments, fill,
+        fillOpacity: (sources.points.fillOpacity.value ?? DEFAULT_FILL_OPACITY) / 100,
         strokeStyle: connectionStrokeStyle, strokeWidth: sources.points.strokeWidth.value,
       })
       const markerVisible = vertices === null || pointMarkersVisible

@@ -178,6 +178,28 @@ describe('point styles and sizes (#222)', () => {
     expect(connections[0]).toMatchObject({ strokeStyle: 'dashed', strokeWidth: 3 })
   })
 
+  it('draws the points, the border and the fill of a list independently', () => {
+    const triangle = 'P = [point(0, 0), point(2, 1), point(1, 3)]'
+    const draw = (points: Record<string, unknown>) =>
+      rendered([['p', triangle], ['o', 'o = 50']], { p: { primitiveStyles: { points } } })
+    // A fill alone, at its default opacity, with no border and no points.
+    const fillOnly = draw({ visible: false, connection: 'none', fill: true })
+    expect(fillOnly.connections).toHaveLength(1)
+    expect(fillOnly.connections[0]).toMatchObject({ id: 'p', segments: [], fillOpacity: 0.2 })
+    expect(fillOnly.connections[0].fill!.map(({ x, y }) => [x + 0, y + 0])).toEqual([[0, 0], [2, 1], [1, 3]])
+    expect(fillOnly.rendered.every((element) => element.markerVisible === false)).toBe(true)
+    // An open border with a fill: the fill still closes the polygon.
+    const open = draw({ connection: 'open-polyline', fill: true, fillOpacitySource: 'o' })
+    expect(open.connections[0].segments).toHaveLength(2)
+    expect(open.connections[0]).toMatchObject({ fillOpacity: 0.5 })
+    // Points hidden without border or fill: nothing but the list's name.
+    const nothing = draw({ visible: false, connection: 'none', fill: false })
+    expect(nothing.connections).toEqual([])
+    expect(nothing.rendered.every((element) => element.markerVisible === false)).toBe(true)
+    // A list too short to fill draws no fill.
+    expect(rendered([['q', 'Q = [point(0, 0), point(2, 1)]']], { q: { primitiveStyles: { points: { fill: true } } } }).connections).toEqual([])
+  })
+
   it('keeps the default dot and size when nothing is set', () => {
     const { rendered: [point], connections } = rendered(
       [['p', 'P = [point(0, 0), point(2, 1)]']], { p: { primitiveStyles: { points: { connection: 'open-polyline' } } } })
