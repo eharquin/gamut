@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { paletteEntry, RAMP_ORDER, STUDIO_COLORS, studioColor } from './appearancePalette'
-import { popoverPosition } from './popoverPosition'
+import { keptPopoverTop, popoverPosition } from './popoverPosition'
 import type { ExpressionAppearance, ExpressionControl, LabelAnchor, PointListDisplay, PointStyle, StrokeStyle } from '../document/expressionDocument'
 import {
   APPEARANCE_SETTING_RANGES,
@@ -164,8 +164,23 @@ export function AppearancePopover({
       current.top === next.top && current.left === next.left ? current : next)
   }, [anchorRef])
 
-  // Re-measure after every render: sections appear or disappear with the settings.
-  useLayoutEffect(place)
+  // Placed once against its anchor when it opens, the menu then stays where it
+  // is while its content changes height (a section folds, options appear with
+  // a setting), moving up only as far as it needs to stay inside the window.
+  const placedRef = useRef(false)
+  useLayoutEffect(() => {
+    if (!placedRef.current) {
+      placedRef.current = true
+      place()
+      return
+    }
+    const measured = ref.current?.scrollHeight ?? 0
+    if (measured <= 0) return
+    setPlacement((current) => {
+      const top = keptPopoverTop(current.top, measured)
+      return top === current.top ? current : { ...current, top }
+    })
+  })
 
   // Follow the anchor when the window is resized or any container scrolls.
   useEffect(() => {

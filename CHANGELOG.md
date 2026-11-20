@@ -53,6 +53,10 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Interface and accessibility
 
+- The appearance menu no longer moves when one of its sections folds or
+  unfolds, or when a setting shows or hides options: placed once against its
+  swatch, it stays where it is and moves up only as far as it needs to stay
+  in the window (#330).
 - The library panel is a gallery: 420 px wide by default instead of 320, it
   widens to the left from its edge (drag, arrow keys, double-click to reset),
   and its cards fill as many columns as it holds. A search field narrows My
