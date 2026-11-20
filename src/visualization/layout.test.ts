@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { layoutIdealArrow, layoutIdealMarker, layoutLineAtInfinity, layoutLineSelection, layoutPointListConnection, layoutUnboundedLine, lineOrientationTicks, pointListSegments, pointListVertices } from './layout'
+import { layoutIdealArrow, layoutIdealMarker, layoutLineAtInfinity, layoutLineSelection, layoutPointListConnection, layoutPointListFill, layoutUnboundedLine, lineOrientationTicks, pointListFill, pointListSegments, pointListVertices } from './layout'
 import type { Viewport2d } from './viewport'
 
 const viewport: Viewport2d = { width: 800, height: 600, centerX: 0, centerY: 0, pixelsPerUnit: 50 }
@@ -126,6 +126,17 @@ describe('point-list connections', () => {
     const segments = pointListSegments(pointListVertices(square)!, 'closed-loop')
     expect(segments).toHaveLength(4)
     expect(segments[3]).toEqual(segment([0, 1], [0, 0]))
+  })
+
+  it('fills the polygon of at least three finite points, whatever the border', () => {
+    const vertices = pointListVertices(square)!
+    expect(pointListFill(vertices, true)).toEqual([{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 1 }])
+    expect(layoutPointListFill(pointListFill(vertices, true)!, viewport))
+      .toBe('M 400 300 L 450 300 L 450 250 L 400 250 Z')
+    // Only a filled list fills, and only with three finite points: an ideal point bounds no area.
+    expect(pointListFill(vertices, false)).toBeNull()
+    expect(pointListFill([finite(0, 0), finite(2, 1)], true)).toBeNull()
+    expect(pointListFill([finite(-1, 0), toward(0, 1), finite(1, 0)], true)).toBeNull()
   })
 
   it('draws one segment for two points and none for zero or one', () => {

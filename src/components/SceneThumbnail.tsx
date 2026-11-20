@@ -9,6 +9,7 @@ import {
   collectRenderedPrimitives,
   layoutOrientedArea,
   layoutOrientedSegment,
+  layoutPointListFill,
   layoutUnboundedLine,
   type RenderedPrimitive,
 } from '../visualization/layout'
@@ -142,6 +143,10 @@ export const SceneThumbnail = memo(function SceneThumbnail({ document, registry 
           return <path key={`area-${entry.id}`} d={layout.path} fill={entry.color} fillOpacity={0.25 * (entry.opacity ?? 1)}
             stroke={entry.borderVisible ? entry.color : 'none'} strokeOpacity={entry.opacity ?? 1} />
         })}
+        {drawing.rendered.connections.map((connection) => connection.fill && (
+          <path key={`fill-${connection.id}`} d={layoutPointListFill(connection.fill, viewport)}
+            fill={connection.color} fillOpacity={connection.fillOpacity * (connection.opacity ?? 1)} stroke="none" />
+        ))}
         {drawing.rendered.connections.map((connection) => connection.segments.map((segment, index) => {
           if (segment.kind !== 'segment') return null
           const start = toScreen(viewport, segment.start)

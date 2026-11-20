@@ -450,23 +450,34 @@ export type PointListConnectionGlyphProps = Readonly<{
   strokeStyle?: StrokeStyle
   /** Width in reference pixels; `null` keeps the default 2. */
   strokeWidth?: number | null
+  /** The polygon of a filled list, drawn under its links; null otherwise. */
+  fillPath?: string | null
+  /** The fill's share of the color, from 0 to 1. */
+  fillOpacity?: number
 }>
 
 /**
- * The segments joining a connected point list, drawn beneath its markers.
- * They carry no handle: the markers keep the list's labels and manipulation.
+ * The segments joining a connected point list, drawn beneath its markers,
+ * over the tinted inside of a filled list. They carry no handle: the markers
+ * keep the list's labels and manipulation.
  */
 export function PointListConnectionGlyph({
-  path, color, scale, opacity, strokeStyle = 'solid', strokeWidth = null,
+  path, color, scale, opacity, strokeStyle = 'solid', strokeWidth = null, fillPath = null, fillOpacity = 0.2,
 }: PointListConnectionGlyphProps) {
   const width = (strokeWidth ?? DEFAULT_STROKE_WIDTHS.connection) * scale
-  return <path
+  // A fill without border has no links to draw.
+  const links = path && <path
     className="point-list-connection"
     d={path}
     style={{ ...glyphStyle(color, opacity), ...strokePattern(strokeStyle, width) }}
     strokeWidth={width}
     aria-hidden="true"
   />
+  if (!fillPath) return links || null
+  return <g aria-hidden="true">
+    <path className="point-list-fill" d={fillPath} style={glyphStyle(color, opacity)} fillOpacity={fillOpacity} />
+    {links}
+  </g>
 }
 
 export type LineSelection = Readonly<{

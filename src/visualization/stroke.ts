@@ -59,3 +59,6 @@ export const DEFAULT_POINT_SIZE = 4.5
  * 10 px for the 4.5 px core. A hovered or dragged core grows to fill it.
  */
 export const POINT_OUTER_SCALE = 10 / 4.5
+
+/** The default share of a list's color its fill takes, in percent. */
+export const DEFAULT_FILL_OPACITY = 20

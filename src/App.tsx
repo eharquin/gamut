@@ -85,7 +85,7 @@ import {
   type AnchorCandidate,
   type AnchorProximity,
 } from './visualization/anchoring'
-import { collectRenderedPrimitives, layoutIdealArrow, layoutIdealMarker, layoutLineAtInfinity, layoutLineSelection, layoutOrientedArea, layoutOrientedSegment, layoutPointListConnection, layoutUnboundedLine, lineNormalLength, lineOrientationTicks } from './visualization/layout'
+import { collectRenderedPrimitives, layoutIdealArrow, layoutIdealMarker, layoutLineAtInfinity, layoutLineSelection, layoutOrientedArea, layoutOrientedSegment, layoutPointListConnection, layoutPointListFill, layoutUnboundedLine, lineNormalLength, lineOrientationTicks } from './visualization/layout'
 import { requireAvailableAlgebra } from './application/algebraAvailability'
 import {
   DocumentFormatError,
@@ -1717,6 +1717,9 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
       addSegmentObstacles(id, arrow)
     } else if (marker) labelAnchors.set(id, marker.tail)
   })
+  // Automatic labels keep out of filled point lists when they can.
+  const labelAreas = renderedConnections.flatMap(({ fill }) =>
+    fill ? [fill.map((point) => toScreen(viewport, point))] : [])
   const labelRequests = renderedPrimitives.flatMap(({ id, label, labelSettings }) => {
     const at = labelAnchors.get(id)
     return label && at ? [{ key: id, ownerId: ownerOf(id), text: label, at, settings: labelSettings }] : []
@@ -1725,13 +1728,13 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
   // when its inputs change, not on every frame of an unrelated animation.
   const labelPlacementKey = labelRequests.length === 0
     ? ''
-    : JSON.stringify([labelRequests, labelObstacles, expressionDoc.view.display.objectScale])
+    : JSON.stringify([labelRequests, labelObstacles, labelAreas, expressionDoc.view.display.objectScale])
   if (labelPlacementCache.current?.key !== labelPlacementKey) {
     labelPlacementCache.current = {
       key: labelPlacementKey,
       placed: labelRequests.length === 0
         ? new Map()
-        : placeLabels(labelRequests, labelObstacles, expressionDoc.view.display.objectScale),
+        : placeLabels(labelRequests, labelObstacles, expressionDoc.view.display.objectScale, labelAreas),
     }
   }
   const placedLabels = labelPlacementCache.current.placed
@@ -3358,10 +3361,12 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
                     />}
                   </g>
                 }),
-                ...renderedConnections.map(({ id, segments, color, opacity, strokeStyle, strokeWidth }) => (
+                ...renderedConnections.map(({ id, segments, fill, fillOpacity, color, opacity, strokeStyle, strokeWidth }) => (
                   <PointListConnectionGlyph
                     key={`connection-${id}`}
                     path={layoutPointListConnection(segments, viewport)}
+                    fillPath={fill ? layoutPointListFill(fill, viewport) : null}
+                    fillOpacity={fillOpacity}
                     color={color}
                     scale={objectRenderScale}
                     opacity={opacity}

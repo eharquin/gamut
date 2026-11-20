@@ -147,7 +147,7 @@ describe('appearance menu', () => {
       pointListDisplayAvailable: true, onPointListDisplayChange: vi.fn(), onPointMarkersVisibleChange: vi.fn(), onLinesVisibleChange: lists,
     })
     expect(screen.getByRole('button', { name: 'Points' })).toBeInTheDocument()
-    expect(screen.getByRole('group', { name: 'Point list display' })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Border' })).toBeInTheDocument()
     expect(screen.queryByRole('switch', { name: 'Show lines' })).not.toBeInTheDocument()
   })
 
@@ -157,8 +157,9 @@ describe('appearance menu', () => {
       kind: 'List (2)', listPrimitives: { points: true, lines: true }, linesVisible: true,
       onPointListDisplayChange: vi.fn(), onPointMarkersVisibleChange: vi.fn(), onLinesVisibleChange,
     })
-    expect(screen.queryByRole('group', { name: 'Point list display' })).not.toBeInTheDocument()
-    expect(screen.getByRole('switch', { name: 'Show point markers' })).toBeDisabled()
+    // Its points are always drawn: no choice of points, border or fill.
+    for (const part of ['Points', 'Border', 'Fill'])
+      expect(screen.queryByRole('group', { name: part })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('switch', { name: 'Show lines' }))
     expect(onLinesVisibleChange).toHaveBeenCalledWith(false)
   })
@@ -352,41 +353,58 @@ describe('point style and size settings (#222)', () => {
     expect(onAppearanceChange).toHaveBeenLastCalledWith({ pointSizeSource: 's' }, 'pointSize')
   })
 
-  it('gives the Points of a list their Style: markers, then the links while connected', () => {
+  it('draws the points, the border and the fill of a list from three rows, each with its style', () => {
     const onAppearanceChange = vi.fn()
+    const onPointMarkersVisibleChange = vi.fn()
+    const onPointListDisplayChange = vi.fn()
     const base = {
-      kind: 'List (3)', listPrimitives: { points: true, lines: false }, onPointMarkersVisibleChange: vi.fn(),
-      onPointListDisplayChange: vi.fn(), pointListDisplayAvailable: true, onAppearanceChange,
+      kind: 'List (3)', listPrimitives: { points: true, lines: false }, onPointMarkersVisibleChange,
+      onPointListDisplayChange, pointListDisplayAvailable: true, pointListFillable: true, onAppearanceChange,
       appearance: { pointStyle: 'cross' as const, primitiveStyles: { points: { pointSizeSource: '3' } } },
     }
+    const section = () => screen.getByRole('group', { name: 'Points' }).closest('section')!
+    const groups = () => within(section()).getAllByRole('group').map((group) => group.getAttribute('aria-label'))
+    const choice = (group: string) => within(within(section()).getByRole('group', { name: group }))
+      .getAllByRole('button').map((button) => [button.getAttribute('aria-label'), button.getAttribute('aria-pressed')])
+
+    // Points only, the default: yes, no border, no fill.
     open({ ...base, pointListDisplay: 'none' })
-    let points = screen.getByRole('switch', { name: 'Show point markers' }).closest('section')!
-    expect(within(points).getAllByRole('group').map((group) => group.getAttribute('aria-label')))
-      .toEqual(['Point list display', 'Point style'])
+    expect(choice('Points')).toEqual([['Show the points', 'true'], ['Hide the points', 'false']])
+    expect(choice('Border')).toEqual([['Closed border', 'false'], ['Open border', 'false'], ['No border', 'true']])
+    expect(choice('Fill')).toEqual([['Fill the polygon', 'false'], ['No fill', 'true']])
+    expect(groups()).toEqual(['Points', 'Border', 'Fill', 'Point style'])
     // No inheritance from the item's own point style.
-    expect(within(points).getByRole('button', { name: 'Dot' })).toHaveAttribute('aria-pressed', 'true')
-    expect(within(points).getByRole('textbox', { name: 'Size' })).toHaveValue('3')
-    fireEvent.click(within(points).getByRole('button', { name: 'Plus' }))
-    expect(onAppearanceChange).toHaveBeenLastCalledWith({ primitiveStyles: { points: { pointStyle: 'plus' } } }, undefined)
+    expect(within(section()).getByRole('button', { name: 'Dot' })).toHaveAttribute('aria-pressed', 'true')
+    expect(within(section()).getByRole('textbox', { name: 'Size' })).toHaveValue('3')
+    fireEvent.click(within(section()).getByRole('button', { name: 'Hide the points' }))
+    expect(onPointMarkersVisibleChange).toHaveBeenLastCalledWith(false)
+    fireEvent.click(within(section()).getByRole('button', { name: 'Closed border' }))
+    expect(onPointListDisplayChange).toHaveBeenLastCalledWith('closed-loop')
+    fireEvent.click(within(section()).getByRole('button', { name: 'Fill the polygon' }))
+    expect(onAppearanceChange).toHaveBeenLastCalledWith({ primitiveStyles: { points: { fill: true } } }, undefined)
     cleanup()
 
-    open({ ...base, pointListDisplay: 'open-polyline' })
-    points = screen.getByRole('switch', { name: 'Show point markers' }).closest('section')!
-    expect(within(points).getAllByRole('group').map((group) => group.getAttribute('aria-label')))
-      .toEqual(['Point list display', 'Point style', 'Connection style'])
-    const width = within(points).getByRole('textbox', { name: 'Width' })
+    // An open border, no points and a fill: the border's style, then the fill's opacity.
+    open({ ...base, pointListDisplay: 'open-polyline', pointMarkersVisible: false, pointListFilled: true })
+    expect(groups()).toEqual(['Points', 'Border', 'Fill', 'Border style'])
+    const width = within(section()).getByRole('textbox', { name: 'Width' })
     expect(width).toHaveAttribute('placeholder', '2')
     fireEvent.change(width, { target: { value: 'w' } })
     expect(onAppearanceChange).toHaveBeenLastCalledWith({ primitiveStyles: { points: { strokeWidthSource: 'w' } } }, 'points.strokeWidth')
-    fireEvent.click(within(points).getByRole('button', { name: 'Dashed' }))
-    expect(onAppearanceChange).toHaveBeenLastCalledWith({ primitiveStyles: { points: { strokeStyle: 'dashed' } } }, undefined)
+    const opacity = within(section()).getByRole('textbox', { name: 'Fill opacity' })
+    expect(opacity).toHaveAttribute('placeholder', '20')
+    fireEvent.change(opacity, { target: { value: '35' } })
+    expect(onAppearanceChange).toHaveBeenLastCalledWith({ primitiveStyles: { points: { fillOpacitySource: '35' } } }, 'points.fillOpacity')
     cleanup()
 
-    // Links alone: only the link stroke remains.
-    open({ ...base, pointListDisplay: 'closed-loop', pointMarkersVisible: false })
-    points = screen.getByRole('switch', { name: 'Show point markers' }).closest('section')!
-    expect(within(points).getAllByRole('group').map((group) => group.getAttribute('aria-label')))
-      .toEqual(['Point list display', 'Connection style'])
+    // Nothing drawn: no style at all.
+    open({ ...base, pointListDisplay: 'none', pointMarkersVisible: false })
+    expect(groups()).toEqual(['Points', 'Border', 'Fill'])
+    cleanup()
+
+    // Two points bound no polygon: no Fill row, and a stored fill shows no opacity.
+    open({ ...base, kind: 'List (2)', pointListDisplay: 'open-polyline', pointListFillable: false, pointListFilled: true })
+    expect(groups()).toEqual(['Points', 'Border', 'Point style', 'Border style'])
   })
 })
 

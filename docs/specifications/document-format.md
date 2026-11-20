@@ -91,7 +91,9 @@ distance along each axis). A set label size or distance is multiplied by
 radians from format version 12 (degrees before), turns the label
 counterclockwise about the centre of its text; angles 2π apart are the same. `auto` estimates each label's box from its
 text and tries the eight positions from `top-right` clockwise, avoiding other
-labels and the points and handles of other objects. Appearance sources are
+labels and the points and handles of other objects, and, when it can, the
+inside of every filled point list, its own included: a position clear of
+labels, points and handles comes before one outside the fills. Appearance sources are
 evaluated after the value nodes they read, which is equivalent to the graph
 order of section 5 since no source can reference them. An item with no
 stored `orientationVisible` is saved with its kind's default: hidden for a
@@ -189,6 +191,8 @@ classDiagram
       +none|open-polyline|closed-loop connection
       +StrokeStyle strokeStyle
       +string strokeWidthSource
+      +boolean fill
+      +string fillOpacitySource
     }
     class LinePrimitiveStyle {
       +boolean visible
@@ -229,7 +233,7 @@ unknown field as an implicit extension.
 | Field | Type | Rule |
 | --- | --- | --- |
 | `id` | string | Non-empty opaque immutable document identity. |
-| `formatVersion` | positive integer | Exactly the current version (`12`) after migration (section 4.1). |
+| `formatVersion` | positive integer | Exactly the current version (`13`) after migration (section 4.1). |
 | `languageVersion` | positive integer | Selects source syntax and semantics. |
 | `algebra` | `AlgebraReference` | Selects one validated algebra configuration. |
 | `interpretation` | `InterpretationReference \| null` | At most one active interpretation. |
@@ -404,8 +408,13 @@ only for a primitive type the evaluated list contains.
 
 - `points`: `visible` (whether the point markers are drawn), `pointStyle`,
   `pointSizeSource`, `connection` (`none`, `open-polyline`, or `closed-loop`:
-  the markers joined in evaluated list order), and the `strokeStyle` and
-  `strokeWidthSource` of the connection.
+  the border, joining the markers in evaluated list order), the
+  `strokeStyle` and `strokeWidthSource` of the border, `fill` (whether the
+  polygon of the points is tinted with the list's color, when it has at least
+  three points and all of them are finite; the polygon is closed whatever the
+  border), and `fillOpacitySource`, the share of the color in percent, from 0
+  to 100, like `opacitySource` (empty: 20). The three parts are drawn
+  independently.
 - `lines`: `visible`, `strokeStyle`, `strokeWidthSource`, and
   `orientationVisible`.
 
@@ -591,6 +600,7 @@ previous one; the implementation records the migrations in
 | 10 | **Planned for 0.3.0; may change until 0.3.0 is published.** Each `Folder` gains `overwriteAppearance`, a boolean, and `appearance`, `null` or a complete `Appearance` record (section 2.2). `appearance.visible` false hides every item of the folder; the rest of the record is drawn instead of that of its items while `overwriteAppearance` is true, except the label fields. The migration sets `overwriteAppearance: false` and `appearance: null`. |
 | 11 | **Planned for 0.3.0; may change until 0.3.0 is published.** Each `Folder` gains `before`, `null` or an item identity: a folder whose subtree holds no item shows just before the row, or the folder, that holds that item at its level; empty folders before one item keep the order of `folders`. With items, a folder shows at its first item and `before` is ignored; `null`, or an identity that names no item, shows an empty folder after the rows of its parent, as in version 10. A folder emptied by a move or a deletion keeps its place. The migration sets `before: null`. |
 | 12 | **Planned for 0.3.0; may change until 0.3.0 is published.** `Appearance.labelOnly`, a boolean that draws the label without its object, and `labelAnchor` adds `center`; `labelOnly` is a label setting, so a folder that overwrites the appearance of its rows leaves it to each row. `Appearance.draggable` holds an object in place on the canvas when it is `false`. `Appearance.sliderInCanvas` draws a scalar's slider on the canvas when it is `true`. `ViewState.display.labelsVisible` turns every label of the graph on or off. The eight label positions move onto the circle of radius the label distance, and the default distance becomes 20 pixels. The label angle is in radians and periodic, taking any finite value. The migration sets `labelOnly: false`, `draggable: true` and `sliderInCanvas: false` in every item and folder appearance and `labelsVisible: true`, and rewrites a non-empty `labelAngleSource` `s`, which was in degrees, as `s * pi / 180` for a number and `(s) * pi / 180` otherwise, so the label keeps its angle. |
+| 13 | **Planned for 0.3.0; may change until 0.3.0 is published.** `primitiveStyles.points.fill`, a boolean that tints the polygon of a list of points, and `primitiveStyles.points.fillOpacitySource`, its share of the list's color in percent (empty: 20); a list's points, border and fill are drawn independently, so its points may be hidden without a border. The migration sets `fill: false` and an empty `fillOpacitySource` in every points block, items and folders alike, so version 12 lists draw as before; version 12 was already served by the deployed site, hence a new version rather than a change to 12. |
 
 A release can open only the format versions it knows. Release 0.2.0 cannot
 open a version 8, 9, 10, 11, or 12 document; protecting an older release against a document

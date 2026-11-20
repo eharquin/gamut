@@ -92,6 +92,8 @@ export type ResolvedAppearance = Readonly<{
   idealPointDisplay: 'vector' | 'ideal' | 'both'
   pointListDisplay: PointListDisplay
   pointMarkersVisible: boolean
+  /** Whether a list of points fills the polygon they bound. */
+  pointListFilled: boolean
   /** Whether a list draws the lines it holds. */
   linesVisible: boolean
   strokeStyle: StrokeStyle
@@ -146,6 +148,7 @@ export function resolveItemAppearance(
     idealPointDisplay: appearance?.idealPointDisplay ?? 'vector',
     pointListDisplay: appearance?.primitiveStyles?.points?.connection ?? 'none',
     pointMarkersVisible: appearance?.primitiveStyles?.points?.visible ?? true,
+    pointListFilled: appearance?.primitiveStyles?.points?.fill ?? false,
     linesVisible: appearance?.primitiveStyles?.lines?.visible ?? true,
     strokeStyle: appearance?.strokeStyle ?? 'solid',
     lineStrokeStyle: appearance?.primitiveStyles?.lines?.strokeStyle ?? 'solid',

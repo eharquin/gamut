@@ -45,12 +45,15 @@ export type LabelAnchor =
   | 'left' | 'right'
   | 'bottom-left' | 'bottom' | 'bottom-right'
   | 'center'
+/** How the points of a list are joined by its border, in evaluated list order. */
 export type PointListDisplay = 'none' | 'open-polyline' | 'closed-loop'
 export type ItemNormalization = 'natural' | 'euclidean' | 'ideal'
 
 /**
  * Points of a list: whether their markers are drawn, the marker style and
- * size, and how they are connected in evaluated list order.
+ * size, how they are connected in evaluated list order (the border), and
+ * whether the polygon they bound is filled, at an opacity of the list's color.
+ * The three parts are drawn or hidden independently.
  */
 export type PointPrimitiveStyle = Readonly<{
   visible: boolean
@@ -59,6 +62,9 @@ export type PointPrimitiveStyle = Readonly<{
   connection: PointListDisplay
   strokeStyle: StrokeStyle
   strokeWidthSource: string
+  fill: boolean
+  /** Percent of the list's color; empty for the default 20. */
+  fillOpacitySource: string
 }>
 
 /** Lines of a list. */

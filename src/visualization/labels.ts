@@ -33,6 +33,14 @@ export type LabelRequest = Readonly<{
 /** A point or a handle that an automatic label avoids. */
 export type LabelObstacle = Readonly<{ ownerId: string; center: Point2d; radius: number }>
 
+/**
+ * A filled area, in screen space, that an automatic label keeps out of when it
+ * can: the polygon of a filled point list. Unlike an obstacle it applies to
+ * the labels of its own object too, so that the list's points are labelled
+ * outside it.
+ */
+export type LabelArea = readonly Point2d[]
+
 /** A label as drawn: the attributes it needs beyond those of the default top-right label. */
 export type PlacedLabel = Readonly<{
   text: string
@@ -112,16 +120,52 @@ function circleOverlaps(box: Box, { center, radius }: LabelObstacle): boolean {
   return Math.hypot(center.x - x, center.y - y) < radius
 }
 
+/** Whether a point lies inside a polygon, by the even-odd rule. */
+function insidePolygon(point: Point2d, polygon: LabelArea): boolean {
+  let inside = false
+  for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index++) {
+    const a = polygon[index]
+    const b = polygon[previous]
+    if ((a.y > point.y) !== (b.y > point.y) &&
+        point.x < (b.x - a.x) * (point.y - a.y) / (b.y - a.y) + a.x) inside = !inside
+  }
+  return inside
+}
+
+/** Whether the segments `ab` and `cd` cross. */
+function segmentsCross(a: Point2d, b: Point2d, c: Point2d, d: Point2d): boolean {
+  const side = (p: Point2d, q: Point2d, r: Point2d) => Math.sign((q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x))
+  return side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0
+}
+
+/** Whether a label's box and a filled polygon share any of the plane. */
+export function boxOverlapsArea(box: Box, polygon: LabelArea): boolean {
+  if (polygon.length < 3) return false
+  const corners = [
+    { x: box.left, y: box.top }, { x: box.right, y: box.top },
+    { x: box.right, y: box.bottom }, { x: box.left, y: box.bottom },
+  ]
+  if (corners.some((corner) => insidePolygon(corner, polygon))) return true
+  if (polygon.some(({ x, y }) => x > box.left && x < box.right && y > box.top && y < box.bottom)) return true
+  return polygon.some((start, index) => {
+    const end = polygon[(index + 1) % polygon.length]
+    return corners.some((corner, side) => segmentsCross(start, end, corner, corners[(side + 1) % 4]))
+  })
+}
+
 /**
  * Places every label. Labels with a fixed anchor go where they are told.
  * An automatic label takes the first position, in `AUTO_LABEL_ORDER`, where
- * it overlaps no other label and no point or handle of another object; when
- * none is free it goes top right. Labels are placed in document order.
+ * it overlaps no other label, no point or handle of another object, and no
+ * filled area; failing that, the first that overlaps no label, point or
+ * handle; then the first outside every filled area; and top right when none
+ * is left. Labels are placed in document order.
  */
 export function placeLabels(
   requests: readonly LabelRequest[],
   obstacles: readonly LabelObstacle[],
   objectScale: number,
+  areas: readonly LabelArea[] = [],
 ): ReadonlyMap<string, PlacedLabel> {
   const placed = new Map<string, PlacedLabel>()
   const boxes: { ownerId: string; box: Box }[] = []
@@ -133,12 +177,20 @@ export function placeLabels(
   }
   for (const request of requests) {
     if (request.settings.anchor !== 'auto') continue
-    const free = AUTO_LABEL_ORDER.map((anchor) => labelAt(request, anchor, objectScale)).find((candidate) => {
-      const box = labelBox(candidate)
-      return !boxes.some((other) => boxesOverlap(box, other.box)) &&
-        !obstacles.some((obstacle) => obstacle.ownerId !== request.ownerId && circleOverlaps(box, obstacle))
+    const candidates = AUTO_LABEL_ORDER.map((anchor) => {
+      const label = labelAt(request, anchor, objectScale)
+      const box = labelBox(label)
+      return {
+        label,
+        clear: !boxes.some((other) => boxesOverlap(box, other.box)) &&
+          !obstacles.some((obstacle) => obstacle.ownerId !== request.ownerId && circleOverlaps(box, obstacle)),
+        outside: !areas.some((area) => boxOverlapsArea(box, area)),
+      }
     })
-    const label = free ?? labelAt(request, 'top-right', objectScale)
+    const chosen = candidates.find(({ clear, outside }) => clear && outside) ??
+      candidates.find(({ clear }) => clear) ??
+      candidates.find(({ outside }) => outside)
+    const label = chosen?.label ?? labelAt(request, 'top-right', objectScale)
     placed.set(request.key, label)
     boxes.push({ ownerId: request.ownerId, box: labelBox(label) })
   }
