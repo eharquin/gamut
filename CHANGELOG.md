@@ -7,6 +7,13 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## 0.3.0 - 2026-11-20
+
+Release notes: [docs/releases/0.3.0.md](docs/releases/0.3.0.md); tag
+[`v0.3.0`](https://github.com/eharquin/gamut/releases/tag/v0.3.0); acceptance
+record: [Library and Expression Organization](docs/acceptance/library-and-expression-organization.md)
+(manual validation pending, #272).
+
 ### Scientific capabilities
 
 - A coordinate tuple is resolved by the active algebra instead of a hidden
@@ -30,7 +37,7 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (VGAC-004); VEC-001 to VEC-003 say so. The new PGA-015 states the PGA(2)
   rule and the PGA convention section 9 lists the tuple next to the
   constructors. The language version does not change (#180).
-- Format version 12 (planned for 0.3.0) adds `labelOnly`, `draggable` and
+- Format version 12 adds `labelOnly`, `draggable` and
   `sliderInCanvas` to every appearance record, `center` to the label anchors
   and `labelsVisible` to the display settings. Version 11 documents migrate to
   labels drawn with their object, all shown, objects draggable and sliders in

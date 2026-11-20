@@ -7,10 +7,12 @@ environment for writing multivector expressions and turning them into
 interactive geometric constructions. It is developed as part of PhD research
 and is intended for geometric-algebra research, exploration, and learning.
 
-> **Project status:** Release `0.2.0` is the first release shipped as GAMUT.
-> It adds the plane-based PGA(2) workflow, scene links and a local graph
-> library to the VGA(2) workflow of `0.1.0` (released under the former name
-> **MultiVector**), while preserving existing documents and browser sessions.
+> **Project status:** Release `0.3.0` turns the local graph library into a
+> library panel with folders, shipped examples and archives, and adds folders,
+> notes and richer appearance to the expression panel, embed mode for
+> presentations, and algebra-owned coordinate tuples, on top of the VGA(2) and
+> PGA(2) workflows of `0.2.0`, while preserving existing documents and browser
+> sessions.
 
 [Open the public application](https://eharquin.github.io/gamut/)
 
@@ -33,7 +35,10 @@ Source: [Oxford Learner's Dictionaries — gamut](https://www.oxfordlearnersdict
 - Position and directly manipulate eligible objects with pointer or keyboard
   controls, with undo and redo.
 - Drive constructions with scalar sliders and deterministic playback.
-- Save the active document locally and import or export canonical JSON.
+- Organize expressions in folders and notes, and keep graphs in a local
+  library with folders, shipped examples, and `.zip` archives.
+- Save the active document locally, import or export canonical JSON, share a
+  scene as a link, and embed it in a presentation.
 
 For example:
 
@@ -85,6 +90,13 @@ published stable release deploys the public site automatically; a maintainer
 may also deploy a chosen ref by hand, for browser testing before a release.
 
 ## Release status
+
+Release `0.3.0` adds the library panel, expression folders and notes, embed
+mode, and algebra-owned coordinate tuples; the
+[0.3.0 release notes](docs/releases/0.3.0.md) summarize its scope and known
+limitations, and the
+[Library and Expression Organization acceptance record](docs/acceptance/library-and-expression-organization.md)
+tracks its remaining manual validation.
 
 Release `0.2.0` is the first release shipped as GAMUT and the first with
 PGA(2); the [0.2.0 release notes](docs/releases/0.2.0.md) summarize its scope
