@@ -42,6 +42,14 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The eight label positions lie on the circle whose radius is the label
   distance, so a diagonal label is as far from its object as the others; the
   default distance is 20 px instead of 8 (#316).
+- A vector, and the arrow of an ideal point, have a **Size** instead of a
+  **Width**, stored in `pointSizeSource` in the units of a point's size: the
+  base is the point of that size and the shaft, arrowhead and head point grow
+  with it. A vector saved with a width keeps its look until a size is set
+  (#317).
+- Width, size, label size and label distance take any finite scalar; a
+  negative value draws as 0. They no longer fall back to the default outside
+  0.25–10, 1–20, 6–36 and 0–40 (#317).
 
 ### Interface and accessibility
 
@@ -62,6 +70,10 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   of the panel; one that fails shows `?` and its reason under the label
   field. `\$` writes a dollar sign; a lone `$` is reserved for inline math
   and draws as written, with a warning (#316).
+- A point, a vector or a line that can be dragged on the canvas can be held
+  in place: a button with crossed arrows under its color swatch, or the
+  **Draggable** switch beside **Visible** under the kind in its appearance
+  menu, removes its handles until it is made draggable again (#317).
 - Dragging a point or vector written as a tuple rewrites the tuple in place,
   so `P = (2, 1)` becomes `P = (2.5, 1)`, not `point(2.5, 1)`. PGA position
   fields accept the tuple `(x, y)` and keep it when the base is dragged; the
@@ -273,6 +285,11 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   no handle in sight (#316).
 - A rotated label turns about the centre of its text instead of the point it
   is aligned on, so it stays in place around its object (#316).
+- A dashed or dotted line keeps its dashes in place when its width changes:
+  the pattern grows around the foot of the perpendicular from the origin
+  instead of sliding from the edge of the canvas (#317).
+- A ring point no longer shows a small inner ring while it grows on hover
+  (#317).
 - Saving a graph while a slider animation plays now stops the animation and
   saves the values it stopped on, so the unsaved-changes dot disappears and
   stays hidden until the next change (#265).

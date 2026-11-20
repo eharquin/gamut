@@ -49,6 +49,17 @@ describe('appearance menu', () => {
     expect(onVisibleChange).toHaveBeenCalledWith(false)
   })
 
+  it('shows Visible and Draggable on a line under the kind', () => {
+    const onDraggableChange = vi.fn()
+    const { dialog } = open({ kind: 'Vector', styleId: 'teal-5', draggable: true, onDraggableChange })
+    const toggles = dialog.querySelector('header .appearance-header-toggles')!
+    expect(within(toggles as HTMLElement).getAllByRole('switch').map((toggle) => toggle.getAttribute('aria-label')))
+      .toEqual(['Visible', 'Draggable'])
+    expect(toggles).toHaveTextContent('VisibleDraggable')
+    fireEvent.click(within(toggles as HTMLElement).getByRole('switch', { name: 'Draggable' }))
+    expect(onDraggableChange).toHaveBeenCalledWith(false)
+  })
+
   it('shows no eye for an object that is not drawn', () => {
     const { dialog } = open({ kind: 'Scalar', colorOnly: true })
     expect(within(dialog).queryByRole('switch', { name: 'Visible' })).not.toBeInTheDocument()
@@ -215,18 +226,28 @@ describe('stroke, width and opacity settings', () => {
   })
 
   it('shows a red line under a refused field, and nothing under a valid one', () => {
-    const { dialog } = open({ kind: 'Vector', onAppearanceChange: vi.fn(), appearance: { strokeWidthSource: '2' } })
-    expect(within(dialog).getByRole('textbox', { name: 'Width' })).not.toHaveAttribute('aria-invalid')
+    const { dialog } = open({ kind: 'Vector', onAppearanceChange: vi.fn(), appearance: { pointSizeSource: '2' } })
+    expect(within(dialog).getByRole('textbox', { name: 'Size' })).not.toHaveAttribute('aria-invalid')
     expect(dialog.querySelector('.appearance-error')).toBeNull()
     cleanup()
     const refused = open({
-      kind: 'Vector', onAppearanceChange: vi.fn(), appearance: { strokeWidthSource: 'k' },
-      sources: withSources({ strokeWidth: { value: null, error: 'The name “k” is not defined. Default used.' } }),
+      kind: 'Vector', onAppearanceChange: vi.fn(), appearance: { pointSizeSource: 'k' },
+      sources: withSources({ pointSize: { value: null, error: 'The name “k” is not defined. Default used.' } }),
     }).dialog
-    const width = within(refused).getByRole('textbox', { name: 'Width' })
-    expect(width).toHaveAttribute('aria-invalid', 'true')
-    expect(width).toHaveAccessibleDescription('Width: The name “k” is not defined. Default used.')
-    expect(refused.querySelector('.appearance-error')).toHaveTextContent('Width: The name “k” is not defined. Default used.')
+    const size = within(refused).getByRole('textbox', { name: 'Size' })
+    expect(size).toHaveAttribute('aria-invalid', 'true')
+    expect(size).toHaveAccessibleDescription('Size: The name “k” is not defined. Default used.')
+    expect(refused.querySelector('.appearance-error')).toHaveTextContent('Size: The name “k” is not defined. Default used.')
+  })
+
+  it('gives a vector a Size in point units, which replaces a width kept from before sizes', () => {
+    const onAppearanceChange = vi.fn()
+    const { dialog } = open({ kind: 'Vector', onAppearanceChange, appearance: { strokeWidthSource: '4' } })
+    expect(within(dialog).queryByRole('textbox', { name: 'Width' })).not.toBeInTheDocument()
+    const size = within(dialog).getByRole('textbox', { name: 'Size' })
+    expect(size).toHaveAttribute('placeholder', '4.5')
+    fireEvent.change(size, { target: { value: '6' } })
+    expect(onAppearanceChange).toHaveBeenLastCalledWith({ pointSizeSource: '6', strokeWidthSource: '' }, 'pointSize')
   })
 
   it('offers Opacity under the shades for a drawn object only', () => {

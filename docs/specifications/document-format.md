@@ -333,12 +333,12 @@ the kind default with a diagnostic and never makes the document invalid.
 
 | Field | Unit | Range | Empty source |
 | --- | --- | --- | --- |
-| `strokeWidthSource` | reference px | 0.25 to 10 | kind default |
-| `pointSizeSource` | reference px | 1 to 20 | kind default |
+| `strokeWidthSource` | reference px | any, below 0 drawn as 0 | kind default |
+| `pointSizeSource` | reference px | any, below 0 drawn as 0 | kind default |
 | `opacitySource` | % | 0 to 100 | 100 |
 | `labelAngleSource` | radians | any, brought into (−π, π] | 0 |
-| `labelSizeSource` | reference px | 6 to 36 | 13 |
-| `labelDistanceSource` | reference px | 0 to 40 | kind default |
+| `labelSizeSource` | reference px | any, below 0 drawn as 0 | 13 |
+| `labelDistanceSource` | reference px | any, below 0 drawn as 0 | kind default |
 
 Ranges are inclusive and owned by the
 [limits and interaction constants](limits-and-constants.md). Pixel values are
@@ -346,7 +346,11 @@ reference screen pixels multiplied by the document's `objectScale`, like the
 fixed sizes they replace. A kind default is the value drawn before format
 version 7 (for example a point radius of 4.5 reference pixels), so an empty
 source never changes a drawing; the label distance is the exception, 20 pixels
-from format version 12.
+from format version 12. A vector, and the arrow of an ideal point, take their size from
+`pointSizeSource`, in the units of a point's size: the base is drawn as the
+point of that size, and the shaft, arrowhead and head point grow in
+proportion. A vector without a size that keeps a `strokeWidthSource`, as
+documents saved before sizes do, is sized by that shaft width instead.
 Opacity applies to fill and stroke together. A list has no label: its
 label fields are stored and ignored.
 
