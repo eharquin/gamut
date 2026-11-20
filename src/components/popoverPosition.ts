@@ -44,6 +44,17 @@ export function popoverPosition(
   }
 }
 
+/**
+ * The top of a popover already placed whose height changed, as when one of
+ * its sections folds: it stays where it is, and moves up only as far as a
+ * taller popover needs to stay inside the window.
+ */
+export function keptPopoverTop(top: number, height: number): number {
+  const viewportHeight = window.innerHeight
+  const shownHeight = Math.min(height, Math.max(0, viewportHeight - 2 * VIEWPORT_MARGIN))
+  return clamp(top, VIEWPORT_MARGIN, viewportHeight - shownHeight - VIEWPORT_MARGIN)
+}
+
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.max(minimum, Math.min(Math.max(minimum, maximum), value))
 }

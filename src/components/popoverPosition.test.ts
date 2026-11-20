@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { popoverPosition } from './popoverPosition'
+import { keptPopoverTop, popoverPosition } from './popoverPosition'
 
 function anchorAt(rect: Partial<DOMRect>): HTMLElement {
   return {
@@ -65,5 +65,20 @@ describe('popoverPosition', () => {
 
   it('falls back to the margin position when no anchor is measurable', () => {
     expect(popoverPosition(null, 272, 300)).toEqual({ top: 8, left: 8 })
+  })
+})
+
+describe('keptPopoverTop', () => {
+  // The default jsdom window is 768 px high.
+  it('keeps the top of a popover whose height shrinks, as when a section folds', () => {
+    // Flipped above its anchor, a shorter menu would otherwise slide down.
+    expect(keptPopoverTop(194, 120)).toBe(194)
+  })
+
+  it('moves a popover that grows up only as far as the window needs', () => {
+    expect(keptPopoverTop(400, 300)).toBe(400)
+    expect(keptPopoverTop(500, 400)).toBe(768 - 400 - 8)
+    // Taller than the window, it is capped and starts at the margin.
+    expect(keptPopoverTop(500, 2000)).toBe(8)
   })
 })
