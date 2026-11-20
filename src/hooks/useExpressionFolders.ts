@@ -39,6 +39,7 @@ import {
   type FolderPath,
 } from '../document/folderModel'
 import { declaredName } from '../language/declaredName'
+import { autoScrollStep, scrollContainer } from '../presentation/dragAutoScroll'
 import { folderPlainName } from '../presentation/annotationText'
 
 /** Where a dragged row would land, shown by the panel while dragging. */
@@ -105,7 +106,15 @@ export function useExpressionFolders({ document, executeCommand, dispatchHistory
   const [renamingKey, setRenamingKey] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
   const folderRowRefs = useRef(new Map<string, HTMLElement>())
-  const drag = useRef<Readonly<{ dragged: Dragged; pointerId: number; target: DropTarget | null }> | null>(null)
+  const drag = useRef<Readonly<{
+    dragged: Dragged
+    pointerId: number
+    target: DropTarget | null
+    /** The panel the drag scrolls near its edges, and the last pointer height. */
+    scroller: Element
+    pointerY: number
+  }> | null>(null)
+  const autoScrollFrame = useRef<number | null>(null)
 
   /** Applies a planned move, reveals its folder, and announces where the row went. */
   const moveTo = useCallback((itemId: string, placement: ItemPlacement): boolean => {
@@ -285,16 +294,43 @@ export function useExpressionFolders({ document, executeCommand, dispatchHistory
   placementRef.current = placementOf
 
   useEffect(() => {
-    const handlePointerMove = (event: PointerEvent) => {
+    const retarget = (pointerY: number) => {
       const current = drag.current
       if (!current) return
-      const target = resolveDropTarget(event.clientY, current.dragged)
-      drag.current = { ...current, target }
+      const target = resolveDropTarget(pointerY, current.dragged)
+      drag.current = { ...current, pointerY, target }
       setDropTarget(target)
+    }
+    // Near the top or bottom of the panel, the drag scrolls it every frame,
+    // and the target follows the rows passing under the still pointer.
+    const autoScroll = () => {
+      autoScrollFrame.current = null
+      const current = drag.current
+      if (!current) return
+      const { scroller, pointerY } = current
+      const page = scroller === window.document.scrollingElement || scroller === window.document.documentElement
+      const rect = page ? { top: 0, bottom: window.innerHeight } : scroller.getBoundingClientRect()
+      const step = autoScrollStep(pointerY, rect.top, rect.bottom)
+      if (step === 0) return
+      const before = scroller.scrollTop
+      scroller.scrollTop = before + step
+      if (scroller.scrollTop === before) return
+      retarget(pointerY)
+      autoScrollFrame.current = window.requestAnimationFrame(autoScroll)
+    }
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!drag.current) return
+      retarget(event.clientY)
+      if (autoScrollFrame.current === null) autoScrollFrame.current = window.requestAnimationFrame(autoScroll)
+    }
+    const stopAutoScroll = () => {
+      if (autoScrollFrame.current !== null) window.cancelAnimationFrame(autoScrollFrame.current)
+      autoScrollFrame.current = null
     }
     const endDrag = (commit: boolean) => {
       const current = drag.current
       drag.current = null
+      stopAutoScroll()
       window.document.body.classList.remove('reordering-items')
       setDropTarget(null)
       if (!current) return
@@ -315,11 +351,15 @@ export function useExpressionFolders({ document, executeCommand, dispatchHistory
       window.removeEventListener('pointerup', handlePointerUp)
       window.removeEventListener('pointercancel', handlePointerCancel)
       window.document.body.classList.remove('reordering-items')
+      stopAutoScroll()
     }
   }, [resolveDropTarget, moveTo, moveFolderTo, dispatchHistory])
 
   const beginDrag = useCallback((event: ReactPointerEvent<HTMLButtonElement>, dragged: Dragged) => {
-    drag.current = { dragged, pointerId: event.pointerId, target: null }
+    drag.current = {
+      dragged, pointerId: event.pointerId, target: null,
+      scroller: scrollContainer(event.currentTarget), pointerY: event.clientY,
+    }
     dispatchHistory({ type: 'begin-transaction' })
     window.document.body.classList.add('reordering-items')
     event.currentTarget.setPointerCapture?.(event.pointerId)

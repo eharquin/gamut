@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
-import { paletteEntry, RAMP_ORDER, STUDIO_COLORS } from './appearancePalette'
+import { paletteEntry, RAMP_ORDER, STUDIO_COLORS, studioColor } from './appearancePalette'
 import { popoverPosition } from './popoverPosition'
 import type { ExpressionAppearance, ExpressionControl, LabelAnchor, PointListDisplay, PointStyle, StrokeStyle } from '../document/expressionDocument'
 import {
@@ -307,7 +307,8 @@ export function AppearancePopover({
       style={{ top: placement.top, left: placement.left, width: POPOVER_WIDTH }}
     >
       <header className="appearance-header">
-        <strong>{title}</strong>
+        {/* The kind in the object's color; a folder keeps its name in the text color. */}
+        <strong style={folder ? undefined : { color: studioColor(styleId) }}>{title}</strong>
         {(!colorOnly || (onDraggableChange && draggable !== undefined)) && (
           // Under the kind: the same settings as the eye and the drag button of the expression row.
           <div className="appearance-header-toggles">

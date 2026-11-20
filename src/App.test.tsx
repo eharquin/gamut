@@ -1629,6 +1629,12 @@ describe('VGA 2D vertical slice', () => {
     expect(screen.queryByRole('button', { name: /scalar animation$/ })).not.toBeInTheDocument()
   })
 
+  it('centres the cards in NoViz as it does the lines', () => {
+    const css = readFileSync(`${import.meta.dirname}/App.css`, 'utf8')
+    expect(css.match(/\.expression-panel\.is-full-width\.is-cards \.expression-list \{([^}]*)\}/)?.[1])
+      .toMatch(/padding-inline: max\(6px, calc\(\(100% - 760px\) \/ 2\)\);/)
+  })
+
   it('puts a scalar\'s slider on the canvas from its appearance menu, off by default', () => {
     render(<App />)
     const source = screen.getByRole<HTMLInputElement>('textbox', { name: 'Expression 1' })
@@ -2090,14 +2096,14 @@ describe('VGA 2D vertical slice', () => {
     expect(screen.getByRole('img')).toHaveTextContent('No spatial objects are visible')
   })
 
-  it('shows gray and error pastilles for empty and invalid expressions', () => {
+  it('shows no pastille for an empty expression and an error pastille for an invalid one', () => {
     const { container } = render(<App />)
     const expression = screen.getByRole('textbox', { name: 'Expression 1' })
 
     fireEvent.change(expression, { target: { value: '' } })
     expect(screen.queryByText(/Enter an expression/)).not.toBeInTheDocument()
-    expect(container.querySelector('.expression-status-pastille.is-empty'))
-      .toBeInTheDocument()
+    // An empty row may yet become an expression, a note or a folder.
+    expect(container.querySelector('.expression-status-pastille')).toBeNull()
 
     fireEvent.change(expression, { target: { value: 'Missing' } })
     expect(expression).toHaveAttribute('aria-invalid', 'true')
@@ -2566,18 +2572,37 @@ describe('VGA 2D vertical slice', () => {
     expect(screen.queryByRole('button', { name: /^Normalization/ })).not.toBeInTheDocument()
   })
 
-  it('marks unit-norm multivectors independently of the normalization mode', () => {
+  it('lays the row out with the drag button above the swatch, the eye in the top right corner, and no unit-norm dot', () => {
     render(<App />)
     const expression = screen.getByRole('textbox', { name: 'Expression 1' })
-    expect(screen.getByRole('button', { name: 'Normalization: off' })).toBeInTheDocument()
-    expect(screen.queryByText('Unit norm')).not.toBeInTheDocument()
-
     fireEvent.change(expression, { target: { value: 'V = e1' } })
-    expect(screen.getByText('Unit norm')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Normalization: off' })).toBeInTheDocument()
-
-    fireEvent.change(expression, { target: { value: 'V = 2*e1' } })
+    const row = expression.closest('.expression-item') as HTMLElement
+    // The drag button is above the swatch, in the actions column.
+    const actions = row.querySelector('.expression-actions')!
+    const drag = within(row).getByRole('button', { name: 'Drag V on the canvas' })
+    expect(actions.firstElementChild).toBe(drag)
+    // The eye is in the top right corner of the row, the delete cross centred under it.
+    const end = row.querySelector('.expression-end-actions')!
+    expect([...end.children].map((child) => child.getAttribute('aria-label'))).toEqual(['Hide V', 'Delete expression 1'])
+    const css = readFileSync(`${import.meta.dirname}/App.css`, 'utf8')
+    expect(css.match(/\.expression-end-actions \{([^}]*)\}/)?.[1]).toMatch(/align-self: stretch;/)
+    // The delete button is centred in the row's height, under the eye.
+    expect(css.match(/\.expression-end-actions \.delete-expression \{([^}]*)\}/)?.[1]).toMatch(/top: 50%;[\s\S]*transform: translateY\(-50%\);/)
+    // Only a row with an eye keeps the cross under it; an empty row has none.
+    expect(css.match(/\.expression-end-actions:has\(\.visibility-toggle\) \.delete-expression \{([^}]*)\}/)?.[1]).toMatch(/top: max\(50%, 38px\);/)
+    // The kind is followed on its line by the value, then the norm button.
+    const kindLine = row.querySelector('.expression-kind-line')!
+    expect([...kindLine.children].map((child) => child.tagName === 'OUTPUT' ? 'value' : child.className))
+      .toEqual(['object-kind', 'value', 'normalize-control'])
+    expect(kindLine.lastElementChild).toContainElement(screen.getByRole('button', { name: 'Normalization: off' }))
+    // No dot marks a unit norm any more.
+    expect(row.querySelector('.unit-norm-indicator')).toBeNull()
     expect(screen.queryByText('Unit norm')).not.toBeInTheDocument()
+
+    // The norm button shows on hover or focus only, unless a mode is on.
+    const styles = readFileSync(`${import.meta.dirname}/App.css`, 'utf8')
+    expect(styles).toMatch(/\.normalize-toggle:not\(\.active\):not\(\[aria-expanded='true'\]\) \{\s*opacity: 0;/)
+    expect(styles).toMatch(/\.expression-item:hover \.normalize-toggle,\s*\.expression-item:focus-within \.normalize-toggle \{\s*opacity: 1;/)
   })
 
   it('shows a position diagnostic while retaining the vector output', () => {
@@ -3328,6 +3353,8 @@ describe('PGA 2D foundation workflow', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Expression 4' }), { target: { value: 'I = line(0, 0, 1)' } })
 
     expect(screen.getByText('Point')).toHaveTextContent('at (1, 2)')
+    // The description after the kind is read out, not shown.
+    expect(screen.getByText('Point').querySelector('.visually-hidden')).toHaveTextContent('at (1, 2)')
     expect(screen.getByText('Line')).toHaveTextContent('scale 1.41421')
     expect(screen.getByText('Ideal point')).toHaveTextContent('direction (0, 1)')
     expect(screen.getByText('Line at infinity')).toBeInTheDocument()
@@ -4076,6 +4103,32 @@ describe('point style and size from the appearance menu (#222)', () => {
   })
 })
 
+describe('value after the kind', () => {
+  it('shows the kind followed by the value on its line, before the position', () => {
+    render(<App />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: 'V = vector(2, 1)' } })
+    const row = screen.getByRole('textbox', { name: 'Expression 1' }).closest('.expression-item') as HTMLElement
+    const kind = within(row).getByText('Vector')
+    const value = row.querySelector('output')!
+    const line = kind.closest('.expression-kind-line')!
+    expect(line).toContainElement(value)
+    expect(kind.nextElementSibling).toBe(value)
+    // The position comes under the value, and the label last of all.
+    const position = within(row).getByRole('textbox', { name: 'Position 1' })
+    expect(line.compareDocumentPosition(position) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const labelToggle = within(row).getByRole('checkbox', { name: 'Show label of V' })
+    expect(position.compareDocumentPosition(labelToggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(labelToggle.closest('.expression-label-row')?.nextElementSibling).toBeNull()
+    // Plain muted text after the kind, with no box, whose full value shows on hover.
+    expect(value).toHaveAttribute('title', value.textContent)
+    const styles = readFileSync(`${import.meta.dirname}/App.css`, 'utf8')
+    const valueRule = styles.match(/\.expression-feedback output \{([^}]*)\}/)?.[1] ?? ''
+    expect(valueRule).not.toMatch(/border:/)
+    expect(valueRule).toMatch(/color: var\(--muted\);/)
+    expect(styles.match(/\.expression-kind-line \{([^}]*)\}/)?.[1]).toMatch(/display: flex;/)
+  })
+})
+
 describe('objects held in place', () => {
   it('holds a vector in place from its row or its menu, and lets it be dragged again', () => {
     render(<App />)
@@ -4310,7 +4363,7 @@ describe('normalization chosen from the expression row (#185)', () => {
     window.localStorage.clear()
   })
 
-  it('offers off, auto, norm and inorm in PGA, and shows the applied mode and unit badge', () => {
+  it('offers off, auto, norm and inorm in PGA, and shows the applied mode', () => {
     render(<App />)
     fireEvent.change(screen.getByRole('textbox', { name: 'Expression 1' }), { target: { value: '' } })
     fireEvent.click(screen.getByRole('button', { name: 'VGA · 2D. Change algebra' }))
@@ -4337,20 +4390,17 @@ describe('normalization chosen from the expression row (#185)', () => {
     expect(toggle).toHaveAccessibleName('Normalization: auto')
     expect(toggle).toHaveClass('active')
     expect(toggle).toHaveAttribute('title', 'Normalized by the ideal norm (automatic)')
-    expect(screen.getByText('Unit ideal norm')).toBeInTheDocument()
     expect(screen.getByText('0.8e01 - 0.6e02', { selector: 'output' })).toBeInTheDocument()
 
     choose('inorm')
     expect(toggle).toHaveAccessibleName('Normalization: inorm')
     expect(toggle).toHaveTextContent(/^inorm$/)
-    expect(screen.getByText('Unit ideal norm')).toBeInTheDocument()
 
     // An ideal point has no Euclidean norm: the value stays unchanged.
     choose('norm')
     expect(toggle).toHaveTextContent(/^norm$/)
     expect(screen.getByText('Normalization unavailable')).toBeInTheDocument()
     expect(screen.getByText(/zero Euclidean norm/)).toBeInTheDocument()
-    expect(screen.queryByText('Unit ideal norm')).not.toBeInTheDocument()
     expect(screen.getByText('4e01 - 3e02', { selector: 'output' })).toBeInTheDocument()
   })
 })

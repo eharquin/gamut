@@ -2,6 +2,7 @@ import { createRef } from 'react'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AppearancePopover } from './AppearancePopover'
+import { studioColor } from './appearancePalette'
 import type { ExpressionControl } from '../document/expressionDocument'
 import { DEFAULT_APPEARANCE_SOURCES } from '../application/evaluateAppearanceSources'
 
@@ -49,10 +50,12 @@ describe('appearance menu', () => {
     expect(onVisibleChange).toHaveBeenCalledWith(false)
   })
 
-  it('shows Visible and Draggable on a line under the kind', () => {
+  it('draws the kind in the color of the object, with Visible and Draggable on a line under it', () => {
     const onDraggableChange = vi.fn()
     const { dialog } = open({ kind: 'Vector', styleId: 'teal-5', draggable: true, onDraggableChange })
-    const toggles = dialog.querySelector('header .appearance-header-toggles')!
+    const header = dialog.querySelector('header')!
+    expect(header.querySelector('strong')).toHaveStyle({ color: studioColor('teal-5') })
+    const toggles = header.querySelector('.appearance-header-toggles')!
     expect(within(toggles as HTMLElement).getAllByRole('switch').map((toggle) => toggle.getAttribute('aria-label')))
       .toEqual(['Visible', 'Draggable'])
     expect(toggles).toHaveTextContent('VisibleDraggable')

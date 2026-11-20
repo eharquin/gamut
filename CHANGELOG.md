@@ -95,6 +95,22 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   also puts its slider on the canvas: a card in the bottom-left corner shows
   `t = 3.5`, the slider and play, and drives the scalar like the row's
   slider. The interval is still edited in the row (#318).
+- A row shows its kind followed, on the same line, by its value as plain
+  text in a lighter colour; the **norm** button ends that line at its right
+  edge. A value too long for the panel is cut short and shows in full on
+  hover. The norm button shows while the row is hovered or focused, and
+  always once a mode is on. The description after the kind (such as
+  "at (1, 2)") is no longer shown, and is still read out by screen readers
+  (#319).
+- The eye that shows or hides an object moves to the top right corner of the
+  row, above the delete cross, which is centred in the row's height; the drag
+  button moves above the color swatch. The blue dot that marked a unit norm
+  is gone. A row without an eye, such as an empty or invalid one, centres its
+  cross too. An empty row shows no grey dot, since it may yet become an
+  expression, a note or a folder (#319).
+- The appearance menu shows the kind in the color of the object (#319).
+- In NoViz, the cards style sits in the same centred column as the lines
+  style (#319).
 - Dragging a point or vector written as a tuple rewrites the tuple in place,
   so `P = (2, 1)` becomes `P = (2.5, 1)`, not `point(2.5, 1)`. PGA position
   fields accept the tuple `(x, y)` and keep it when the base is dragged; the
@@ -301,6 +317,9 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   dark theme they had the colour of the panels themselves. The dark theme
   also gains contrast: darker page and canvas, panels that stand out, and
   lighter secondary and dim text (#324).
+- Dragging a row or a folder near the top or bottom of the expression panel
+  scrolls it, faster closer to the edge, so a row can be carried from the
+  bottom of a long list to its top (#319).
 - Opacity now fades a point, and the base of a vector or a bivector, instead
   of leaving the drawn dot opaque; an object drawn as its label only leaves
   no handle in sight (#316).

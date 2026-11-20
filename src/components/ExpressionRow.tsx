@@ -3,7 +3,7 @@ import type { AlgebraEngine } from '../algebra/algebraEngine'
 import type { ItemAppearanceSources } from '../application/evaluateAppearanceSources'
 import type { EvaluatedDocumentItem } from '../application/evaluateDocument'
 import { evaluateScalarControl, type ScalarControlEvaluation } from '../application/evaluateScalarControl'
-import { hasIdealNorm, isUnitNorm, measuredNorm, normalizeItemValue } from '../application/normalization'
+import { hasIdealNorm, measuredNorm, normalizeItemValue } from '../application/normalization'
 import { DEFAULT_SCALAR_CONTROL, type ScalarPlayback } from '../hooks/useScalarPlayback'
 import type { DocumentCommand } from '../document/documentCommands'
 import type { HistoryAction } from '../document/documentHistory'
@@ -192,13 +192,10 @@ export function ExpressionRow({
     supportsNormalization &&
     item.normalization !== undefined &&
     normalizeItemValue(item.normalization, evaluation.value, engine, interpretation).status === 'unavailable'
-  // The badge follows the norm the mode applies (#185).
+  // The norm the mode applies, named in the norm button's tooltip (#185).
   const unitNorm = supportsNormalization
     ? measuredNorm(item.normalization, evaluation.value, engine, interpretation)
     : null
-  const hasUnitNorm =
-    supportsNormalization &&
-    isUnitNorm(item.normalization, evaluation.value, engine, interpretation)
   // VGA has one norm: a forced mode from an imported document reads as auto.
   const normalizationMode = item.normalization && !hasIdealNorm(engine) ? 'natural' : item.normalization
   const normalizationText = NORMALIZATION_TEXT[normalizationMode ?? 'off']
@@ -261,6 +258,145 @@ export function ExpressionRow({
   const empty = item.source.trim() === ''
   const listDetailsId = `list-details-${item.id}`
 
+  // A slider row shows its kind and value first, then the slider under them.
+  const sliderShown = Boolean(scalar && effectiveControl?.mode === 'slider' && controlEvaluation)
+  const kindLabel = (
+    <span className="object-kind" style={{ color }}>
+      {kind}
+      {/* The description ("at (1, 2)", "direction (0, 1)") is read out, not shown. */}
+      {evaluation?.status === 'valid' && evaluation.valueType === 'single' &&
+        interpretation.detail(evaluation.entity) && (
+        <span className="visually-hidden"> {interpretation.detail(evaluation.entity)}</span>
+      )}
+      {approximated && (
+        <span
+          className="approximated-indicator"
+          title="A negligible coefficient was ignored when classifying this object"
+        >
+          <span aria-hidden="true">≈</span>
+          <span className="visually-hidden">
+            {' '}(approximated; a negligible coefficient was ignored)
+          </span>
+        </span>
+      )}
+    </span>
+  )
+  const displayedValue = evaluation?.status === 'valid'
+    ? formatDisplayValue(evaluation.value, display.decimalPlaces, display.showApproximatedResidue)
+    : ''
+  // A value cut short at the end of its line shows in full on hover.
+  const valueOutput = evaluation?.status === 'valid' && (display.valuesVisible ? (
+    <output title={displayedValue}>{displayedValue}</output>
+  ) : (
+    // A hidden value is announced as hidden, never read out (#191).
+    <span className="visually-hidden">Value hidden</span>
+  ))
+  // The norm button ends the value's line; its choice opens in a popover anchored to it.
+  const normControl = supportsNormalization && (
+    <span className="normalize-control">
+      <button
+        ref={(element) => {
+          if (element) normalizationToggleRefs.current.set(item.id, element)
+          else normalizationToggleRefs.current.delete(item.id)
+        }}
+        type="button"
+        className={`normalize-toggle${item.normalization ? ' active' : ''}`}
+        aria-label={`Normalization: ${normalizationText}`}
+        // With one norm (VGA) the button switches off and auto
+        // directly; with norm and inorm (PGA) it opens the choice.
+        aria-pressed={hasIdealNorm(engine) ? undefined : Boolean(normalizationMode)}
+        aria-expanded={hasIdealNorm(engine) ? normalizationChoiceOpen : undefined}
+        aria-haspopup={hasIdealNorm(engine) ? 'dialog' : undefined}
+        title={!normalizationMode
+          ? 'Not normalized'
+          : normalizationUnavailable
+            ? 'Normalization unavailable: the value is unchanged'
+            : `Normalized by ${NORM_NAME[unitNorm!]}${normalizationMode === 'natural' ? ' (automatic)' : ''}`}
+        onClick={(event) => {
+          if (!hasIdealNorm(engine)) {
+            executeCommand({
+              kind: 'update-normalization', itemId: item.id,
+              normalization: normalizationMode ? undefined : 'natural',
+            })
+            return
+          }
+          normalizationAnchorRef.current = event.currentTarget
+          toggleNormalizationChoice(item.id)
+        }}
+      >{item.normalization ? normalizationText : 'norm'}</button>
+    </span>
+  )
+  const feedback = evaluation || positionEvaluation ? (
+    <div
+      id={feedbackId}
+      className="expression-feedback"
+      role={invalid || invalidPosition ? 'alert' : 'status'}
+    >
+      {evaluation?.status === 'valid' ? (
+        <>
+          {/* The kind, followed by the value in a read-only field and the norm button. */}
+          <div className="expression-kind-line">
+          {evaluation.valueType === 'list' ? (
+            <button
+              type="button"
+              className="list-inspection-toggle object-kind"
+              style={{ color }}
+              aria-expanded={listExpanded}
+              aria-controls={listDetailsId}
+              onClick={() => toggleListExpanded(item.id)}
+            >
+              <span aria-hidden="true">{listExpanded ? '▾' : '▸'}</span>
+              {kind}
+            </button>
+          ) : (
+            kindLabel
+          )}
+          {valueOutput}
+          {normControl}
+          </div>
+          {normalizationUnavailable && <>
+            <span className="feedback-label">Normalization unavailable</span>
+            <span>This multivector has zero {
+              item.normalization === 'natural' ? 'natural norm'
+                : item.normalization === 'ideal' ? 'ideal norm' : 'Euclidean norm'
+            } and was left unchanged.</span>
+          </>}
+        </>
+      ) : evaluation?.status === 'invalid' ? (
+        <>
+          <span className="feedback-label">
+            {evaluation.diagnostic.code}
+          </span>
+          <span>{evaluation.diagnostic.message}</span>
+          <span className="source-location">
+            Source characters{' '}
+            {evaluation.diagnostic.span.start + 1}–
+            {Math.max(
+              evaluation.diagnostic.span.start + 1,
+              evaluation.diagnostic.span.end,
+            )}
+          </span>
+        </>
+      ) : null}
+      {positionEvaluation?.status === 'invalid' && (
+        <>
+          <span className="feedback-label">
+            {positionEvaluation.diagnostic.code}
+          </span>
+          <span>{positionEvaluation.diagnostic.message}</span>
+          <span className="source-location">
+            Position characters{' '}
+            {positionEvaluation.diagnostic.span.start + 1}–
+            {Math.max(
+              positionEvaluation.diagnostic.span.start + 1,
+              positionEvaluation.diagnostic.span.end,
+            )}
+          </span>
+        </>
+      )}
+    </div>
+  ) : null
+
   return (
     <article
       ref={(element) => {
@@ -295,25 +431,25 @@ export function ExpressionRow({
       </button>
       <div className="expression-input-row">
         <div className="expression-actions">
-          {drawable && valid && !noViz && (
+          {/* Above the swatch: whether a drag on the canvas moves the object. */}
+          {draggableAvailable && valid && (
               <button
                 type="button"
-                className="visibility-toggle"
-                aria-label={`${visible ? 'Hide' : 'Show'} ${objectName}`}
-                aria-pressed={visible}
+                className={`drag-toggle${draggable ? '' : ' is-held'}`}
+                aria-label={`Drag ${objectName} on the canvas`}
+                aria-pressed={draggable}
+                title={draggable ? 'Draggable: click to hold in place' : 'Held in place: click to make draggable'}
                 onClick={() => executeCommand({
-                  kind: 'update-appearance', itemId: item.id,
-                  appearance: { visible: !visible },
+                  kind: 'update-appearance', itemId: item.id, appearance: { draggable: !draggable },
                 })}
               >
-                <svg className="visibility-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-                  <path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8z" />
-                  <circle cx="8" cy="8" r="2" />
-                  {!visible && <path className="visibility-icon-slash" d="M2.5 13.5 13.5 2.5" />}
+                <svg className="drag-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M8 2v12M2 8h12M6.2 3.8 8 2l1.8 1.8M6.2 12.2 8 14l1.8-1.8M3.8 6.2 2 8l1.8 1.8M12.2 6.2 14 8l-1.8 1.8" />
+                  {!draggable && <path className="drag-icon-slash" d="M2.5 13.5 13.5 2.5" />}
                 </svg>
               </button>
           )}
-          {valid && (!drawable || noViz) && (
+          {valid && !draggableAvailable && (
             <span className="expression-action-spacer" aria-hidden="true" />
           )}
           {valid && noViz ? (
@@ -350,30 +486,11 @@ export function ExpressionRow({
                   aria-hidden="true"
                 />
               </button>
-          ) : !annotation && (
-            // A note has no status: its column stays, so that its text lines up with the sources.
-            <span
-              className={`expression-status-pastille${empty ? ' is-empty' : ' is-error'}`}
-              aria-hidden="true"
-            />
-          )}
-          {/* Under the swatch: whether a drag on the canvas moves the object. */}
-          {draggableAvailable && valid && (
-              <button
-                type="button"
-                className={`drag-toggle${draggable ? '' : ' is-held'}`}
-                aria-label={`Drag ${objectName} on the canvas`}
-                aria-pressed={draggable}
-                title={draggable ? 'Draggable: click to hold in place' : 'Held in place: click to make draggable'}
-                onClick={() => executeCommand({
-                  kind: 'update-appearance', itemId: item.id, appearance: { draggable: !draggable },
-                })}
-              >
-                <svg className="drag-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-                  <path d="M8 2v12M2 8h12M6.2 3.8 8 2l1.8 1.8M6.2 12.2 8 14l1.8-1.8M3.8 6.2 2 8l1.8 1.8M12.2 6.2 14 8l-1.8 1.8" />
-                  {!draggable && <path className="drag-icon-slash" d="M2.5 13.5 13.5 2.5" />}
-                </svg>
-              </button>
+          ) : !annotation && !empty && (
+            // A note has no status, nor has an empty row, which may yet become an
+            // expression, a note or a folder: their column stays, so that their
+            // text lines up with the sources.
+            <span className="expression-status-pastille is-error" aria-hidden="true" />
           )}
         </div>
         <div className="expression-body">
@@ -444,48 +561,6 @@ export function ExpressionRow({
               autoComplete="off"
             />
             )}
-            {supportsNormalization && (
-              <span className="normalize-control">
-                <button
-                  ref={(element) => {
-                    if (element) normalizationToggleRefs.current.set(item.id, element)
-                    else normalizationToggleRefs.current.delete(item.id)
-                  }}
-                  type="button"
-                  className={`normalize-toggle${item.normalization ? ' active' : ''}`}
-                  aria-label={`Normalization: ${normalizationText}`}
-                  // With one norm (VGA) the button switches off and auto
-                  // directly; with norm and inorm (PGA) it opens the choice.
-                  aria-pressed={hasIdealNorm(engine) ? undefined : Boolean(normalizationMode)}
-                  aria-expanded={hasIdealNorm(engine) ? normalizationChoiceOpen : undefined}
-                  aria-haspopup={hasIdealNorm(engine) ? 'dialog' : undefined}
-                  title={!normalizationMode
-                    ? 'Not normalized'
-                    : normalizationUnavailable
-                      ? 'Normalization unavailable: the value is unchanged'
-                      : `Normalized by ${NORM_NAME[unitNorm!]}${normalizationMode === 'natural' ? ' (automatic)' : ''}`}
-                  onClick={(event) => {
-                    if (!hasIdealNorm(engine)) {
-                      executeCommand({
-                        kind: 'update-normalization', itemId: item.id,
-                        normalization: normalizationMode ? undefined : 'natural',
-                      })
-                      return
-                    }
-                    normalizationAnchorRef.current = event.currentTarget
-                    toggleNormalizationChoice(item.id)
-                  }}
-                >{item.normalization ? normalizationText : 'norm'}</button>
-                <span
-                  className={`unit-norm-indicator${hasUnitNorm ? ' is-unit' : ''}`}
-                  title={hasUnitNorm ? (unitNorm === 'ideal' ? 'Unit ideal norm' : 'Unit norm') : undefined}
-                >
-                  {hasUnitNorm && (
-                    <span className="visually-hidden">{unitNorm === 'ideal' ? 'Unit ideal norm' : 'Unit norm'}</span>
-                  )}
-                </span>
-              </span>
-            )}
           </div>
           {/* The mode is chosen in a popover anchored to the norm button, like the appearance menu. */}
           {normalizationChoiceOpen && (
@@ -503,101 +578,7 @@ export function ExpressionRow({
               onClose={closeNormalizationChoice}
             />
           )}
-
-          {evaluation || positionEvaluation ? (
-            <div
-              id={feedbackId}
-              className="expression-feedback"
-              role={invalid || invalidPosition ? 'alert' : 'status'}
-            >
-              {evaluation?.status === 'valid' ? (
-                <>
-                  {evaluation.valueType === 'list' ? (
-                    <button
-                      type="button"
-                      className="list-inspection-toggle object-kind"
-                      style={{ color }}
-                      aria-expanded={listExpanded}
-                      aria-controls={listDetailsId}
-                      onClick={() => toggleListExpanded(item.id)}
-                    >
-                      <span aria-hidden="true">{listExpanded ? '▾' : '▸'}</span>
-                      {kind}
-                    </button>
-                  ) : (
-                    <span className="object-kind" style={{ color }}>
-                      {kind}
-                      {evaluation?.status === 'valid' && evaluation.valueType === 'single' &&
-                        interpretation.detail(evaluation.entity) && (
-                        <span className="object-detail"> {interpretation.detail(evaluation.entity)}</span>
-                      )}
-                      {approximated && (
-                        <span
-                          className="approximated-indicator"
-                          title="A negligible coefficient was ignored when classifying this object"
-                        >
-                          <span aria-hidden="true">≈</span>
-                          <span className="visually-hidden">
-                            {' '}(approximated; a negligible coefficient was ignored)
-                          </span>
-                        </span>
-                      )}
-                    </span>
-                  )}
-                  {display.valuesVisible ? (
-                    <output>{formatDisplayValue(
-                      evaluation.value,
-                      display.decimalPlaces,
-                      display.showApproximatedResidue,
-                    )}</output>
-                  ) : (
-                    // A hidden value is announced as hidden, never read out (#191).
-                    <span className="visually-hidden">Value hidden</span>
-                  )}
-                  {normalizationUnavailable && <>
-                    <span className="feedback-label">Normalization unavailable</span>
-                    <span>This multivector has zero {
-                      item.normalization === 'natural' ? 'natural norm'
-                        : item.normalization === 'ideal' ? 'ideal norm' : 'Euclidean norm'
-                    } and was left unchanged.</span>
-                  </>}
-                </>
-              ) : evaluation?.status === 'invalid' ? (
-                <>
-                  <span className="feedback-label">
-                    {evaluation.diagnostic.code}
-                  </span>
-                  <span>{evaluation.diagnostic.message}</span>
-                  <span className="source-location">
-                    Source characters{' '}
-                    {evaluation.diagnostic.span.start + 1}–
-                    {Math.max(
-                      evaluation.diagnostic.span.start + 1,
-                      evaluation.diagnostic.span.end,
-                    )}
-                  </span>
-                </>
-              ) : null}
-              {positionEvaluation?.status === 'invalid' && (
-                <>
-                  <span className="feedback-label">
-                    {positionEvaluation.diagnostic.code}
-                  </span>
-                  <span>{positionEvaluation.diagnostic.message}</span>
-                  <span className="source-location">
-                    Position characters{' '}
-                    {positionEvaluation.diagnostic.span.start + 1}–
-                    {Math.max(
-                      positionEvaluation.diagnostic.span.start + 1,
-                      positionEvaluation.diagnostic.span.end,
-                    )}
-                  </span>
-                </>
-              )}
-            </div>
-          ) : null}
-
-          {scalar && effectiveControl?.mode === 'slider' && controlEvaluation && (
+          {sliderShown && effectiveControl && controlEvaluation ? (
             <ScalarSliderControl
               item={item}
               position={position}
@@ -611,8 +592,10 @@ export function ExpressionRow({
               decimalPlaces={display.decimalPlaces}
               executeCommand={executeCommand}
               dispatchHistory={dispatchHistory}
-            />
-          )}
+            >
+              {feedback}
+            </ScalarSliderControl>
+          ) : feedback}
 
           {evaluation?.status === 'valid' &&
             evaluation.valueType === 'list' &&
@@ -747,14 +730,35 @@ export function ExpressionRow({
             <p id={labelErrorId} className="expression-label-error" role="status">{labelText.error}</p>
           )}
         </div>
-        <button
-          type="button"
-          className="delete-expression"
-          onClick={() => removeExpression(item.id)}
-          aria-label={`Delete ${annotation ? 'annotation' : 'expression'} ${position}`}
-        >
-          ×
-        </button>
+        <div className="expression-end-actions">
+          {/* In the top right corner of the row: whether the object is drawn. */}
+          {drawable && valid && !noViz && (
+              <button
+                type="button"
+                className="visibility-toggle"
+                aria-label={`${visible ? 'Hide' : 'Show'} ${objectName}`}
+                aria-pressed={visible}
+                onClick={() => executeCommand({
+                  kind: 'update-appearance', itemId: item.id,
+                  appearance: { visible: !visible },
+                })}
+              >
+                <svg className="visibility-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M1.5 8s2.4-4.5 6.5-4.5S14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8z" />
+                  <circle cx="8" cy="8" r="2" />
+                  {!visible && <path className="visibility-icon-slash" d="M2.5 13.5 13.5 2.5" />}
+                </svg>
+              </button>
+          )}
+          <button
+            type="button"
+            className="delete-expression"
+            onClick={() => removeExpression(item.id)}
+            aria-label={`Delete ${annotation ? 'annotation' : 'expression'} ${position}`}
+          >
+            ×
+          </button>
+        </div>
       </div>
       {appearanceOpen && valid && (
         <AppearancePopover
