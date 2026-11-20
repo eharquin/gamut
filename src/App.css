@@ -1605,10 +1605,11 @@ body.reordering-items .reorder-handle {
 }
 
 /* The track and the aura take the object's colour at 20 %. The thumb is the
-   canvas base point at the canvas object scale (--slider-scale): a point of
-   radius 4.5 inside an aura of radius 10, here with a white centre. Ring and
-   aura are painted inside the 20-unit target, so the whole aura reacts to the
-   pointer; --slider-ring is registered so that only the ring grows on hover. */
+   canvas base point at the default object scale (--slider-scale, fixed so the
+   Object size setting leaves it alone): a point of
+   radius 4.5 inside an aura of radius 10. Dot and aura are painted inside
+   the 20-unit target, so the whole aura reacts to the pointer; --slider-ring
+   is registered so that the dot grows smoothly while it is dragged. */
 @property --slider-ring {
   syntax: '<length>';
   inherits: true;
@@ -1632,10 +1633,11 @@ body.reordering-items .reorder-handle {
   width: calc(20px * var(--slider-scale));
   height: calc(20px * var(--slider-scale));
   margin-top: calc(2px - 10px * var(--slider-scale));
+  /* Drawn like a movable point of the canvas: a solid dot in a pale halo,
+     the dot filling the halo while it is dragged. */
   background: radial-gradient(
     circle closest-side,
-    #fff calc(2.25px * var(--slider-scale)),
-    var(--slider-color) calc(2.25px * var(--slider-scale)) var(--slider-ring),
+    var(--slider-color) var(--slider-ring),
     var(--slider-aura) var(--slider-ring) 100%
   );
   border: 0;
@@ -1648,10 +1650,11 @@ body.reordering-items .reorder-handle {
   --slider-ring: calc(4.5px * var(--slider-scale));
   width: calc(20px * var(--slider-scale));
   height: calc(20px * var(--slider-scale));
+  /* Drawn like a movable point of the canvas: a solid dot in a pale halo,
+     the dot filling the halo while it is dragged. */
   background: radial-gradient(
     circle closest-side,
-    #fff calc(2.25px * var(--slider-scale)),
-    var(--slider-color) calc(2.25px * var(--slider-scale)) var(--slider-ring),
+    var(--slider-color) var(--slider-ring),
     var(--slider-aura) var(--slider-ring) 100%
   );
   border: 0;
@@ -1692,12 +1695,24 @@ body.reordering-items .reorder-handle {
   cursor: default;
 }
 
+/* The bounds take a fixed width, so that every slider bar has the same
+   length whatever its bounds; a longer bound is cut short and shows in full
+   on hover. Each bound sits against the bar. */
 .scalar-slider-row > span {
-  min-width: 14px;
-  flex-shrink: 0;
+  flex: 0 0 6ch;
+  overflow: hidden;
   color: var(--muted);
   font: 10px var(--font-mono);
-  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scalar-slider-row > span:first-of-type {
+  text-align: right;
+}
+
+.scalar-slider-row > span:last-of-type {
+  text-align: left;
 }
 
 .scalar-slider-row small {
@@ -1746,6 +1761,17 @@ body.reordering-items .reorder-handle {
   flex: 1.4 1 0;
   align-items: center;
   gap: 6px;
+}
+
+/* The interval shows only while its row has the focus; its diagnostic stays.
+   A slider played with the pointer does not count as focusing the row. */
+.expression-item:not(:focus-within) .scalar-interval-row,
+.expression-item:has([data-pointer-focus]) .scalar-interval-row {
+  display: none;
+}
+
+.expression-item:focus-within:has([data-pointer-focus]):not(:hover) {
+  background: var(--surface);
 }
 
 .scalar-interval-row input {
@@ -2454,6 +2480,61 @@ span.object-kind {
   font-size: 0.62rem;
 }
 
+/* A speed is a short number: its field stays narrow, its × sign readable. */
+.appearance-speed-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.appearance-speed .appearance-source {
+  width: 56px;
+}
+
+/* The arrows on either side halve and double the speed. */
+.appearance-speed-step {
+  width: 20px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.appearance-speed-step svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.appearance-speed-step:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.appearance-speed-step:focus-visible {
+  color: var(--text);
+  border-color: var(--accent);
+  outline: none;
+}
+
+/* Little inner padding, so that a few digits still fit. */
+.appearance-speed input:not([role='switch']) {
+  padding: 0 0 0 4px;
+}
+
+.appearance-speed-unit {
+  padding: 0 6px 0 2px;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
 .appearance-error {
   margin: -2px 0 0;
   color: var(--error);
@@ -2777,6 +2858,43 @@ code {
 
 /* Ghost chrome over the canvas: recessive while reading the figure, fully
    opaque once the pointer or keyboard reaches it. */
+/* Sliders a scalar's appearance puts on the canvas: one card in the
+   bottom-left corner, clear of the panel buttons (top left), the viewport
+   toolbar (top right) and the embed controls (bottom right). */
+.canvas-sliders {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  z-index: 9;
+  width: min(260px, calc(100% - 16px));
+  max-height: calc(100% - 64px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 4px 2px 10px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgb(30 36 51 / 8%);
+}
+
+.canvas-slider-name {
+  display: block;
+  padding-top: 2px;
+  color: var(--text);
+  font: 500 0.74rem var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.canvas-slider-name > span {
+  font-weight: 700;
+}
+
+.canvas-slider .scalar-slider-row {
+  padding: 0 6px 0 0;
+}
+
 .viewport-toolbar {
   position: absolute;
   top: 8px;
@@ -4590,5 +4708,10 @@ body.reordering-items .folder-handle {
   background: var(--surface);
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* A slider played with the pointer leaves the card as it was. */
+.expression-panel.is-cards .expression-item:focus-within:has([data-pointer-focus]) {
+  border-color: var(--border);
 }
 

@@ -74,6 +74,27 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   in place: a button with crossed arrows under its color swatch, or the
   **Draggable** switch beside **Visible** under the kind in its appearance
   menu, removes its handles until it is made draggable again (#317).
+- A new scalar slider leaves its minimum, maximum, and step empty. Empty
+  fields are derived from the value `t` and shown greyed: the maximum is `t`
+  beyond 10 and 10 otherwise, the minimum is `t` below −10 and −10 otherwise,
+  and the step is a hundredth of the interval. A drag or a playback keeps
+  the interval it started with (#318).
+- The interval of a scalar slider (`min ≤ t ≤ max step n`) shows only while
+  its row has the focus. Clicking play or pause, dragging the slider, or
+  opening the appearance menu with the pointer no longer focuses the row;
+  opened from the keyboard, the menu still returns the focus to the swatch
+  (#318).
+- The slider's thumb is drawn like a point of the canvas and keeps its size
+  when **Object size** changes; every slider bar has the same length, the
+  bounds on either side taking a fixed width (#318).
+- The **Animate** menu of a scalar has a **Speed**: 1 crosses the interval in
+  2 s, 2 is twice as fast; the arrows on either side halve and double it.
+  It is stored as the existing duration of the animation. A new speed takes
+  effect while the animation plays, from where it is (#318).
+- A scalar's appearance menu has a **Canvas** switch, off by default, that
+  also puts its slider on the canvas: a card in the bottom-left corner shows
+  `t = 3.5`, the slider and play, and drives the scalar like the row's
+  slider. The interval is still edited in the row (#318).
 - Dragging a point or vector written as a tuple rewrites the tuple in place,
   so `P = (2, 1)` becomes `P = (2.5, 1)`, not `point(2.5, 1)`. PGA position
   fields accept the tuple `(x, y)` and keep it when the base is dragged; the

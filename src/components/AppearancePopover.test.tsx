@@ -177,6 +177,26 @@ describe('appearance menu', () => {
     expect(onControlChange).toHaveBeenLastCalledWith({ ...slider, mode: 'number' })
   })
 
+  it('sets the speed of an animation as a multiple of the default one', () => {
+    const onControlChange = vi.fn()
+    const { dialog } = open({ kind: 'Scalar', colorOnly: true, control: slider, onControlChange })
+    const speed = within(dialog).getByRole('textbox', { name: 'Speed' })
+    // The default animation crosses the interval in 2 s: speed 1.
+    expect(speed).toHaveValue(String(2 / slider.animation!.durationSeconds))
+    fireEvent.change(speed, { target: { value: '4' } })
+    expect(onControlChange).toHaveBeenLastCalledWith({ ...slider, animation: { ...slider.animation, durationSeconds: 0.5 } })
+    // A speed that is not positive is not stored and says why.
+    onControlChange.mockClear()
+    fireEvent.change(speed, { target: { value: '0' } })
+    expect(onControlChange).not.toHaveBeenCalled()
+    expect(speed).toHaveAccessibleDescription('Speed: Enter a number greater than 0.')
+    // The arrows halve and double the speed.
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Double speed' }))
+    expect(onControlChange).toHaveBeenLastCalledWith({ ...slider, animation: { ...slider.animation, durationSeconds: 2.5 } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Halve speed' }))
+    expect(onControlChange).toHaveBeenLastCalledWith({ ...slider, animation: { ...slider.animation, durationSeconds: 10 } })
+  })
+
   it('shows a slider without animation as it is, until Animate is touched', () => {
     const onControlChange = vi.fn()
     const still = { ...slider, animation: null }

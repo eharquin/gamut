@@ -279,7 +279,13 @@ appearance menu.
 
 `control` is `null` or an object with exactly `mode`, `minimumSource`,
 `maximumSource`, `stepSource`, and `animation`. `mode` is `number` or `slider`.
-The three sources are stored verbatim and use the common language.
+The three sources are stored verbatim and use the common language. An empty
+source is derived from the scalar's value `t`: the maximum is `t` when
+`t > 10` and `10` otherwise, the minimum is `t` when `t < −10` and `−10`
+otherwise, and the step is a hundredth of the interval. A derived bound never
+meets a given one: it lies 20 beyond it instead. A new slider starts with the
+three sources empty; a drag or a playback keeps the derived interval it
+started with.
 `animation` is `null` or an object with exactly `mode`, `direction`, and
 `durationSeconds`, using the values shown in the diagram. Active playback and
 its source snapshot are not stored. Animation may be configured in either
