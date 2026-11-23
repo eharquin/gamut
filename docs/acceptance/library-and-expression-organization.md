@@ -14,19 +14,19 @@ supported browsers. The deployed evidence follows publication.
 
 | Criterion | Current evidence | Remaining evidence | Status |
 | --- | --- | --- | --- |
-| LEO-001 — Interface boundary | — | Extraction pull requests of [#274](https://github.com/eharquin/gamut/issues/274) with their `App.tsx` line counts; `npm run verify` after each step; new panels and rows outside `App.tsx`; smoke test of the VGA and PGA workflows | Pending |
-| LEO-002 — Library panel | — | Panel, sections, actions, and temporary-session tests ([#266](https://github.com/eharquin/gamut/issues/266)); manual checklist | Pending |
-| LEO-003 — Library folders | — | Folder tests, including the 0.2.0 parsing rules on an index written by 0.3.0, a 0.2.0 index at the root, and a graph saved from 0.2.0 ([#267](https://github.com/eharquin/gamut/issues/267)); manual checklist | Pending |
-| LEO-004 — Library archive | — | Round-trip, invalid-entry, collision, quota, drop, temporary-session, and SEC-010 boundary tests ([#268](https://github.com/eharquin/gamut/issues/268)); manual export and import across two browsers | Pending |
-| LEO-005 — Examples and first run | — | Test that every shipped example is in the current canonical format and opens without diagnostics; first-run and algebra-switch tests ([#270](https://github.com/eharquin/gamut/issues/270), [#217](https://github.com/eharquin/gamut/issues/217)); link from P2D-001 in the [PGA 2D Foundation record](pga-2d-foundation.md) | Pending |
-| LEO-006 — Expression folders | — | Move, undo, collapsed-state, round-trip, and migration tests ([#83](https://github.com/eharquin/gamut/issues/83)); keyboard folder operations in the manual checklist | Pending |
-| LEO-007 — Comment rows | — | Kind-switching, undo, and Markdown fixtures, including rejected link schemes and literal mathematical text ([#187](https://github.com/eharquin/gamut/issues/187)); screen-reader check | Pending |
-| LEO-008 — Hidden values | — | Setting tests for single, scalar, and list values and every round trip ([#191](https://github.com/eharquin/gamut/issues/191)); screen-reader check | Pending |
-| LEO-009 — Saving during playback | — | Tests with one and several playing scalars ([#265](https://github.com/eharquin/gamut/issues/265)); manual check | Pending |
-| LEO-010 — Coordinate tuples and weighted points | — | Tuple and weighted-drag fixtures in both algebras; language §7, VEC-001, PGA-VIZ-003, PGA convention, and PGA tuple requirement updated ([#180](https://github.com/eharquin/gamut/issues/180), [#181](https://github.com/eharquin/gamut/issues/181)) | Pending |
-| LEO-011 — Compatibility | — | Regression fixtures: 0.1.0 and 0.2.0 documents, 0.2.0 scene links, a 0.2.0 library snapshot; version 8 migration tests; downgrade limitation ([#275](https://github.com/eharquin/gamut/issues/275)) in the release notes | Pending |
-| LEO-012 — Accessibility and release | — | Manual checklist below on the supported browsers; `npm run verify` on the release commit; [PGA 2D Foundation record](pga-2d-foundation.md) complete ([#192](https://github.com/eharquin/gamut/issues/192)); release checklist below | Pending |
-| LEO-013 — Embed mode | — | Detection, embed-mode, and storage-spy tests ([#215](https://github.com/eharquin/gamut/issues/215)); manual check in a Slides.com iframe block below | Pending |
+| LEO-001 — Interface boundary | Extractions merged: scalar playback ([#276](https://github.com/eharquin/gamut/pull/276)), expression row ([#279](https://github.com/eharquin/gamut/pull/279)), header and document commands ([#283](https://github.com/eharquin/gamut/pull/283)); `App.tsx` 3,963 lines at 0.2.0, 3,141 after the extractions, 3,474 at `v0.3.0` (`7f6cebe`) with the later features; the library panel, library and expression folder trees, add menu, embed controls, canvas sliders and performance monitor are components of their own; `npm run verify` after each step | Smoke test of the deployed VGA and PGA workflows ([#274](https://github.com/eharquin/gamut/issues/274)) | Automated evidence ready; manual validation pending |
+| LEO-002 — Library panel | Panel region, focus on open and return on close, overlay below 720 px with Escape, confirmations in the panel, examples opened unbound and copied (`App.test.tsx`, *library panel (#266)* and *local library of named graphs (#212)*); width, resizing, search and action menus (`libraryGallery.integration.test.tsx`, [#328](https://github.com/eharquin/gamut/issues/328)); temporary sessions write nothing (`sceneLink.integration.test.tsx`); filter and copy rules (`documentLibrary.test.ts`) | Manual checklist | Automated evidence ready; manual validation pending |
+| LEO-003 — Library folders | Folder storage, 0.2.0 parsing rules on an index written by 0.3.0, a 0.2.0 index at the root, a graph saved from 0.2.0 moved to the root, names with `/`, limits, rename, move and delete with their failures (`libraryFolders.test.ts`, 14 tests); nesting, collapsed state per browser, filter, other tab, non-empty deletion, drag and drop, read-only Examples tree, temporary session (`libraryFolders.integration.test.tsx`, 11 tests) | Manual checklist | Automated evidence ready; manual validation pending |
+| LEO-004 — Library archive | ZIP reading and writing, CRC, unsafe paths, encryption, ZIP64, expansion and size bounds, manifest as a hint, invalid entries, collisions into `Imported YYYY-MM-DD`, full storage (`libraryArchive.test.ts`, 22 tests); export, import, drop, rejection without write, temporary session (`libraryArchive.integration.test.tsx`, 4 tests) | Manual export and import across two browsers | Automated evidence ready; manual validation pending |
+| LEO-005 — Examples and first run | Every shipped example in the current canonical format byte for byte and opened without diagnostics, with a showcase per algebra (`examples.test.ts`); first run and algebra switch load the showcase (`showcase.integration.test.tsx`); showcases evaluate and draw (`showcase.test.ts`); [#270](https://github.com/eharquin/gamut/issues/270) closed | Manual checklist; link from P2D-001 in the [PGA 2D Foundation record](pga-2d-foundation.md) | Automated evidence ready; manual validation pending |
+| LEO-006 — Expression folders | Tree, names and limits, moves of rows and folders by pointer and keyboard, undo and redo, collapsed state outside history, appearance overwrite, migrations (`expressionFolders.test.ts`, 42 tests); keyboard and pointer workflows, slash trigger, auto-scroll (`expressionFolders.integration.test.tsx`, 17 tests); round trip and migrations (`canonicalDocument.test.ts`) | Keyboard folder operations in the manual checklist | Automated evidence ready; manual validation pending |
+| LEO-007 — Comment rows | Inline Markdown subset, rejected link schemes, literal mathematical text and dollars, escapes, linear parsing time (`annotationText.test.ts`, 12 tests); blocks, never HTML (`annotationBlocks.test.ts`, 11 tests); kind switching with one undo, safe links, mathematics, names and dependencies (`commentRows.integration.test.tsx`, 15 tests); version 8 → 9 migration (`canonicalDocument.test.ts`) | Screen-reader check | Automated evidence ready; manual validation pending |
+| LEO-008 — Hidden values | Single, scalar and list values hidden and announced, diagnostics and controls kept, undo and redo, export, library and scene links (`hiddenValues.test.tsx`, 7 tests); version 7 → 8 migration (`canonicalDocument.test.ts`) | Screen-reader check | Automated evidence ready; manual validation pending |
+| LEO-009 — Saving during playback | One and several playing sliders stopped on save, stopped values saved, the graph kept saved, undo as after a manual pause (`App.test.tsx`, *saving while sliders play (#265)*) | Manual check | Automated evidence ready; manual validation pending |
+| LEO-010 — Coordinate tuples and weighted points | Algebra-neutral tuples and arity diagnostics (`parseExpression.test.ts`, `lowerExpression.test.ts`, `evaluateDocument.test.ts`); tuples rewritten in place and weighted points edited without their weight (`constructorLiteralEdit.test.ts`); weighted drag coordinates (`viewportCreation.test.ts`); language §7 and the PGA requirements updated with [#180](https://github.com/eharquin/gamut/issues/180) and [#181](https://github.com/eharquin/gamut/issues/181) | Manual checklist | Automated evidence ready; manual validation pending |
+| LEO-011 — Compatibility | Migrations from format 1 to 13, byte-stable (`canonicalDocument.test.ts`); version 6 VGA and PGA canvases drawn exactly as before (`appearanceRendering.test.tsx`, SVG snapshots); `*.multivector.json` and historical storage keys (`App.test.tsx`, `documentStorage.test.ts`); 0.2.0 library indexes (`libraryFolders.test.ts`); scene links (`sceneLink.test.ts`); downgrade limitation ([#275](https://github.com/eharquin/gamut/issues/275)) in the [release notes](../releases/0.3.0.md) | Open 0.1.0 and 0.2.0 documents, a 0.2.0 scene link and a 0.2.0 library on the deployed application | Automated evidence ready; manual validation pending |
+| LEO-012 — Accessibility and release | `npm run verify` passed on the release commit `7f6cebe` (typecheck, lint, 72 test files, 1481 tests, build); release workflow [44831792704](https://github.com/eharquin/gamut/actions/runs/44831792704) verified and deployed `v0.3.0` | Manual checklist below on the supported browsers; [PGA 2D Foundation record](pga-2d-foundation.md) complete ([#192](https://github.com/eharquin/gamut/issues/192)); release checklist below | Automated evidence ready; manual validation pending |
+| LEO-013 — Embed mode | Frame detection, options and Open in GAMUT address (`embedMode.test.ts`, 10 tests); canvas only, dragging, fullscreen, theme, background, invalid scene (`embedMode.integration.test.tsx`, 9 tests); storage spies in both modes, with a control (`embedStorage.integration.test.tsx`) | Manual check in a Slides.com iframe block below | Automated evidence ready; manual validation pending |
 
 ## Specification ownership
 
@@ -132,17 +132,17 @@ To be completed on every browser in the table above, on the release build.
 
 - [ ] Every issue of the [0.3.0 milestone](https://github.com/eharquin/gamut/milestone/4)
   is closed, and the PGA 2D Foundation record is complete (#192).
-- [ ] `npm run verify` passes on the release commit.
-- [ ] The package version, `CHANGELOG.md`, `CITATION.cff`, and
+- [x] `npm run verify` passes on the release commit (`7f6cebe`).
+- [x] The package version, `CHANGELOG.md`, `CITATION.cff`, and
   [release notes](../releases/0.3.0.md) are updated together; the release
-  notes state the downgrade limitation of #275.
+  notes state the downgrade limitation of #275 ([#334](https://github.com/eharquin/gamut/pull/334)).
 - [ ] This record and the milestone status are changed to **Accepted** only
   after all required evidence is present.
 - [ ] After publication: the release workflow run, deployed URL, revision,
   tester, and date are recorded below, and the documented workflow is
   repeated on the deployed application.
 
-- Workflow:
-- Deployed URL:
-- Revision:
+- Workflow: [44831792704](https://github.com/eharquin/gamut/actions/runs/44831792704) (verify and deploy, both successful)
+- Deployed URL: <https://eharquin.github.io/gamut/>
+- Revision: `v0.3.0` (`7f6cebe`)
 - Tester and date:
