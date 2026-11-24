@@ -60,7 +60,8 @@ function rewritten(source: string, node: SurfaceExpressionNode): string {
   }
   if (node.kind === 'binary-expression' && node.implicit) {
     // `2e1.norm` cannot become `2norm(e1)`: implicit multiplication only
-    // follows a number before a blade or a group, so it is written out.
+    // joins a number to a blade, a constant or the pseudoscalar, so it is
+    // written out.
     const right = rewritten(source, node.right)
     if (/^[A-Za-z_]/.test(right) && right !== source.slice(node.right.span.start, node.right.span.end)) {
       return `(${rewritten(source, node.left)} * ${right})`
@@ -88,11 +89,17 @@ function spliced(source: string, span: SourceSpan, nodes: readonly SurfaceExpres
  */
 export function migrateSourceToVersion2(source: string): string {
   if (!/\.\s*(norm|inorm|dual|inverse|reverse|involution)\b/.test(source)) return source
-  const parsed = parseDocumentExpression(source)
-  if (!parsed.ok) return source
-  const { expression } = parsed.source
-  return source.slice(0, expression.span.start) + rewritten(source, expression) +
-    source.slice(expression.span.end)
+  try {
+    const parsed = parseDocumentExpression(source)
+    if (!parsed.ok) return source
+    const { expression } = parsed.source
+    return source.slice(0, expression.span.start) + rewritten(source, expression) +
+      source.slice(expression.span.end)
+  } catch (error) {
+    // A source nested too deeply to parse or rewrite is kept as written.
+    if (error instanceof RangeError) return source
+    throw error
+  }
 }
 
 /**

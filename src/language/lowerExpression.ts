@@ -1,4 +1,4 @@
-import { LANGUAGE_PROPERTIES, REMOVED_PROPERTIES, languageFunction } from './functions'
+import { LANGUAGE_PROPERTIES, languageFunction } from './functions'
 import type {
   CoreExpressionNode,
   SurfaceExpressionNode,
@@ -163,7 +163,8 @@ export function lowerExpression(
         operand,
         property: expression.property,
         propertyOrigin: expression.propertySpan,
-        functionForm: REMOVED_PROPERTIES.has(expression.property) ? expression.property : null,
+        // A function of one argument is never a property: `A.norm` and `A.exp` name the call.
+        functionForm: languageFunction(expression.property)?.arities.includes(1) ? expression.property : null,
         origin: expression.span,
       }
     }

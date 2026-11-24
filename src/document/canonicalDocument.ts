@@ -443,11 +443,15 @@ export function migrateLanguage(value: unknown): unknown {
   if (typeof version === 'number' && Number.isInteger(version) && version > CURRENT_LANGUAGE_VERSION)
     fail('DOCUMENT_LANGUAGE_VERSION', 'Unsupported language version ' + String(version) + '.')
   if (version !== 1) return value
+  // A source the rewrite would take over the source limit keeps its version 1
+  // text, which reports the function form instead of refusing the document.
+  const bounded = (text: string, migrated: string) => migrated.length > MAX_SOURCE_LENGTH ? text : migrated
+  const source = (text: string) => bounded(text, migrateSourceToVersion2(text))
   const sources = (entry: unknown): unknown => {
     if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) return entry
     return Object.fromEntries(Object.entries(entry as Record<string, unknown>).map(([key, field]) => [key,
-      typeof field === 'string' && key.endsWith('Source') ? migrateSourceToVersion2(field)
-        : typeof field === 'string' && key === 'label' ? migrateLabelToVersion2(field)
+      typeof field === 'string' && key.endsWith('Source') ? source(field)
+        : typeof field === 'string' && key === 'label' ? bounded(field, migrateLabelToVersion2(field))
           : key === 'primitiveStyles' || key === 'points' || key === 'lines' || key === 'control' ? sources(field)
             : field]))
   }
@@ -455,7 +459,7 @@ export function migrateLanguage(value: unknown): unknown {
     if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) return entry
     const record = sources(entry) as Record<string, unknown>
     return record.kind === 'expression' && typeof record.source === 'string'
-      ? { ...record, source: migrateSourceToVersion2(record.source) }
+      ? { ...record, source: source(record.source) }
       : record
   }
   const appearance = document.appearance

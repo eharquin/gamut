@@ -150,32 +150,32 @@ export function functionsSection(examples: Readonly<{ dual: ReferenceExample }>)
       { source: 'sqrt(4)', inspection: '2' }, { source: 'max(1, 2)', inspection: '2' }),
     entry('pi, tau', 'predefined scalar constants', { source: 'cos(pi)', inspection: '-1' }, { source: 'cos(tau)', inspection: '1' }),
   ]
-  }
+}
 
-  export const PRECEDENCE: ReferenceSection = {
-    title: 'Precedence',
-    entries: [
-      entry('(...) calls, L[i], and properties', 'strongest', { source: '-e1.e1', inspection: '-1' }),
-      entry('A**n', 'right-associative geometric power', { source: '2**3**2', inspection: '512' }),
-      entry('!A, ~A, +A, -A', 'unary operations', { source: '-2**2', inspection: '-4' }),
-      entry('A ^ B, A & B, A | B', 'geometric derived products', { source: 'e1 * e2 ^ e1', inspection: '-e2' }),
-      entry('A * B, A / B, a % m', 'geometric product, division, and scalar modulo', { source: '2 * e12 >>> e1', inspection: '-4e1' }),
-      entry('R >>> A', 'sandwich action', { source: 'e1 + e12 >>> e1', inspection: '0' }),
-      entry('A + B, A - B', 'weakest', { source: '1 + 2 * 3', inspection: '7' }),
-    ],
-  }
+export const PRECEDENCE: ReferenceSection = {
+  title: 'Precedence',
+  entries: [
+    entry('(...) calls, L[i], and properties', 'strongest', { source: '-e1.e1', inspection: '-1' }),
+    entry('A**n', 'right-associative geometric power', { source: '2**3**2', inspection: '512' }),
+    entry('!A, ~A, +A, -A', 'unary operations', { source: '-2**2', inspection: '-4' }),
+    entry('A ^ B, A & B, A | B', 'geometric derived products', { source: 'e1 * e2 ^ e1', inspection: '-e2' }),
+    entry('A * B, A / B, a % m', 'geometric product, division, and scalar modulo', { source: '2 * e12 >>> e1', inspection: '-4e1' }),
+    entry('R >>> A', 'sandwich action', { source: 'e1 + e12 >>> e1', inspection: '0' }),
+    entry('A + B, A - B', 'weakest', { source: '1 + 2 * 3', inspection: '7' }),
+  ],
+}
 
-  /**
-   * The general expressions, true in every algebra (#259). Only the examples of
-   * the regressive product and the dual depend on the algebra.
-   */
-  export function generalReference(examples: Readonly<{ regressive: ReferenceExample; dual: ReferenceExample }>): readonly ReferenceSection[] {
-    return [
-      { title: 'Values and names', entries: [SCALAR_LITERALS, NAME_REFERENCE] },
-      LISTS_AND_RANGES,
-      operatorsSection(examples),
-      { title: 'Functions', entries: functionsSection(examples) },
-      PRECEDENCE,
+/**
+ * The general expressions, true in every algebra (#259). Only the examples of
+ * the regressive product and the dual depend on the algebra.
+ */
+export function generalReference(examples: Readonly<{ regressive: ReferenceExample; dual: ReferenceExample }>): readonly ReferenceSection[] {
+  return [
+    { title: 'Values and names', entries: [SCALAR_LITERALS, NAME_REFERENCE] },
+    LISTS_AND_RANGES,
+    operatorsSection(examples),
+    { title: 'Functions', entries: functionsSection(examples) },
+    PRECEDENCE,
   ]
 }
 

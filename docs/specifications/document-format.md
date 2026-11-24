@@ -572,9 +572,11 @@ Both paths then enter the same document-processing pipeline:
 1. parse JSON while rejecting duplicate keys and invalid scalar values;
 2. read only `formatVersion` to select a trusted migration;
 3. migrate one version at a time without evaluating source;
-4. validate the complete current schema and resource limits;
-5. resolve the algebra and optional interpretation;
-6. build dependency nodes, parse source, and evaluate.
+4. migrate the sources of a `languageVersion` 1 document to the current
+   language, parsing but not evaluating them (language section 15);
+5. validate the complete current schema and resource limits;
+6. resolve the algebra and optional interpretation;
+7. build dependency nodes, parse source, and evaluate.
 
 The encoded shared-fragment limit does not apply to raw JSON imports. Neither
 preprocessing path may pass partial, integrity-failing, malformed, or
@@ -606,7 +608,9 @@ A release can open only the format versions it knows. Release 0.2.0 cannot
 open a version 8, 9, 10, 11, or 12 document; protecting an older release against a document
 stored in a newer format is deferred to
 [#275](https://github.com/eharquin/gamut/issues/275) and accepted while GAMUT
-has no users.
+has no users. Likewise, release 0.3.0 does not check `languageVersion`: it
+opens a language version 2 document and reports the calls it does not know,
+such as `norm(…)` in VGA(2), as diagnostics.
 
 All bounds used by these steps are owned by the
 [limits and interaction constants](limits-and-constants.md).

@@ -312,6 +312,15 @@ describe('source evaluation pipeline', () => {
     expect(evaluateSource('norm([3e1, 4e2])', context)).toMatchObject({ status: 'valid', inspection: '[3, 4]' })
   })
 
+  it('names the function of a one-argument function written as a property', () => {
+    expect(evaluateSource('e1.normalize', context)).toMatchObject({
+      status: 'invalid', diagnostic: { message: 'The property “normalize” is written as a function: normalize(…).' },
+    })
+    expect(evaluateSource('e1.size', context)).toMatchObject({
+      status: 'invalid', diagnostic: { message: 'The property “size” is not supported.' },
+    })
+  })
+
   it('names the function of a removed property (#342)', () => {
     expect(evaluateSource('e1.norm', context)).toMatchObject({
       status: 'invalid',

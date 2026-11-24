@@ -42,3 +42,10 @@ describe('language version 1 to 2 (#342)', () => {
     expect(migrateLabelToVersion2('plain')).toBe('plain')
   })
 })
+
+describe('sources too deep to rewrite', () => {
+  it('keeps them unchanged instead of failing the document', () => {
+    const deep = `${'('.repeat(5_000)}A${')'.repeat(5_000)}.norm + ${'1 + '.repeat(20_000)}A.norm`
+    expect(() => migrateSourceToVersion2(deep)).not.toThrow()
+  })
+})

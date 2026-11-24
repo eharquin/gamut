@@ -32,7 +32,7 @@ subtraction, geometric product, outer product, inner product, regressive
 product, reverse, dual, grade involution, pseudoscalar, grade-projection, and
 coefficient-extraction subset. Coordinate tuples are implemented for every
 algebra that declares a tuple constructor (section 7): VGA(2) and PGA(2). The read-only `V.position` and
-`V.head` properties resolve the separately evaluated position and the derived
+`V.head` item-part references resolve the separately evaluated position and the derived
 sum `V.position + V` for named positioned vectors. Pure bivectors receive the
 same separate position capability through `B.position` but have no `head`
 property. The expression panel classifies exact VGA(2) values as scalars,
@@ -47,14 +47,16 @@ and partial list results are rejected. Positioned vector and bivector elements
 retain positions through supported list operations without a list-level
 position field; `position` and vector `head` distribute over compatible lists.
 
-The scalar functions of section 10 are implemented, including `atan2`.
+The functions of section 10 are implemented, including `atan2`, `norm`,
+`normalize`, and, in PGA(2), `inorm` and `inormalize`, through one registry
+of common-language functions.
 Annotations are implemented as notes: a quotation mark typed first in an
 expression row makes the row an annotation, and an expression that
 becomes an annotation loses its position source, normalization, and control
 in the same undoable edit. Their text renders the Markdown subset of section
-3. The remaining properties and operators, serialization, and the
-generalized algebra-symbol and capability registries in this specification
-remain planned. This section records implementation evidence; it
+3. The left contraction `<<`, the property descriptors of section 13, and
+the generalized algebra-symbol and capability registries in this
+specification remain planned. This section records implementation evidence; it
 does not narrow the normative language.
 
 ## 2. Semantic values
@@ -293,9 +295,9 @@ e139 == e1 * e3 * e9
 Non-numeric generator aliases such as `einf` are complete registered symbols;
 they are not segments in compact concatenated blades and shall be combined
 explicitly with an operator. Multi-digit generator indices are not supported by
-language version 1. The
+the current language. The
 character sequence `e{` is lexically reserved through the matching `}` for a
-future explicit blade syntax. In version 1 it always produces the dedicated
+future explicit blade syntax. It always produces the dedicated
 `LANG_RESERVED_BLADE_SYNTAX` diagnostic and shall not be tokenized as an
 identifier followed by another construct. Reserving it does not commit a later
 version to accepting it.
@@ -467,16 +469,19 @@ does not provide, such as `inorm` in VGA(2), is an unsupported-function
 diagnostic.
 
 Every function is called as `name(arguments)`; a function is never written
-as a property. Function names resolve in one registry: the common-language
-functions above first, then the constructors and functions the active
-algebra registers (such as `vector`, `point`, `ipoint` and `line`). An
-algebra-registered name belongs to its algebra, so a source that uses it is
-an unsupported-function diagnostic after a switch to an algebra without it.
+as a property. The common-language functions above are resolved first, and
+their arity is checked when the source is parsed. Any other call resolves
+against the constructors and functions the active algebra registers (such as
+`vector`, `point`, `ipoint` and `line`), whose arity is checked at evaluation
+(`LANG_ARITY`). An algebra-registered name belongs to its algebra, so a source
+that uses it is an unsupported-function diagnostic after a switch to an
+algebra without it.
 
 The operations on a value distribute over a list and keep the identity of
-each element, like the unary operators: `dual(A)`, `reverse(A)`,
-`involution(A)` and `inverse(A)` are the dual, reverse, grade involution and
-inverse of section 8.
+each element, like the unary operators. `reverse(A)` and `dual(A)` are `~A`
+and `!A` of section 8; `involution(A)` is the grade involution, which negates
+the odd grades; and `inverse(A)` is the inverse, `A**-1`, when it exists. The
+algebra conventions define each of them.
 
 `min(a, b)` and `max(a, b)` require exactly two finite scalar arguments and
 return a grade-zero multivector. `atan2(y, x)` is the two-argument arc tangent,
@@ -496,8 +501,8 @@ do not alter any multivector grade or algebraic-domain classification.
 `norm(A)` denotes the primary norm defined by the active algebra's versioned
 conventions. `inorm(A)` is available only for an algebra that explicitly
 defines an ideal norm. `normalize(A)` is `A / norm(A)` and `inormalize(A)` is
-`A / inorm(A)`; a zero or non-finite norm is a domain diagnostic, never the
-value returned unchanged. Norm-bar syntax is not part of the language,
+`A / inorm(A)`; a zero norm is a domain diagnostic and a non-finite one the
+engine's non-finite diagnostic, never the value returned unchanged. Norm-bar syntax is not part of the language,
 avoiding ambiguity with the infix `|` inner product. The evaluator shall not select a
 different norm using a visual or geometric-classification heuristic. An
 undefined norm produces a diagnostic.
@@ -517,8 +522,8 @@ expressions but not lists. Elements evaluate left to right for deterministic
 diagnostic ordering, without observable side effects. Supported unary
 operations, scalar functions, and postfix extractors distribute over lists and
 preserve length and order. A function or operator not advertised as
-distributive rejects a list argument. `min` and `max` are explicitly
-non-distributive in language version 1.
+distributive rejects a list argument. The scalar functions, `min` and `max`
+included, broadcast like binary operations (section 10).
 
 Binary operations follow these rules:
 
@@ -579,22 +584,24 @@ truncated result.
 ## 13. Capability properties
 
 Postfix property access has the form `object.property`, where `property` matches
-the identifier grammar. The common language defines the syntax but does not
-hard-code algebra- or interpretation-specific property names or meanings.
-Properties are registered through stable capability descriptors supplied by the
-active algebra definition or geometry interpretation.
+the identifier grammar. The common language defines the syntax and two
+families of properties; it does not hard-code algebra- or
+interpretation-specific property names or meanings.
 
-Each descriptor declares the receiver kinds it accepts, its result kind, whether
-it distributes over lists, and the capability required for evaluation. An
-unknown property, an invalid receiver, or an unavailable capability produces the
-corresponding structured diagnostic. A distributive property preserves list
-order and evaluated element identity; a non-distributive property rejects a list
-receiver.
+Properties specific to an algebra definition or geometry interpretation are a
+planned extension: they will be registered through stable capability
+descriptors, each declaring the receiver kinds it accepts, its result kind,
+whether it distributes over lists, and the capability required for
+evaluation. An unknown property, an invalid receiver, or an unavailable
+capability produces the corresponding structured diagnostic. A distributive
+property preserves list order and evaluated element identity; a
+non-distributive property rejects a list receiver.
 
-The common language registers two families of properties, both distributive:
-the grade projection `A.gN` and the blade coefficient `A.eN`, in any generator
-order (section 6). `.position` and `.head` are not properties of a value: they
-name a part of a document item (section 3). A property is never a function:
+The two common-language families are both distributive: the grade
+projection `A.gN` and the blade coefficient `A.eN`, in any generator order
+(section 6). `.position` and `.head` are not properties of a value: they are
+references to the separately evaluated position of a named item and to its
+derived head (section 1, current implementation subset). A property is never a function:
 operations on a value are written as calls (section 10), and the removed
 version 1 properties, such as `A.norm`, produce an unsupported-property
 diagnostic that names the function form.

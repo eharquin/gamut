@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { executeDocumentCommand } from './documentCommands'
 import { expressionDocument } from './expressionDocument'
+import { migrateSourceToVersion2 } from '../language/migrateLanguage'
 import {
   fromCanonicalDocument,
   parseCanonicalDocument,
@@ -266,6 +267,11 @@ describe('canonical document format', () => {
       label: 'd = ${norm(A & B)}', opacitySource: 'norm(inverse(A))',
       primitiveStyles: { points: { pointSizeSource: 'reverse(X)' } },
     })
+    // A rewrite that would exceed the source limit keeps the version 1 text.
+    const atLimit = `${'A'.repeat(65_536 - 5)}.norm`
+    expect(migrateSourceToVersion2(atLimit).length).toBe(65_537)
+    expect(parseCanonicalDocument(JSON.stringify({ ...legacy, items: [{ ...legacy.items[0], source: atLimit }, legacy.items[1]] })).items[0].source)
+      .toBe(atLimit)
     // A version 2 document is read as written, and a later version is refused.
     expect(parseCanonicalDocument(JSON.stringify({ ...current, items: [{ ...current.items[0], source: 'A.norm' }, current.items[1]] })).items[0].source).toBe('A.norm')
     expect(() => parseCanonicalDocument(JSON.stringify({ ...current, languageVersion: 3 }))).toThrow('Unsupported language version 3.')
