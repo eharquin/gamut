@@ -25,10 +25,11 @@ const sources = () => editors().map((element) => element.value)
 const stored = () => parseCanonicalDocument(window.localStorage.getItem(ACTIVE_DOCUMENT_KEY)!)
 
 /** Pastes `text` into an editor over the selection from `start` to `end`. */
-function paste(editor: HTMLInputElement, text: string, start = editor.value.length, end = start) {
+/** Whether the browser would insert the text itself: false when the handler takes the paste over. */
+function paste(editor: HTMLInputElement, text: string, start = editor.value.length, end = start): boolean {
   editor.focus()
   editor.setSelectionRange(start, end)
-  fireEvent.paste(editor, { clipboardData: { getData: (type: string) => (type === 'text/plain' ? text : '') } })
+  return fireEvent.paste(editor, { clipboardData: { getData: (type: string) => (type === 'text/plain' ? text : '') } })
 }
 
 const BLOCK = [
@@ -49,7 +50,7 @@ const rows = (...rowSources: string[]) => expressionDocument(
 describe('pasting several lines into an expression (#336)', () => {
   it('makes one row per line, in one undo step, with the caret after the last line', async () => {
     open(rows('A = 1', ''))
-    paste(editors()[1], `${BLOCK.join('\r\n')}\r\n`)
+    expect(paste(editors()[1], `${BLOCK.join('\r\n')}\r\n`)).toBe(false)
     expect(sources()).toEqual(['A = 1', ...BLOCK])
     await waitFor(() => expect(editors().at(-1)).toHaveFocus())
     expect(editors().at(-1)!.selectionStart).toBe(BLOCK.at(-1)!.length)
@@ -57,12 +58,45 @@ describe('pasting several lines into an expression (#336)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
     expect(sources()).toEqual(['A = 1', ''])
+    // Undo returns to the editor the paste was made in.
+    await waitFor(() => expect(editors()[1]).toHaveFocus())
   })
 
-  it('pastes into the middle of a row, keeping the text around the selection', () => {
+  it('stops a playing slider first, so that the paste stays one step', async () => {
+    const document = rows('a = 2', '')
+    open({ ...document, items: document.items.map((item, index) => index === 0 ? {
+      ...item,
+      control: { mode: 'slider', minimumSource: '0', maximumSource: '10', stepSource: '1', animation: { mode: 'loop', direction: 'forward', durationSeconds: 1 } },
+    } : item) })
+    fireEvent.click(screen.getAllByRole('button', { name: 'Play scalar animation' })[0])
+    expect(screen.getAllByRole('button', { name: 'Pause scalar animation' }).length).toBeGreaterThan(0)
+    expect(paste(editors()[1], 'x = 1\ny = 2')).toBe(false)
+    expect(sources()).toEqual(['a = 2', 'x = 1', 'y = 2'])
+    expect(screen.queryAllByRole('button', { name: 'Pause scalar animation' })).toHaveLength(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
+    expect(sources()).toEqual(['a = 2', ''])
+  })
+
+  it('pastes into the middle of a row, keeping the text around the selection', async () => {
     open(rows('a = x + 1', 'z = 0'))
     paste(editors()[0], 'b\nc = d', 4, 5)
     expect(sources()).toEqual(['a = b', 'c = d + 1', 'z = 0'])
+    // The caret follows the pasted text, before what followed the selection.
+    await waitFor(() => expect(editors()[1]).toHaveFocus())
+    expect(editors()[1].selectionStart).toBe(5)
+  })
+
+  it('keeps a pasted slash line an expression, even when it is edited', async () => {
+    open(rows(''))
+    expect(paste(editors()[0], '/Points')).toBe(false)
+    expect(sources()).toEqual(['/Points'])
+    fireEvent.change(editors()[0], { target: { value: '/Points2' } })
+    expect(sources()).toEqual(['/Points2'])
+    expect(screen.queryByRole('button', { name: /^Folder / })).not.toBeInTheDocument()
+    // Typing a slash first in an empty row still makes a folder.
+    fireEvent.change(editors()[0], { target: { value: '' } })
+    fireEvent.change(editors()[0], { target: { value: '/' } })
+    await waitFor(() => expect(screen.getByRole('textbox', { name: /^Name of folder/ })).toBeInTheDocument())
   })
 
   it('makes notes, never folders, and keeps the rows in the folder pasted into', async () => {
@@ -85,14 +119,17 @@ describe('pasting several lines into an expression (#336)', () => {
     paste(last, 'x = 1\ny = 2\nz = 3')
     expect(editors()).toHaveLength(MAX_EXPRESSION_ITEMS - 1)
     expect(last.value).toBe(`a${MAX_EXPRESSION_ITEMS - 2} = ${MAX_EXPRESSION_ITEMS - 2}`)
-    expect(screen.getByText(`The paste would make more than ${MAX_EXPRESSION_ITEMS} rows; nothing was changed.`)).toBeInTheDocument()
-  }, 60_000)
+    expect(screen.getByText(`The paste would make more than ${MAX_EXPRESSION_ITEMS} rows; nothing was changed.`)).toBeVisible()
+    // Exactly the limit is allowed.
+    paste(editors().at(-1)!, 'x = 1\ny = 2')
+    expect(editors()).toHaveLength(MAX_EXPRESSION_ITEMS)
+  }, 90_000)
 
   it('pastes a single line as before', () => {
     open(rows('a = '))
     const editor = editors()[0]
-    paste(editor, '1')
     // The browser inserts it: the paste event is not prevented.
+    expect(paste(editor, '1')).toBe(true)
     expect(sources()).toEqual(['a = '])
   })
 })

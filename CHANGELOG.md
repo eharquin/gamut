@@ -29,9 +29,8 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Pasting several lines into an expression row makes one row per non-blank
   line, after the row pasted into and in its folder, as one undo step (#336).
   A line that starts with `"` becomes a note; a line that starts with `/`
-  stays an expression, so a paste never makes a folder. A paste that would
-  exceed 1,000 rows is refused.
-
+  stays an expression, even when edited, so a paste never makes a folder. A
+  paste that would exceed 1,000 rows is refused.
 - `normalize(A)` and, in PGA(2), `inormalize(A)` divide a value by its norm or
   its ideal norm; a zero norm is a domain diagnostic (#342).
 - List reductions `min(L)`, `max(L)` and `sum(L)` (#338): `min([d0, d1, d2])`
