@@ -155,6 +155,7 @@ traversal or recursive evaluation.
 | Generated element records per document evaluation | 100,000 | `LIMIT_DOCUMENT_VALUES` |
 | Stored non-zero coefficients in one owned value | 100,000 | `LIMIT_COEFFICIENT_COUNT` |
 | Deterministic work units per document evaluation | 10,000,000 | `LIMIT_EVALUATION_WORK` |
+| Nested calls to declared functions | 32 | `LIMIT_CALL_DEPTH` |
 | Generator count accepted by the common engine boundary | 32 | `LIMIT_GENERATOR_COUNT` |
 | Formatted result characters per item | 1 MiB | `LIMIT_FORMATTED_RESULT` |
 

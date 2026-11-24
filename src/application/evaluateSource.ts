@@ -22,6 +22,7 @@ import {
 import { lowerExpression } from '../language/lowerExpression'
 import { parseExpression } from '../language/parseExpression'
 import type { SurfaceExpressionNode } from '../language/ast'
+import type { UserFunction } from '../evaluation/evaluateExpression'
 import {
   type VisualizationPrimitive,
 } from '../visualization/primitives'
@@ -64,6 +65,15 @@ export type EvaluationState =
   | Readonly<{
       status: 'invalid'
       diagnostic: Diagnostic
+    }>
+  | Readonly<{
+      /**
+       * A declared function `f(x, …) = body` (#340): it has no value and
+       * draws nothing; calls evaluate its body.
+       */
+      status: 'function'
+      signature: string
+      definition: UserFunction
     }>
 
 function firstReference(

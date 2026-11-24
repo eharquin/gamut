@@ -33,6 +33,27 @@ export class ExpressionEvaluationError extends Error {
 export type EvaluationBudget = { work: number; generatedValues: number }
 const MAX_DOCUMENT_VALUES = 100_000
 const MAX_EVALUATION_WORK = 10_000_000
+/** Calls to declared functions nested inside one another (#340). */
+export const MAX_CALL_DEPTH = 32
+
+type ReferenceResolver = (name: string, property: 'position' | 'head' | null) => LanguageValue
+
+/**
+ * A function declared in the document, `name(p1, …) = body` (#340): its
+ * parameters, its lowered body, and how the body resolves its other names.
+ */
+export type UserFunction = Readonly<{
+  name: string
+  parameters: readonly string[]
+  body: CoreExpressionNode
+  resolveReference: ReferenceResolver
+}>
+
+/** The declared functions a call may reach, and how deep the current call is. */
+export type FunctionScope = Readonly<{
+  resolve(name: string): UserFunction | undefined
+  depth: number
+}>
 
 /**
  * Evaluates an owned syntax node exclusively through the supplied algebra
@@ -47,11 +68,12 @@ export function evaluateExpression(
   ) => LanguageValue,
   identityScope?: string,
   budget: EvaluationBudget = { work: 0, generatedValues: 0 },
+  functions?: FunctionScope,
 ): LanguageValue {
   chargeWork(budget, 1, expression)
   try {
     return evaluateExpressionUnchecked(
-      expression, engine, resolveReference, identityScope ?? 'source', budget,
+      expression, engine, resolveReference, identityScope ?? 'source', budget, functions,
     )
   } catch (error) {
     if (error instanceof AlgebraOperationError) {
@@ -70,10 +92,11 @@ function evaluateExpressionUnchecked(
   ) => LanguageValue,
   identityScope?: string,
   budget: EvaluationBudget = { work: 0, generatedValues: 0 },
+  functions?: FunctionScope,
 ): LanguageValue {
   const scope = identityScope ?? 'source'
   const evaluate = (node: CoreExpressionNode) =>
-    evaluateExpression(node, engine, resolveReference, scope, budget)
+    evaluateExpression(node, engine, resolveReference, scope, budget, functions)
   switch (expression.kind) {
     case 'scalar':
       return engine.scalar(expression.value)
@@ -84,6 +107,10 @@ function evaluateExpressionUnchecked(
     }
     case 'call': {
       const arities = engine.functions.get(expression.name)
+      const declared = arities === undefined ? functions?.resolve(expression.name) : undefined
+      if (declared) {
+        return callUserFunction(expression, declared, expression.arguments.map(evaluate), engine, scope, budget, functions!)
+      }
       if (arities === undefined) {
         throw new ExpressionEvaluationError(
           'LANG_UNSUPPORTED_FUNCTION',
@@ -280,6 +307,68 @@ function evaluateExpressionUnchecked(
           : `The property “${expression.property}” is not supported.`,
         expression.propertyOrigin,
       )
+  }
+}
+
+/**
+ * A call to a declared function (#340): the arguments are evaluated once,
+ * then the body with each parameter bound to its argument and every other
+ * name resolved in the document. List results take identities scoped by the
+ * call, and a failure in the body fails the call and names the function.
+ */
+function callUserFunction(
+  expression: Extract<CoreExpressionNode, { kind: 'call' }>,
+  declared: UserFunction,
+  args: readonly LanguageValue[],
+  engine: AlgebraEngine,
+  scope: string,
+  budget: EvaluationBudget,
+  functions: FunctionScope,
+): LanguageValue {
+  const count = declared.parameters.length
+  if (args.length !== count) {
+    throw new ExpressionEvaluationError(
+      'LANG_ARITY',
+      `“${declared.name}” takes ${count} ${count === 1 ? 'argument' : 'arguments'}, received ${args.length}.`,
+      expression.origin,
+    )
+  }
+  if (functions.depth >= MAX_CALL_DEPTH) {
+    throw new ExpressionEvaluationError(
+      'LIMIT_CALL_DEPTH',
+      `Calls to declared functions are nested more than ${MAX_CALL_DEPTH} deep.`,
+      expression.origin,
+    )
+  }
+  const bound = new Map(declared.parameters.map((parameter, index) => [parameter, args[index]]))
+  try {
+    return evaluateExpression(
+      declared.body,
+      engine,
+      (name, property) => {
+        const argument = bound.get(name)
+        if (argument === undefined) return declared.resolveReference(name, property)
+        if (property !== null) {
+          throw new ExpressionEvaluationError(
+            'LANG_UNSUPPORTED_PROPERTY',
+            `The parameter “${name}” has no ${property}.`,
+            declared.body.origin,
+          )
+        }
+        return argument
+      },
+      `${scope}:call:${expression.origin.start}:${expression.origin.end}`,
+      budget,
+      { resolve: functions.resolve, depth: functions.depth + 1 },
+    )
+  } catch (error) {
+    if (!(error instanceof ExpressionEvaluationError)) throw error
+    // The body belongs to another row, so the call carries the diagnostic;
+    // a limit keeps its message, any other failure names the function.
+    const message = error.code.startsWith('LIMIT_') || error.message.startsWith('In “')
+      ? error.message
+      : `In “${declared.name}”: ${error.message}`
+    throw new ExpressionEvaluationError(error.code, message, expression.origin)
   }
 }
 

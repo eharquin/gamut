@@ -21,8 +21,19 @@ export type ParseResult =
   | Readonly<{ ok: true; expression: SurfaceExpressionNode }>
   | Readonly<{ ok: false; diagnostic: Diagnostic }>
 
+/** A parameter of a declared function, `x` in `f(x) = …` (#340). */
+export type FunctionParameter = Readonly<{ name: string; span: SourceSpan }>
+
 export type ParsedDocumentExpression = Readonly<{
-  declaration: Readonly<{ name: string; span: SourceSpan }> | null
+  /**
+   * The declared name; `parameters` is present for a function declaration
+   * `f(x, …) = body` and absent for a value `A = …`.
+   */
+  declaration: Readonly<{
+    name: string
+    span: SourceSpan
+    parameters?: readonly FunctionParameter[]
+  }> | null
   expression: SurfaceExpressionNode
 }>
 
@@ -126,9 +137,89 @@ class Parser {
     return { ok: true, expression: expression.node }
   }
 
+  /**
+   * The closing parenthesis of `name(…) =` when the source starts with a
+   * function declaration, or -1: a call followed by `=`.
+   */
+  private functionDeclarationEnd(): number {
+    if (this.current().kind !== 'identifier' ||
+        this.tokens[this.offset + 1]?.kind !== 'left-parenthesis') return -1
+    let depth = 0
+    for (let index = this.offset + 1; index < this.tokens.length; index += 1) {
+      const kind = this.tokens[index].kind
+      if (kind === 'left-parenthesis') depth += 1
+      else if (kind === 'right-parenthesis') {
+        depth -= 1
+        if (depth === 0) return this.tokens[index + 1]?.kind === 'equals' ? index : -1
+      } else if (kind === 'end') return -1
+    }
+    return -1
+  }
+
+  /** `name(p1, …, pk) =`: distinct names that are not reserved. */
+  private parseFunctionDeclaration(end: number): Readonly<{ ok: true; declaration: NonNullable<ParsedDocumentExpression['declaration']> }> | Readonly<{ ok: false; diagnostic: Diagnostic }> {
+    const identifier = this.current()
+    const parameters: FunctionParameter[] = []
+    let index = this.offset + 2
+    while (index < end) {
+      const token = this.tokens[index]
+      if (token.kind !== 'identifier') {
+        return { ok: false, diagnostic: syntaxDiagnostic(
+          `A parameter of “${identifier.text}” must be a name.`, token.span,
+        ) }
+      }
+      if (RESERVED_FUNCTION_NAMES.has(token.text)) {
+        return { ok: false, diagnostic: syntaxDiagnostic(
+          `The built-in name “${token.text}” cannot be a parameter.`, token.span,
+        ) }
+      }
+      if (parameters.some((parameter) => parameter.name === token.text)) {
+        return { ok: false, diagnostic: syntaxDiagnostic(
+          `The parameter “${token.text}” is repeated.`, token.span,
+        ) }
+      }
+      parameters.push({ name: token.text, span: token.span })
+      const separator = this.tokens[index + 1]
+      if (index + 1 < end && separator.kind !== 'comma') {
+        return { ok: false, diagnostic: syntaxDiagnostic(
+          'Expected “,” between the parameters.', separator.span,
+        ) }
+      }
+      if (index + 2 === end && separator.kind === 'comma') {
+        return { ok: false, diagnostic: syntaxDiagnostic(
+          'Expected a parameter after “,”.', this.tokens[end].span,
+        ) }
+      }
+      index += 2
+    }
+    if (parameters.length === 0) {
+      return { ok: false, diagnostic: syntaxDiagnostic(
+        `“${identifier.text}” needs at least one parameter.`,
+        { start: identifier.span.start, end: this.tokens[end].span.end },
+      ) }
+    }
+    this.offset = end + 2
+    return { ok: true, declaration: { name: identifier.text, span: identifier.span, parameters } }
+  }
+
   parseDocumentExpression(): DocumentExpressionParseResult {
     let declaration: ParsedDocumentExpression['declaration'] = null
-    if (
+    const functionEnd = this.functionDeclarationEnd()
+    if (functionEnd >= 0) {
+      const identifier = this.current()
+      if (RESERVED_FUNCTION_NAMES.has(identifier.text)) {
+        return {
+          ok: false,
+          diagnostic: syntaxDiagnostic(
+            `The built-in name “${identifier.text}” cannot be redefined.`,
+            identifier.span,
+          ),
+        }
+      }
+      const parsed = this.parseFunctionDeclaration(functionEnd)
+      if (!parsed.ok) return parsed
+      declaration = parsed.declaration
+    } else if (
       this.current().kind === 'identifier' &&
       this.tokens[this.offset + 1]?.kind === 'equals'
     ) {

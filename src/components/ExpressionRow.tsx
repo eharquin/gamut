@@ -362,6 +362,12 @@ export function ExpressionRow({
             } and was left unchanged.</span>
           </>}
         </>
+      ) : evaluation?.status === 'function' ? (
+        // A declared function has no value: its signature stands for it (#340).
+        <div className="expression-kind-line">
+          <span className="object-kind">Function</span>
+          <code className="function-signature">{evaluation.signature}</code>
+        </div>
       ) : evaluation?.status === 'invalid' ? (
         <>
           <span className="feedback-label">

@@ -2,7 +2,7 @@ import type { AlgebraEngine } from '../algebra/algebraEngine'
 import type { ExpressionControl } from '../document/expressionDocument'
 import type { Diagnostic, SourceSpan } from '../domain/diagnostic'
 import type { LanguageValue } from '../domain/languageValue'
-import { evaluateExpression, ExpressionEvaluationError } from '../evaluation/evaluateExpression'
+import { evaluateExpression, ExpressionEvaluationError, type FunctionScope } from '../evaluation/evaluateExpression'
 import type { SurfaceExpressionNode } from '../language/ast'
 import { declaredName } from '../language/declaredName'
 import { lowerExpression } from '../language/lowerExpression'
@@ -101,6 +101,16 @@ export function valueSourceEvaluator(
     declarations.set(name, [...(declarations.get(name) ?? []), item])
   })
 
+  // Labels and bounds may call the functions the document declares (#340).
+  const functions: FunctionScope = {
+    depth: 0,
+    resolve: (name) => {
+      const targets = declarations.get(name)
+      const evaluation = targets?.length === 1 ? targets[0].evaluation : null
+      return evaluation?.status === 'function' ? evaluation.definition : undefined
+    },
+  }
+
   return (source) => {
     const parsed = parseExpression(source)
     if (!parsed.ok) return { status: 'invalid', diagnostic: parsed.diagnostic }
@@ -115,6 +125,7 @@ export function valueSourceEvaluator(
       if (!targets) return invalid('LANG_UNDEFINED_NAME', `The name “${reference.name}” is not defined.`, reference.span)
       if (targets.length !== 1) return invalid('LANG_DUPLICATE_NAME', `The name “${reference.name}” is declared more than once.`, reference.span)
       const evaluation = targets[0].evaluation
+      if (evaluation?.status === 'function') return invalid('LANG_FUNCTION_VALUE', `“${reference.name}” is a function: call it, as in ${evaluation.signature}.`, reference.span)
       if (evaluation?.status !== 'valid') return invalid('LANG_INVALID_DEPENDENCY', `The dependency “${reference.name}” is invalid.`, reference.span)
       resolved.set(reference.name, evaluation.value)
     }
@@ -126,6 +137,7 @@ export function valueSourceEvaluator(
         (name) => resolved.get(name)!,
         'scalar-control',
         { work: 0, generatedValues: 0 },
+        functions,
       )
     } catch (error) {
       if (!(error instanceof ExpressionEvaluationError)) throw error
