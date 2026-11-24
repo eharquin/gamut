@@ -125,6 +125,9 @@ export function operatorsSection(examples: Readonly<{ regressive: ReferenceExamp
       entry('~A', 'reverse, as reverse(A)', { source: '~e12', inspection: '-e12' }),
       entry('!A', 'dual, as dual(A)', examples.dual),
       entry('R >>> A', 'sandwich action R * A * ~R', { source: 'e12 >>> e1', inspection: '-e1' }),
+      entry('a < b, a <= b, a > b, a >= b', 'comparisons: 1 when they hold, 0 otherwise',
+        { source: '1 < 2', inspection: '1' }, { source: '[1, 2, 3] >= 2', inspection: '[0, 1, 1]' }),
+      entry('a == b, a != b', 'exact equality, with no tolerance', { source: '0.5 + 0.5 == 1', inspection: '1' }),
     ],
   }
 }
@@ -148,6 +151,9 @@ export function functionsSection(examples: Readonly<{ dual: ReferenceExample }>)
       { source: 'sinh(0)', inspection: '0' }, { source: 'cosh(0)', inspection: '1' }),
     entry('abs(a), sqrt(a), log(a), min(a, b), max(a, b)', 'scalar functions',
       { source: 'sqrt(4)', inspection: '2' }, { source: 'max(1, 2)', inspection: '2' }),
+    entry('if(c, a, b)', 'a when c is not zero, else b, leaving the other branch unevaluated',
+      { source: 'if(2 > 1, e1, e2)', inspection: 'e1' }, { source: 'if([1, 0], 3, 4)', inspection: '[3, 4]' }),
+    entry('sign(a)', '-1, 0 or 1', { source: 'sign(-3)', inspection: '-1' }),
     entry('min(L), max(L), sum(L)', 'smallest or largest scalar of a list, and the sum of its elements',
       { source: 'min([3, -1, 4])', inspection: '-1' }, { source: 'sum([e1, 2e2, e1])', inspection: '2e1 + 2e2' }),
     entry('pi, tau', 'predefined scalar constants', { source: 'cos(pi)', inspection: '-1' }, { source: 'cos(tau)', inspection: '1' }),
@@ -163,7 +169,8 @@ export const PRECEDENCE: ReferenceSection = {
     entry('A ^ B, A & B, A | B', 'geometric derived products', { source: 'e1 * e2 ^ e1', inspection: '-e2' }),
     entry('A * B, A / B, a % m', 'geometric product, division, and scalar modulo', { source: '2 * e12 >>> e1', inspection: '-4e1' }),
     entry('R >>> A', 'sandwich action', { source: 'e1 + e12 >>> e1', inspection: '0' }),
-    entry('A + B, A - B', 'weakest', { source: '1 + 2 * 3', inspection: '7' }),
+    entry('A + B, A - B', 'addition and subtraction', { source: '1 + 2 * 3', inspection: '7' }),
+    entry('a < b, a == b, …', 'weakest, not associative', { source: '1 + 1 == 2', inspection: '1' }),
   ],
 }
 

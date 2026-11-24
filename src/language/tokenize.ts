@@ -16,6 +16,7 @@ export type TokenKind =
   | 'percent'
   | 'power'
   | 'sandwich'
+  | 'comparison'
   | 'caret'
   | 'pipe'
   | 'ampersand'
@@ -129,6 +130,14 @@ export function tokenize(source: string): TokenizeResult {
     if (source.startsWith('>>>', offset)) {
       tokens.push({ kind: 'sandwich', text: '>>>', span: { start: offset, end: offset + 3 } })
       offset += 3
+      continue
+    }
+    // `>>>` is read first, so `>` and `>=` here are comparisons; `!=` is one
+    // token, never the dual `!` followed by `=` (#339).
+    const comparison = ['<=', '>=', '==', '!=', '<', '>'].find((operator) => source.startsWith(operator, offset))
+    if (comparison) {
+      tokens.push({ kind: 'comparison', text: comparison, span: { start: offset, end: offset + comparison.length } })
+      offset += comparison.length
       continue
     }
     if (source.startsWith('...', offset)) {

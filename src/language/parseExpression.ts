@@ -2,6 +2,7 @@ import type { Diagnostic, SourceSpan } from '../domain/diagnostic'
 import { LANGUAGE_FUNCTION_NAMES, languageFunction } from './functions'
 import type {
   BasisBladeNode,
+  ComparisonOperator,
   SurfaceExpressionNode,
 } from './ast'
 import { tokenize, type Token, type TokenKind } from './tokenize'
@@ -109,7 +110,7 @@ class Parser {
   }
 
   parse(): ParseResult {
-    const expression = this.parseAdditive()
+    const expression = this.parseComparison()
     if (!expression.ok) return expression
 
     const trailing = this.current()
@@ -145,7 +146,7 @@ class Parser {
       declaration = { name: identifier.text, span: identifier.span }
     }
 
-    const expression = this.parseAdditive()
+    const expression = this.parseComparison()
     if (!expression.ok) return expression
     const trailing = this.current()
     if (trailing.kind !== 'end') {
@@ -172,6 +173,40 @@ class Parser {
     const token = this.current()
     this.offset += 1
     return token
+  }
+
+  /**
+   * The weakest level: one comparison between two additive expressions. A
+   * comparison is not associative, so `a < b < c` is a syntax diagnostic.
+   */
+  private parseComparison(): NodeResult {
+    const left = this.parseAdditive()
+    if (!left.ok) return left
+    const operator = this.consume('comparison')
+    if (!operator) return left
+    const right = this.parseAdditive()
+    if (!right.ok) return right
+    const chained = this.current()
+    if (chained.kind === 'comparison') {
+      return {
+        ok: false,
+        diagnostic: syntaxDiagnostic(
+          'Comparisons cannot be chained; combine them with parentheses, such as (a < b) * (b < c).',
+          chained.span,
+        ),
+      }
+    }
+    return {
+      ok: true,
+      node: {
+        kind: 'binary-expression',
+        operator: operator.text as ComparisonOperator,
+        left: left.node,
+        right: right.node,
+        implicit: false,
+        span: { start: left.node.span.start, end: right.node.span.end },
+      },
+    }
   }
 
   private parseAdditive(): NodeResult {
@@ -347,7 +382,7 @@ class Parser {
     while (this.current().kind === 'dot' || this.current().kind === 'left-bracket') {
       const leftBracket = this.consume('left-bracket')
       if (leftBracket) {
-        const index = this.parseAdditive()
+        const index = this.parseComparison()
         if (!index.ok) return index
         const rightBracket = this.consume('right-bracket')
         if (!rightBracket) {
@@ -485,7 +520,7 @@ class Parser {
 
     const leftParenthesis = this.consume('left-parenthesis')
     if (leftParenthesis) {
-      const first = this.parseAdditive()
+      const first = this.parseComparison()
       if (!first.ok) return first
 
       if (this.current().kind === 'comma') {
@@ -529,10 +564,10 @@ class Parser {
       } }
     }
 
-    const first = this.parseAdditive()
+    const first = this.parseComparison()
     if (!first.ok) return first
     if (this.consume('ellipsis')) {
-      const end = this.parseAdditive()
+      const end = this.parseComparison()
       if (!end.ok) return end
       const right = this.consume('right-bracket')
       if (!right) return { ok: false, diagnostic: syntaxDiagnostic(
@@ -564,10 +599,10 @@ class Parser {
       } }
     }
 
-    const second = this.parseAdditive()
+    const second = this.parseComparison()
     if (!second.ok) return second
     if (this.consume('ellipsis')) {
-      const end = this.parseAdditive()
+      const end = this.parseComparison()
       if (!end.ok) return end
       const right = this.consume('right-bracket')
       if (!right) return { ok: false, diagnostic: syntaxDiagnostic(
@@ -582,7 +617,7 @@ class Parser {
     const elements: SurfaceExpressionNode[] = [first.node, second.node]
     while (this.consume('comma')) {
       if (this.current().kind === 'right-bracket') break
-      const element = this.parseAdditive()
+      const element = this.parseComparison()
       if (!element.ok) return element
       elements.push(element.node)
     }
@@ -601,7 +636,7 @@ class Parser {
     this.consume('left-parenthesis')
     const argumentNodes: SurfaceExpressionNode[] = []
     do {
-      const argument = this.parseAdditive()
+      const argument = this.parseComparison()
       if (!argument.ok) return argument
       argumentNodes.push(argument.node)
     } while (this.consume('comma'))
@@ -651,7 +686,7 @@ class Parser {
     // tuple, so `(1,)` differs from the parenthesized scalar `(1)`.
     if (this.current().kind !== 'right-parenthesis') {
       for (;;) {
-        const component = this.parseAdditive()
+        const component = this.parseComparison()
         if (!component.ok) return component
         components.push(component.node)
         const comma = this.consume('comma')
@@ -700,7 +735,7 @@ class Parser {
 
     // Components are any expressions; the constructor rejects a non-scalar
     // one at evaluation, as for every other constructor call.
-    const first = this.parseAdditive()
+    const first = this.parseComparison()
     if (!first.ok) return first
     if (!this.consume('comma')) {
       return {
@@ -712,7 +747,7 @@ class Parser {
       }
     }
 
-    const second = this.parseAdditive()
+    const second = this.parseComparison()
     if (!second.ok) return second
     const rightParenthesis = this.consume('right-parenthesis')
     if (!rightParenthesis) {

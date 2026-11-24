@@ -23,6 +23,8 @@ function nearTangentPole(scalar: number): boolean {
 
 export const SCALAR_FUNCTIONS = {
   abs: { arity: 1, domainError: admissible, apply: ([x]) => Math.abs(x) },
+  // -1, 0 or 1; the zero is never negative (#339).
+  sign: { arity: 1, domainError: admissible, apply: ([x]) => (x > 0 ? 1 : x < 0 ? -1 : 0) },
   sqrt: {
     arity: 1,
     domainError: ([x]) => (x < 0 ? 'The square root requires a non-negative scalar value.' : null),
