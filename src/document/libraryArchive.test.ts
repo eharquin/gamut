@@ -270,9 +270,9 @@ describe('library archive import (STORE-018, SEC-010, SEC-011)', () => {
     expect(result.migrated).toBe(0)
     // Graphs written by an earlier version are counted in the summary (#343).
     expect(describeArchiveImport({ ...result, migrated: 2 })).toBe(
-      'Imported 3 graphs into the folder Imported 2026-11-13. 2 were written by an earlier version of GAMUT and updated to the current format.')
+      'Imported 3 graphs into the folder Imported 2026-11-13. 2 were written by an earlier version of GAMUT and updated to the current version.')
     expect(describeArchiveImport({ ...result, migrated: 3 })).toBe(
-      'Imported 3 graphs into the folder Imported 2026-11-13. All were written by an earlier version of GAMUT and updated to the current format.')
+      'Imported 3 graphs into the folder Imported 2026-11-13. All were written by an earlier version of GAMUT and updated to the current version.')
     const read = readLibrary(storage)
     expect(read.entries.map(({ id, name, folder, updatedAt }) => ({ id, name, folder, updatedAt }))).toEqual([
       { id: 'a', name: 'Rotation', folder: undefined, updatedAt: NOW },

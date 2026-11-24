@@ -605,14 +605,16 @@ previous one; the implementation records the migrations in
 | 13 | `primitiveStyles.points.fill`, a boolean that tints the polygon of a list of points, and `primitiveStyles.points.fillOpacitySource`, its share of the list's color in percent (empty: 20); a list's points, border and fill are drawn independently, so its points may be hidden without a border. The migration sets `fill: false` and an empty `fillOpacitySource` in every points block, items and folders alike, so version 12 lists draw as before; version 12 was already served by the deployed site, hence a new version rather than a change to 12. |
 
 When the reader opens a document written in an earlier format or language
-version, by importing or dropping a file, from the library or by a scene
-link, a polite status message says so (#343): the versions it was written
-in, the current ones, how many rows the language migration rewrote, and that
-saving writes the new format. Opening never writes: a library entry stays
-stored as it was until it is saved, and the message does not mark the graph
-as changed. A document in the current versions shows nothing, embed mode
-shows nothing, and an archive import adds to its summary how many of its
-graphs were migrated.
+version, by importing or dropping a file, from the library, by a scene link,
+or as the working copy an earlier release autosaved, a polite status message
+says so (#343): the versions it was written in, the current ones, the rows
+and folders the language migration rewrote, by name (the declared name,
+`row N`, or `folder A/B`, at most five then a count), and that saving writes
+the new format. Opening never writes: a library entry stays stored as it was
+until it is saved, and the message does not mark the graph as changed.
+Opening another graph withdraws it. A document in the current versions shows
+nothing, embed mode shows nothing, and an archive import adds to its summary
+how many of its graphs were migrated.
 
 A release can open only the format versions it knows. Release 0.2.0 cannot
 open a version 8, 9, 10, 11, or 12 document; protecting an older release against a document

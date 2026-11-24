@@ -1,5 +1,6 @@
 import { defaultStyleForKind, STUDIO_COLORS } from '../components/appearancePalette'
 import { CURRENT_LANGUAGE_VERSION, migrateLabelToVersion2, migrateSourceToVersion2 } from '../language/migrateLanguage'
+import { declaredName } from '../language/declaredName'
 import type {
   ExpressionControl,
   ExpressionDocument,
@@ -224,7 +225,11 @@ function rejectDuplicateKeys(source: string): void {
 export type DocumentMigration = Readonly<{
   formatVersion: number
   languageVersion: number
-  rewrittenRows: number
+  /**
+   * The rows and folders whose sources the language migration rewrote, named
+   * as the panel shows them: the declared name, `row N`, or `folder A/B`.
+   */
+  rewritten: readonly string[]
 }>
 
 const migrations = new WeakMap<CanonicalDocument, DocumentMigration>()
@@ -234,14 +239,25 @@ export function documentMigration(document: CanonicalDocument): DocumentMigratio
   return migrations.get(document) ?? null
 }
 
-/** The items of a raw document, by identity, as comparable text. */
-function itemTexts(value: unknown): Map<string, string> {
-  const document = value as { items?: unknown; appearance?: unknown }
+/**
+ * The rows and folders of a raw document, by a name the reader recognizes,
+ * as comparable text: an item with its appearance, a folder with its own.
+ */
+function rowTexts(value: unknown): Map<string, string> {
+  const document = value as { items?: unknown; appearance?: unknown; folders?: unknown }
   const texts = new Map<string, string>()
-  if (!Array.isArray(document.items)) return texts
   const appearance = (document.appearance ?? {}) as Record<string, unknown>
-  for (const item of document.items as { id?: unknown }[]) {
-    if (typeof item?.id === 'string') texts.set(item.id, JSON.stringify([item, appearance[item.id]]))
+  if (Array.isArray(document.items)) {
+    (document.items as { id?: unknown; source?: unknown }[]).forEach((item, index) => {
+      if (typeof item?.id !== 'string') return
+      const name = typeof item.source === 'string' ? declaredName(item.source) : null
+      texts.set(`${item.id}\u0000${name ?? `row ${index + 1}`}`, JSON.stringify([item, appearance[item.id]]))
+    })
+  }
+  if (Array.isArray(document.folders)) {
+    for (const folder of document.folders as { path?: unknown }[]) {
+      if (Array.isArray(folder?.path)) texts.set(`\u0000folder ${folder.path.join('/')}`, JSON.stringify(folder))
+    }
   }
   return texts
 }
@@ -257,12 +273,12 @@ export function parseCanonicalDocument(source: string): CanonicalDocument {
   const languageMigrated = migrateLanguage(formatMigrated)
   const document = validateCanonicalDocument(languageMigrated)
   if (raw.formatVersion !== CURRENT_FORMAT_VERSION || raw.languageVersion !== CURRENT_LANGUAGE_VERSION) {
-    const before = itemTexts(formatMigrated)
-    const after = itemTexts(languageMigrated)
+    const before = rowTexts(formatMigrated)
+    const after = rowTexts(languageMigrated)
     migrations.set(document, {
       formatVersion: Number(raw.formatVersion),
       languageVersion: Number(raw.languageVersion),
-      rewrittenRows: [...after].filter(([id, text]) => before.get(id) !== text).length,
+      rewritten: [...after].filter(([key, text]) => before.get(key) !== text).map(([key]) => key.split('\u0000')[1]),
     })
   }
   return document

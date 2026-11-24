@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createHash, webcrypto } from 'node:crypto'
 import App from './App'
 import { serializeCanonicalDocument, toCanonicalDocument, type CanonicalDocument } from './document/canonicalDocument'
+import { ACTIVE_DOCUMENT_KEY } from './document/documentStorage'
 import { expressionDocument } from './document/expressionDocument'
 
 const current = toCanonicalDocument(expressionDocument([
@@ -11,7 +12,7 @@ const current = toCanonicalDocument(expressionDocument([
   { id: 'd', source: 'd = A.norm' },
 ], {}, { id: 'old-graph', title: 'Old graph' }), 'light')
 const version1 = { ...current, languageVersion: 1 } as unknown as CanonicalDocument
-const NOTICE = /written by an earlier version of GAMUT \(format 13, language 1\).*1 row was rewritten/
+const NOTICE = /written by an earlier version of GAMUT \(format 13, language 1\).*: d\./
 
 beforeEach(() => {
   vi.stubGlobal('crypto', webcrypto)
@@ -39,11 +40,17 @@ describe('telling the reader that a graph was migrated (#343)', () => {
     await waitFor(() => expect(screen.getByRole('textbox', { name: 'Expression 2' })).toHaveValue('d = norm(A)'))
     expect(screen.getByText(NOTICE)).toBeInTheDocument()
 
-    cleanup()
-    render(<App />)
-    importFile(serializeCanonicalDocument(current))
-    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Expression 2' })).toHaveValue('d = norm(A)'))
+    // A current graph opened next withdraws the notice, which described the old one.
+    importFile(serializeCanonicalDocument({ ...current, id: 'current-graph', items: [current.items[0], { ...current.items[1], source: 'e = 1' }] }))
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Expression 2' })).toHaveValue('e = 1'))
     expect(screen.queryByText(/written by an earlier version/)).not.toBeInTheDocument()
+  })
+
+  it('says so when the working copy an earlier version autosaved is restored', async () => {
+    window.localStorage.setItem(ACTIVE_DOCUMENT_KEY, JSON.stringify(version1))
+    render(<App />)
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Expression 2' })).toHaveValue('d = norm(A)'))
+    await waitFor(() => expect(screen.getByText(NOTICE)).toBeInTheDocument())
   })
 
   it('says so when a scene link was written by an earlier version', async () => {
@@ -53,6 +60,6 @@ describe('telling the reader that a graph was migrated (#343)', () => {
     window.history.replaceState(null, '', '/' + fragment)
     render(<App />)
     await waitFor(() => expect(screen.getByRole('textbox', { name: 'Expression 2' })).toHaveValue('d = norm(A)'))
-    expect(screen.getByText(NOTICE)).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText(NOTICE)).toBeInTheDocument())
   })
 })

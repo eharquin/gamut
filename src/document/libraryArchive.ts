@@ -354,5 +354,5 @@ export function describeArchiveImport(result: LibraryArchiveImport): string {
     ? `No graph was imported: the archive holds no valid document.${skipped}`
     : `Imported ${graphs(result.imported)} into the folder ${describeFolder(result.folder)}.${
       result.migrated === 0 ? '' : ` ${result.migrated === result.imported ? (result.imported === 1 ? 'It was' : 'All were')
-        : `${result.migrated} ${result.migrated === 1 ? 'was' : 'were'}`} written by an earlier version of GAMUT and updated to the current format.`}${skipped}`
+        : `${result.migrated} ${result.migrated === 1 ? 'was' : 'were'}`} written by an earlier version of GAMUT and updated to the current version.`}${skipped}`
 }

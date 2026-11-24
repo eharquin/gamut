@@ -1,5 +1,4 @@
 import type { PastedRows } from './application/pastedLines'
-import { migrationNotice } from './document/migrationNotice'
 import {
   useCallback,
   useEffect,
@@ -129,6 +128,7 @@ import { SceneThumbnail } from './components/SceneThumbnail'
 import { useLibraryFolderActions } from './hooks/useLibraryFolderActions'
 import { showcaseExample, type LibraryExample } from './examples'
 import { selectDroppedDocument } from './document/droppedDocument'
+import { migrationNotice } from './document/migrationNotice'
 import { createSceneLink, decodeSceneFragment, hasSceneFragment, SHARE_URL_WARNING_LENGTH } from './document/sceneLink'
 import { formatDisplayNumber } from './presentation/formatNumber'
 import { evaluateScalarControl } from './application/evaluateScalarControl'
@@ -421,7 +421,11 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
       if (stored === null) return fallback
       const restored = fromCanonicalDocument(stored, restoreOptions)
       requireAvailableAlgebra(algebraRegistry, restored.document.algebra)
-      return { ...restored, diagnostic: sceneDiagnostic ?? restored.recoveryDiagnostic, restored: true }
+      return {
+        ...restored, diagnostic: sceneDiagnostic ?? restored.recoveryDiagnostic, restored: true,
+        // The working copy an earlier version autosaved says so too (#343).
+        migrationNotice: migrationNotice(documentMigration(stored)),
+      }
     } catch (error) {
       return {
         ...fallback,
@@ -640,15 +644,29 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
   const [shareResult, setShareResult] = useState<{ content: string; label: string; message: string } | null>(null)
   // A copied link is confirmed briefly; the panel with the text only appears
   // when the clipboard refuses the copy.
-  const [copyNotice, setCopyNotice] = useState<Readonly<{ message: string; durationMs: number }> | null>(
-    // A scene link written by an earlier version says so as it opens (#343).
-    () => !embed && sharedMigrationNotice ? { message: sharedMigrationNotice, durationMs: MIGRATION_NOTICE_MS } : null,
-  )
-  /** Tells the reader that the graph just opened was migrated from an earlier version (#343). */
+  const [copyNotice, setCopyNotice] = useState<Readonly<{
+    message: string
+    durationMs: number
+    /** A migration notice describes the open graph and goes when another opens. */
+    kind?: 'migration'
+  }> | null>(null)
+  /**
+   * Tells the reader that the graph just opened was migrated from an earlier
+   * version (#343), or withdraws the notice of a previous graph.
+   */
   const showMigrationNotice = (migration: DocumentMigration | null) => {
     const message = migrationNotice(migration)
-    if (message) setCopyNotice({ message, durationMs: MIGRATION_NOTICE_MS })
+    if (message) setCopyNotice({ message, durationMs: MIGRATION_NOTICE_MS, kind: 'migration' })
+    else setCopyNotice((current) => current?.kind === 'migration' ? null : current)
   }
+  // A scene link or a restored working copy written by an earlier version
+  // says so once the page is there, so that the status is announced.
+  useEffect(() => {
+    const message = embed ? null : sharedMigrationNotice ?? ('migrationNotice' in initial ? initial.migrationNotice : null)
+    if (message) setCopyNotice({ message, durationMs: MIGRATION_NOTICE_MS, kind: 'migration' })
+    // Once, as the editor opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   useEffect(() => {
     if (!copyNotice) return
     const timer = window.setTimeout(() => setCopyNotice(null), copyNotice.durationMs)
@@ -2510,7 +2528,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
       requireAvailableAlgebra(algebraRegistry, restored.document.algebra)
       if (!keepFormerDocument()) return
       openGraph(restored.document, restored.theme, restored.recoveryDiagnostic, entry.id)
-      // The entry stays in its stored format until it is saved.
+      // The entry stays in its stored format until it is saved; a current one withdraws an earlier notice.
       showMigrationNotice(documentMigration(stored))
     } catch (error) {
       reportLibraryFailure(error, error instanceof DocumentFormatError
@@ -2521,6 +2539,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
   /** A new empty graph in the current algebra and view. */
   const newLibraryGraph = () => {
     if (!keepFormerDocument()) return
+    showMigrationNotice(null)
     openGraph({
       ...expressionDoc,
       id: crypto.randomUUID(),
@@ -2593,6 +2612,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
     // An example stores the system theme only because a canonical document
     // needs one; it is not a choice of its author, so the reader's theme stays.
     openGraph(restored.document, theme, restored.recoveryDiagnostic, null)
+    showMigrationNotice(null)
     markExampleOnRender.current = true
   }
   const addExampleToLibrary = (example: LibraryExample) => {
