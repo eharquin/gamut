@@ -25,6 +25,16 @@ describe('scalar control evaluation', () => {
     })
   })
 
+  it('does not read an anonymous comparison a == b as a declaration of a (#339)', () => {
+    const items = evaluateDocument(expressionDocument([
+      { id: 'a', source: 'a = 2' },
+      { id: 'c', source: 'a == 3' },
+    ]), context)
+    expect(evaluateScalarControl(control({ minimumSource: '-a' }), items, engine)).toMatchObject({
+      status: 'valid', minimum: -2,
+    })
+  })
+
   it('rejects non-scalar, invalid, and unordered bounds', () => {
     const items = evaluateDocument(expressionDocument([
       { id: 'v', source: 'v = e1' },

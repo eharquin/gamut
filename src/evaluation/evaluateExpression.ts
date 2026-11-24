@@ -441,9 +441,10 @@ function conditionTruth(value: OwnedMultivector, expression: CoreExpressionNode,
 /**
  * `if(condition, whenTrue, whenFalse)` (#339). A single condition evaluates
  * only the branch it selects, so the other may fail without failing the
- * expression. A list condition selects element by element; each branch is
- * evaluated only when at least one element selects it, and a branch that is
- * a list is broadcast against the condition like a binary operand.
+ * expression. A list condition selects element by element: the condition and
+ * the list branches follow the broadcasting rules of `binary`, and each
+ * branch is evaluated only when at least one element selects it. An empty
+ * condition selects nothing and gives an empty list.
  */
 function evaluateConditional(
   expression: Extract<CoreExpressionNode, { kind: 'conditional' }>,
@@ -456,30 +457,44 @@ function evaluateConditional(
   }
   const truths = condition.elements.map((element, index) =>
     conditionTruth(element.value, expression.condition, index))
-  const branch = (selected: boolean, node: CoreExpressionNode) => {
-    if (!truths.includes(selected)) return null
-    const value = evaluate(node)
-    if (value.kind === 'list' && value.elements.length !== 1 && value.elements.length !== truths.length) {
-      throw new ExpressionEvaluationError(
-        'LANG_LIST_LENGTH',
-        `List lengths ${truths.length} and ${value.elements.length} are incompatible.`,
-        node.origin,
-      )
-    }
-    return value
+  if (truths.length === 0) return ownedList([])
+  const whenTrue = truths.includes(true) ? evaluate(expression.whenTrue) : null
+  const whenFalse = truths.includes(false) ? evaluate(expression.whenFalse) : null
+  const lengths = [condition, whenTrue, whenFalse]
+    .flatMap((value) => (value?.kind === 'list' ? [value.elements.length] : []))
+  if (lengths.some((length) => length === 0)) {
+    throw new ExpressionEvaluationError(
+      'LANG_LIST_LENGTH', 'An empty list is incompatible with a non-empty list.', expression.origin,
+    )
   }
-  const whenTrue = branch(true, expression.whenTrue)
-  const whenFalse = branch(false, expression.whenFalse)
-  chargeElements(budget, truths.length, expression)
-  return ownedList(condition.elements.map((conditionElement, index) => {
-    const selected = (truths[index] ? whenTrue : whenFalse)!
-    const element = selected.kind === 'list'
-      ? selected.elements[selected.elements.length === 1 ? 0 : index]
-      : null
+  const length = Math.max(...lengths)
+  if (lengths.some((candidate) => candidate !== 1 && candidate !== length)) {
+    throw new ExpressionEvaluationError(
+      'LANG_LIST_LENGTH',
+      `List lengths ${[...new Set(lengths)].join(' and ')} are incompatible.`,
+      expression.origin,
+    )
+  }
+  chargeElements(budget, length, expression)
+  const pick = <T,>(elements: readonly T[], index: number) => elements[elements.length === 1 ? 0 : index]
+  return ownedList(Array.from({ length }, (_, index) => {
+    const conditionElement = pick(condition.elements, index)
+    const truth = pick(truths, index)
+    // A singleton condition selects one branch for every element, which
+    // was evaluated only if it is selected.
+    const selected = (truth ? whenTrue : whenFalse)!
+    const element = selected.kind === 'list' ? pick(selected.elements, index) : null
+    const value = element?.value ?? selected as OwnedMultivector
+    // A copy, so that the list never takes over the identity of the value it
+    // selects, which may be another item's (as in a gather).
+    const copy = ownedMultivector(value.coefficients, value.basis)
+    const construction = outerConstruction(value)
+    if (construction) retainOuterConstruction(copy, construction)
+    const sources = element ? [element.id] : valueLineage(value)
     return {
-      id: `${expression.origin.start}:${expression.origin.end}:${conditionElement.id}:${element?.id ?? (truths[index] ? 'true' : 'false')}`,
-      value: element?.value ?? selected as OwnedMultivector,
-      sources: element ? [conditionElement.id, element.id] : [conditionElement.id],
+      id: `${expression.origin.start}:${expression.origin.end}:${index}:${conditionElement.id}:${element?.id ?? (truth ? 'true' : 'false')}`,
+      value: copy,
+      sources: [...new Set([conditionElement.id, ...sources])],
     }
   }))
 }

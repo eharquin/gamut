@@ -106,7 +106,8 @@ const FUNCTIONS: readonly LanguageFunction[] = [
   })),
   {
     // `if(condition, whenTrue, whenFalse)` evaluates only the branch it
-    // selects, so it is lowered to its own node instead of being applied (#339).
+    // selects, so it is lowered to its own node instead of being applied
+    // (#339); it has no `apply`, and the parser enforces its three arguments.
     name: 'if',
     arities: [3],
     scalarResult: false,

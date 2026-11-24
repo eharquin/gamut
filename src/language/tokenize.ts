@@ -133,7 +133,8 @@ export function tokenize(source: string): TokenizeResult {
       continue
     }
     // `>>>` is read first, so `>` and `>=` here are comparisons; `!=` is one
-    // token, never the dual `!` followed by `=` (#339).
+    // token, never the dual `!` followed by `=` (#339). The planned left
+    // contraction `<<` shall be read before `<` when it is implemented.
     const comparison = ['<=', '>=', '==', '!=', '<', '>'].find((operator) => source.startsWith(operator, offset))
     if (comparison) {
       tokens.push({ kind: 'comparison', text: comparison, span: { start: offset, end: offset + comparison.length } })

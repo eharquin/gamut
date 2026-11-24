@@ -500,9 +500,10 @@ is zero (#339). `c` shall be a finite pure grade-zero value, such as a
 comparison. Only the selected branch is evaluated, so `if(u != 0, u / abs(u),
 0)` is valid at `u = 0`; the names of both branches remain dependencies of the
 item, so the dependency graph does not change with the values. When `c` is a
-list, `if` selects element by element: each branch is broadcast against `c`
-under the rules of section 11, and a branch is evaluated only when at least
-one element selects it. A selected branch is evaluated as a whole, so a
+list, `if` selects element by element: the condition and the branches are
+broadcast together under the rules of section 11, and a branch is evaluated
+only when at least one element selects it. An empty condition selects
+nothing and gives an empty list. A selected branch is evaluated as a whole, so a
 failure in one of its elements fails the expression even where another
 element selects the other branch.
 

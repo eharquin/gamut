@@ -11,7 +11,7 @@ const vga = { engine: createVga2Engine(), interpretation: VGA_2D_INTERPRETATION 
 const pga = { engine: createPga2Engine(), interpretation: PGA_2D_INTERPRETATION }
 
 /** The inspection of each row of a document, or its diagnostic code. */
-function rows(context: typeof vga, ...sources: string[]) {
+function rows(context: typeof vga | typeof pga, ...sources: string[]) {
   return evaluateDocument(
     expressionDocument(sources.map((source, index) => ({ id: `item-${index}`, source }))),
     context,
@@ -64,6 +64,41 @@ describe('comparisons, if and sign (#339)', () => {
     // A branch that no element selects is not evaluated.
     expect(evaluateSource('if([1, 1], 3, 1 / 0)', vga)).toMatchObject({ status: 'valid', inspection: '[3, 3]' })
     expect(evaluateSource('if([1, 0], [1, 2, 3], 0)', vga)).toMatchObject({ status: 'invalid', diagnostic: { code: 'LANG_LIST_LENGTH' } })
+    // The condition and the branches broadcast together, as in a binary operation.
+    expect(evaluateSource('if([1], [1, 2, 3], 0)', vga)).toMatchObject({ status: 'valid', inspection: '[1, 2, 3]' })
+    expect(evaluateSource('if([0], [1, 2, 3], [7])', vga)).toMatchObject({ status: 'valid', inspection: '[7]' })
+    expect(evaluateSource('if([1, 0], [], 1)', vga)).toMatchObject({
+      status: 'invalid', diagnostic: { code: 'LANG_LIST_LENGTH', message: 'An empty list is incompatible with a non-empty list.' },
+    })
+    // An empty condition selects nothing.
+    expect(evaluateSource('if([], 1 / 0, 2)', vga)).toMatchObject({ status: 'valid', inspection: '[]' })
+  })
+
+  it('evaluates in PGA(2) as in VGA(2)', () => {
+    expect(evaluateSource('if(1 < 2, point(1, 2), ipoint(1, 0))', pga)).toMatchObject({ status: 'valid', inspection: '2e01 - e02 + e12' })
+    expect(evaluateSource('if([1, 0], point(1, 2), ipoint(1, 0))', pga)).toMatchObject({
+      status: 'valid', inspection: '[2e01 - e02 + e12, -e02]',
+    })
+    expect(evaluateSource('sign([-2, 0, 3])', pga)).toMatchObject({ status: 'valid', inspection: '[-1, 0, 1]' })
+    expect(evaluateSource('if(point(1, 2), 1, 2)', pga)).toMatchObject({ status: 'invalid', diagnostic: { code: 'ALG_DOMAIN' } })
+    expect(rows(pga, 'u = 0', 'if(u != 0, 1 / u, 0)')[1]).toBe('0')
+  })
+
+  it('keeps the positions of the items a list condition selects (#339 review)', () => {
+    const positions = (...items: { id: string; source: string; positionSource?: string }[]) => {
+      const evaluated = evaluateDocument(expressionDocument(items), pga)
+      const last = evaluated.at(-1)!.evaluation
+      if (last?.status !== 'valid' || last.valueType !== 'list') throw new Error(JSON.stringify(last))
+      return last.inspection
+    }
+    const d1 = { id: 'd1', source: 'D1 = ipoint(1, 0)', positionSource: 'point(1, 2)' }
+    const d2 = { id: 'd2', source: 'D2 = ipoint(0, 1)', positionSource: 'point(-3, 0)' }
+    const expected = positions(d1, d2, { id: 'l', source: 'L = [D1, D2]' }, { id: 'p', source: 'L.position' })
+    expect(positions(d1, d2, { id: 'l', source: 'L = if([1, 0], D1, D2)' }, { id: 'p', source: 'L.position' }))
+      .toBe(expected)
+    // A later list of D1 keeps its position after an unrelated if.
+    expect(positions(d1, d2, { id: 'l', source: 'L = if([1, 1], D1, D2)' }, { id: 'm', source: 'M = [D1]' }, { id: 'p', source: 'M.position' }))
+      .toBe(positions(d1, d2, { id: 'm', source: 'M = [D1]' }, { id: 'p', source: 'M.position' }))
   })
 
   it('refuses a non-scalar condition', () => {
@@ -96,7 +131,12 @@ describe('comparisons, if and sign (#339)', () => {
     expect(rows(vga, 'qx = 2', 'qy = 2', '(1 + (qx - qy) / abs(qx - qy)) / 2', 'if(qx > qy, 1, 0)').slice(2))
       .toEqual(['ALG_SINGULAR', '0'])
     expect(rows(vga, 'u = 0', 'u / abs(u)', 'sign(u)').slice(1)).toEqual(['ALG_SINGULAR', '0'])
-    // The index (1 - s) / 2 is not an exact integer once s is computed; the conditional needs no index arithmetic.
-    expect(rows(vga, 'sides = [e1, e2]', 'u = 0.3', 'if(u >= 0, sides[0], sides[1])')[2]).toBe('e1')
+    // The index (1 - su) / 2 is rejected once su is computed; the conditional needs no index arithmetic.
+    for (const [u, side] of [['0.3', 'e1'], ['-0.3', 'e2'], ['0', 'e1']]) {
+      expect(rows(vga, 'sides = [e1, e2]', `u = ${u}`, 'if(u >= 0, sides[0], sides[1])')[2]).toBe(side)
+    }
+    // The encoding fails even away from the boundary: (1 - su) / 2 is 5.6e-17, not the index 0.
+    expect(rows(vga, 'sides = [e1, e2]', 'u = 0.3', 'su = u / abs(u)', 'sides[(1 - su) / 2]')[3]).toBe('LANG_INDEX_DOMAIN')
+    expect(rows(vga, 'sides = [e1, e2]', 'u = 0', 'su = u / abs(u)', 'sides[(1 - su) / 2]')[3]).toBe('LANG_INVALID_DEPENDENCY')
   })
 })
