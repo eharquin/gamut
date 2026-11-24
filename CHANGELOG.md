@@ -21,7 +21,7 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `norm(A + B)`. The shipped examples are written in version 2. A document of
   a later language version is refused.
 - The names `norm`, `normalize`, `inorm`, `inormalize`, `dual`, `inverse`,
-  `reverse`, `involution`, `sum`, `if` and `sign` are reserved in every algebra: an item declared
+  `reverse`, `involution`, `sum`, `if`, `sign` and `iterate` are reserved in every algebra: an item declared
   with one of them becomes a diagnostic.
 
 ### Added
@@ -45,6 +45,11 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Recursion is reported as a cycle, a parameter cannot have the name of an
   item, and calls nest at most 32 deep. Labels and slider bounds may call
   functions.
+- Bounded iteration `iterate(f, x0, n)` (#341): the `n + 1` states of a
+  recurrence in one row, such as a sphere-traced ray
+  `path = iterate(step, O, n)` with a slider on `n`, instead of one row per
+  step. The length is checked before the first step, and a failing step
+  fails the row with its index.
 
 ## 0.3.0 - 2026-11-20
 

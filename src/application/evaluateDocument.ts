@@ -66,12 +66,27 @@ type ParsedNode = Readonly<{
   calls: readonly Reference[]
 }>
 
-/** Every name called as `name(…)` that is not a common-language function. */
+/** The function `iterate(f, …)` names, which is called, not used as a value (#341). */
+function iteratedFunction(expression: SurfaceExpressionNode): Reference | null {
+  if (expression.kind !== 'call-expression' || expression.callee !== 'iterate') return null
+  const [first] = expression.arguments
+  return first?.kind === 'reference' && first.property === null
+    ? { name: first.name, property: null, span: first.span }
+    : null
+}
+
+/** The arguments of a call that are values: all but the function `iterate` names. */
+function functionArguments(expression: Extract<SurfaceExpressionNode, { kind: 'call-expression' }>) {
+  return iteratedFunction(expression) ? expression.arguments.slice(1) : expression.arguments
+}
+
+/** Every name called as `name(…)` that is not a common-language function, and the function `iterate` names. */
 function collectCalls(expression: SurfaceExpressionNode): Reference[] {
   const own: Reference[] = expression.kind === 'call-expression' && !languageFunction(expression.callee)
     ? [{ name: expression.callee, property: null, span: expression.span }]
     : []
-  return [...own, ...surfaceChildren(expression).flatMap(collectCalls)]
+  const iterated = iteratedFunction(expression)
+  return [...own, ...(iterated ? [iterated] : []), ...surfaceChildren(expression).flatMap(collectCalls)]
 }
 
 /** The direct sub-expressions of a node. */
@@ -129,7 +144,7 @@ function collectReferences(expression: SurfaceExpressionNode): Reference[] {
     case 'tuple':
       return expression.components.flatMap(collectReferences)
     case 'call-expression':
-      return expression.arguments.flatMap(collectReferences)
+      return functionArguments(expression).flatMap(collectReferences)
     case 'list-expression':
       return expression.elements.flatMap(collectReferences)
     case 'range-expression':

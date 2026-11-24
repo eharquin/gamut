@@ -610,6 +610,44 @@ ds = sdf([O, X])
 - Labels (`${…}`), slider bounds and appearance sources may call declared
   functions.
 
+### Bounded iteration
+
+`iterate(f, x0, n)` returns the list `[x0, f(x0), f(f(x0)), …, f^n(x0)]` of
+the `n + 1` states of a recurrence (#341), so a state-dependent process is
+one row with a slider on `n`:
+
+```text
+step(P) = P + sdf(P) * Dir
+path = iterate(step, O, n)
+```
+
+- `f` shall be the name of a declared function of exactly one parameter
+  (`LANG_ITERATE_FUNCTION`, `LANG_ARITY`). It is the only place where a
+  function name appears without a call, and it is a dependency of the item
+  like a call; functions do not become values.
+- `x0` and every state shall be one value: a list `x0`, or a step that
+  returns a list, fails the expression (`LANG_NESTED_LIST`).
+- `n` shall be a finite non-negative integer scalar, with the rules of a
+  list index; `n = 0` returns `[x0]`.
+- The length `n + 1` is checked against the generated-value limit (section
+  12, 10,000 elements) before the first step. Work inside the steps is
+  charged to the document evaluation budget.
+- If step `k` fails, the whole expression fails with no partial list; the
+  message starts with `Step k:` and carries the function's diagnostic.
+- Element `k` has a stable identity derived from the `iterate` node and the
+  ordinal `k`, as for a range, so labels and appearances stay attached when
+  `n` changes. A state never shares the identity of the value it came from,
+  but keeps its lineage, so a positioned vector stays at its position as in
+  `[v, f(v)]`.
+- A row's iteration shares the document evaluation budget with the rows
+  after it, like a range: a costly iteration may exhaust it for them.
+- Animating `n` reevaluates the whole list each frame; no state is kept
+  between evaluations.
+
+With a constant motor, `rot(X) = M >>> X` and `iterate(rot, X, n)` gives
+`exp([0...n] * log(M)) >>> X` within numerical tolerance; `iterate` is needed
+when the motor depends on the current state.
+
 ## 11. Lists, broadcasting, and indexing
 
 `[]` is a valid empty list. A list literal is `[expression, ...]`; a trailing
@@ -737,7 +775,7 @@ from the parse tree so that the operand keeps its grouping: `(A + B).norm`
 becomes `norm(A + B)` and `A.inverse.norm` becomes `norm(inverse(A))`. A
 source that does not parse is kept unchanged with its diagnostic, and notes
 are text. Version 2 also reserves `normalize`, `inormalize`, `sum`, `if`,
-`sign` and the names of the operations, so a version 1 item declared with one of them
+`sign`, `iterate` and the names of the operations, so a version 1 item declared with one of them
 becomes a diagnostic.
 
 Unknown function calls produce diagnostics. Declared functions (section 10)

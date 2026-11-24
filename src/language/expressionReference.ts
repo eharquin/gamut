@@ -154,6 +154,8 @@ export function functionsSection(examples: Readonly<{ dual: ReferenceExample }>)
       { source: 'sinh(0)', inspection: '0' }, { source: 'cosh(0)', inspection: '1' }),
     entry('abs(a), sqrt(a), log(a), min(a, b), max(a, b)', 'scalar functions',
       { source: 'sqrt(4)', inspection: '2' }, { source: 'max(1, 2)', inspection: '2' }),
+    entry('iterate(f, x0, n)', 'the n + 1 states x0, f(x0), f(f(x0)), … of a declared function',
+      'f(x) = x / 2', { source: 'iterate(f, 8, 3)', inspection: '[8, 4, 2, 1]' }),
     entry('if(c, a, b)', 'a when c is not zero, else b, leaving the other branch unevaluated',
       { source: 'if(2 > 1, e1, e2)', inspection: 'e1' }, { source: 'if([1, 0], 3, 4)', inspection: '[3, 4]' }),
     entry('sign(a)', '-1, 0 or 1', { source: 'sign(-3)', inspection: '-1' }),

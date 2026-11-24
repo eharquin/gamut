@@ -157,6 +157,17 @@ export function lowerExpression(
       }
     case 'call-expression': {
       const args = expression.arguments.map(lowerExpression)
+      if (expression.callee === 'iterate' && args.length === 3) {
+        const [reference] = expression.arguments
+        return {
+          kind: 'iterate',
+          functionName: reference.kind === 'reference' && reference.property === null ? reference.name : null,
+          functionOrigin: reference.span,
+          initial: args[1],
+          count: args[2],
+          origin: expression.span,
+        }
+      }
       if (expression.callee === 'if' && args.length === 3) {
         return { kind: 'conditional', condition: args[0], whenTrue: args[1], whenFalse: args[2], origin: expression.span }
       }

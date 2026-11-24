@@ -37,7 +37,9 @@ function references(expression: SurfaceExpressionNode): readonly Readonly<{
     case 'property-expression': return references(expression.object)
     case 'vector-constructor':
     case 'tuple': return expression.components.flatMap(references)
-    case 'call-expression': return expression.arguments.flatMap(references)
+    // The function `iterate` names is not a value (#341).
+    case 'call-expression': return (iteratedName(expression)
+      ? expression.arguments.slice(1) : expression.arguments).flatMap(references)
     case 'list-expression': return expression.elements.flatMap(references)
     case 'range-expression': return [expression.start, ...(expression.next ? [expression.next] : []), expression.end].flatMap(references)
     case 'index-expression': return [...references(expression.object), ...references(expression.index)]
@@ -45,11 +47,19 @@ function references(expression: SurfaceExpressionNode): readonly Readonly<{
   }
 }
 
-/** The calls of a source to names that are not common-language functions (#340). */
+/** The function `iterate(f, …)` names, which is called, not used as a value (#341). */
+function iteratedName(expression: SurfaceExpressionNode): Readonly<{ name: string; span: SourceSpan }> | null {
+  if (expression.kind !== 'call-expression' || expression.callee !== 'iterate') return null
+  const [first] = expression.arguments
+  return first?.kind === 'reference' && first.property === null ? { name: first.name, span: first.span } : null
+}
+
+/** The calls of a source to names that are not common-language functions (#340), and the function `iterate` names. */
 function calls(expression: SurfaceExpressionNode): readonly Readonly<{ name: string; span: SourceSpan }>[] {
+  const iterated = iteratedName(expression)
   const own = expression.kind === 'call-expression' && !languageFunction(expression.callee)
     ? [{ name: expression.callee, span: expression.span }]
-    : []
+    : iterated ? [iterated] : []
   const children = (): readonly SurfaceExpressionNode[] => {
     switch (expression.kind) {
       case 'unary-expression': return [expression.operand]
