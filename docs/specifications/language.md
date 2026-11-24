@@ -490,10 +490,11 @@ list; any other value is a `LANG_LIST_REQUIRED` diagnostic, so `min(a)` of a
 scalar is an error, not the identity. `min(L)` and `max(L)` require pure
 grade-zero elements and return the smallest or largest; an element that is
 not scalar fails the call with its zero-based index, and an empty list is a
-domain diagnostic. `sum(L)` adds the elements, which may be any multivectors,
-with the algebra's addition, in list order; `sum([])` is scalar zero. A
-reduction returns a single value, not a list, and a call with zero or three
-arguments remains a syntax diagnostic. `atan2(y, x)` is the two-argument arc tangent,
+domain diagnostic. `sum(L)` adds the elements, which may be any
+multivectors, with the algebra's addition, in list order; `sum([])` is scalar
+zero. A reduction returns a new single value, not a list and never an
+element of its argument, even for a one-element list. A call with no
+argument, or with three or more, remains a syntax diagnostic. `atan2(y, x)` is the two-argument arc tangent,
 the oriented angle of the direction `(x, y)` in `(-pi, pi]`; it is undefined at
 the origin. Scalar functions broadcast over lists like every other operation of
 section 11, elementwise for a list argument and pairwise for two lists of equal

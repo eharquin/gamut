@@ -74,6 +74,14 @@ describe('PGA(2) sources through the language', () => {
     expect(value('inormalize(ipoint(0, 2))').inspection).toBe('e01')
     // The centroid of three points is the sum of the points over their count (#338).
     expect(value('sum([point(0, 0), point(3, 0), point(0, 3)]) / 3').inspection).toBe('e01 - e02 + e12')
+    expect(value('sum([ipoint(1, 0), ipoint(0, 2)])').inspection).toBe('2e01 - e02')
+    expect(value('sum([])').inspection).toBe('0')
+    expect(value('min([point(1, 2).e12])').inspection).toBe('1')
+    expect(evaluateSource('max([1, point(1, 2)])', context)).toMatchObject({
+      status: 'invalid', diagnostic: { code: 'ALG_DOMAIN', message: 'List element 1: max of a list requires scalar elements.' },
+    })
+    expect(evaluateSource('min([])', context)).toMatchObject({ status: 'invalid', diagnostic: { code: 'ALG_DOMAIN' } })
+    expect(evaluateSource('sum(point(1, 2))', context)).toMatchObject({ status: 'invalid', diagnostic: { code: 'LANG_LIST_REQUIRED' } })
     expect(evaluateSource('normalize(ipoint(1, 0))', context)).toMatchObject({
       status: 'invalid', diagnostic: { code: 'ALG_DOMAIN' },
     })

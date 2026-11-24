@@ -295,9 +295,6 @@ describe('source evaluation pipeline', () => {
     expect(evaluateSource('norm(e1, e2)', context)).toMatchObject({
       status: 'invalid', diagnostic: { code: 'LANG_SYNTAX', message: '“norm” takes exactly one argument.' },
     })
-    expect(evaluateSource('normalize = 2', context)).toMatchObject({
-      status: 'invalid', diagnostic: { code: 'LANG_SYNTAX' },
-    })
   })
 
   it('distributes the functions over a list, keeping element identities', () => {
@@ -370,8 +367,10 @@ describe('source evaluation pipeline', () => {
       expect(evaluateSource('min()', context)).toMatchObject({ status: 'invalid', diagnostic: { code: 'LANG_SYNTAX' } })
     })
 
-    it('reserves sum', () => {
-      expect(evaluateSource('sum = 2', context)).toMatchObject({ status: 'invalid', diagnostic: { code: 'LANG_SYNTAX' } })
+    it('returns a new value, never an element of its argument', () => {
+      for (const source of ['sum([e1])', 'min([2])', 'max([2])']) {
+        expect(evaluateSource(source, context)).toMatchObject({ status: 'valid', elementId: null })
+      }
     })
   })
 

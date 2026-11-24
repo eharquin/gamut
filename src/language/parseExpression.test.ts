@@ -272,6 +272,12 @@ describe('minimal expression parser', () => {
       ok: false,
       diagnostic: { code: 'LANG_SYNTAX' },
     })
+    for (const name of ['sum', 'norm', 'normalize', 'inorm', 'dual', 'inverse']) {
+      expect(parseDocumentExpression(`${name} = 2`)).toMatchObject({
+        ok: false,
+        diagnostic: { code: 'LANG_SYNTAX', message: `The built-in name “${name}” cannot be redefined.` },
+      })
+    }
   })
 
   it('parses read-only position and head properties', () => {

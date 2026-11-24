@@ -241,7 +241,11 @@ function evaluateExpressionUnchecked(
         return reduceList(expression, expression.name, args[0], entry.reduction, engine, budget)
       }
       const apply = entry.apply
-      if (!apply) throw new Error(`“${expression.name}” has no form for ${args.length} arguments.`)
+      if (!apply) {
+        throw new ExpressionEvaluationError(
+          'LANG_ARITY', `“${expression.name}” has no form for ${args.length} arguments.`, expression.origin,
+        )
+      }
       return entry.distribution === 'operation' && args.length === 1
         ? unary(expression, args[0], (value) => apply(engine, [value]), budget)
         : nary(expression, args, (values) => apply(engine, values), budget)
@@ -437,8 +441,11 @@ function reduceList(
     }
     return empty
   }
+  // The first element is copied, so that a one-element list never returns
+  // the element itself with its identity: `sum([V])` is not an alias of `V`.
+  const first = ownedMultivector(values[0].coefficients, values[0].basis)
   return withLineage(
-    values.slice(1).reduce((accumulated, next) => reduction.combine(engine, accumulated, next), values[0]),
+    values.slice(1).reduce((accumulated, next) => reduction.combine(engine, accumulated, next), first),
     values,
   )
 }
