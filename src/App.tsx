@@ -1,3 +1,4 @@
+import type { PastedRow } from './application/pastedLines'
 import {
   useCallback,
   useEffect,
@@ -1910,6 +1911,47 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
   }
 
   /**
+   * Writes the rows of a pasted block (#336): the first replaces the source of
+   * the row pasted into, the others are new rows after it, in its folder. The
+   * whole paste is one step, refused with a message when it would exceed the
+   * item limit; the caret ends after the last line.
+   */
+  const pasteRows = (itemId: string, rows: readonly PastedRow[]) => {
+    const added = rows.length - 1
+    if (expressionDoc.items.length + added > MAX_EXPRESSION_ITEMS) {
+      setReorderAnnouncement(`The paste would make more than ${MAX_EXPRESSION_ITEMS} rows; nothing was changed.`)
+      return
+    }
+    const taken = new Set(expressionDoc.items.map((item) => item.id))
+    const ids = rows.slice(1).map(() => {
+      let id = `item-${nextId.current++}`
+      while (taken.has(id)) id = `item-${nextId.current++}`
+      taken.add(id)
+      return id
+    })
+    const [first, ...rest] = rows
+    dispatchHistory({ type: 'begin-transaction' })
+    executeCommand(first.kind === 'annotation'
+      ? { kind: 'set-item-kind', itemId, itemKind: 'annotation', source: first.source }
+      : { kind: 'update-source', itemId, source: first.source })
+    rest.forEach((row, index) => executeCommand({
+      kind: 'insert-item',
+      item: { id: ids[index], source: row.source, ...(row.kind === 'annotation' ? { kind: 'annotation' as const } : {}) },
+      anchorId: index === 0 ? itemId : ids[index - 1],
+      placement: 'after',
+    }))
+    dispatchHistory({ type: 'commit-transaction' })
+    if (added > 0) setReorderAnnouncement(`Pasted ${rows.length} rows.`)
+    const lastId = ids.at(-1) ?? itemId
+    requestAnimationFrame(() => {
+      const editor = inputRefs.current.get(lastId)
+      editor?.focus()
+      const end = editor?.value.length ?? 0
+      editor?.setSelectionRange(end, end)
+    })
+  }
+
+  /**
    * Turns an empty folder back into a row, where the folder shows, written
    * `source`, as Backspace turns a note back into an expression: one step.
    */
@@ -2798,6 +2840,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
     beginRowReorder: folders.beginRowReorder,
     reorderRowWithKeyboard: folders.reorderRowWithKeyboard,
     convertRowToFolder: folders.convertRowToFolder,
+    pasteRows,
     focusRow: (itemId) => setRowFocusId(itemId),
     blurRow: (itemId) => setRowFocusId((current) => current === itemId ? null : current),
     hoverRow: (itemId) => setRowHoverId(itemId),

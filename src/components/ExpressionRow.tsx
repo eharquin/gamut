@@ -1,3 +1,4 @@
+import { pastedRows, type PastedRow } from '../application/pastedLines'
 import { useLayoutEffect, useRef, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import type { AlgebraEngine } from '../algebra/algebraEngine'
 import type { ItemAppearanceSources } from '../application/evaluateAppearanceSources'
@@ -60,6 +61,8 @@ export type ExpressionRowActions = Readonly<{
   reorderRowWithKeyboard(event: KeyboardEvent<HTMLButtonElement>, itemId: string): void
   /** Makes a folder of the row, named by `name`. */
   convertRowToFolder(itemId: string, name: string): void
+  /** Writes the rows of a pasted block from this row on, in one step (#336). */
+  pasteRows(itemId: string, rows: readonly PastedRow[]): void
   /** Focus entering or leaving the row. */
   focusRow(itemId: string): void
   blurRow(itemId: string): void
@@ -150,6 +153,7 @@ export function ExpressionRow({
     beginRowReorder,
     reorderRowWithKeyboard,
     convertRowToFolder,
+    pasteRows,
     focusRow,
     blurRow,
     hoverRow,
@@ -557,6 +561,21 @@ export function ExpressionRow({
                   kind: 'update-source', itemId: item.id,
                   source: value,
                 }, `source:${item.id}`)
+              }}
+              onPaste={(event) => {
+                // A block of several lines makes one row per line (#336).
+                const editor = event.currentTarget
+                const rows = pastedRows(
+                  item.source,
+                  editor.selectionStart ?? item.source.length,
+                  editor.selectionEnd ?? item.source.length,
+                  event.clipboardData.getData('text/plain'),
+                )
+                if (!rows) return
+                event.preventDefault()
+                if (isPlaying) playback.stop(item.id)
+                playback.forgetPaused(item.id)
+                pasteRows(item.id, rows)
               }}
               onBlur={() => dispatchHistory({ type: 'boundary' })}
               onFocus={(event) => rememberEditorFocus(event.currentTarget)}
