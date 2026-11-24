@@ -59,6 +59,10 @@ export; they never produce a truncated link. The maximum URL accepted by
 Slides.com's iframe field remains to be measured in an authenticated host
 session. JSON export remains the archival alternative.
 
+A scene link written by an earlier version opens migrated like any
+document, with the status message of the document format specification
+(#343); embed mode shows no message.
+
 ## Temporary sessions and storage
 
 On initial navigation to a scene link, decode and validate before mounting the

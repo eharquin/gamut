@@ -216,13 +216,56 @@ function rejectDuplicateKeys(source: string): void {
   }
 }
 
+/**
+ * What opening a document written by an earlier GAMUT changed (#343): the
+ * versions it was written in, and how many rows the language migration
+ * rewrote. A document already in the current versions has none.
+ */
+export type DocumentMigration = Readonly<{
+  formatVersion: number
+  languageVersion: number
+  rewrittenRows: number
+}>
+
+const migrations = new WeakMap<CanonicalDocument, DocumentMigration>()
+
+/** The migration that produced a parsed document, or null when it was current. */
+export function documentMigration(document: CanonicalDocument): DocumentMigration | null {
+  return migrations.get(document) ?? null
+}
+
+/** The items of a raw document, by identity, as comparable text. */
+function itemTexts(value: unknown): Map<string, string> {
+  const document = value as { items?: unknown; appearance?: unknown }
+  const texts = new Map<string, string>()
+  if (!Array.isArray(document.items)) return texts
+  const appearance = (document.appearance ?? {}) as Record<string, unknown>
+  for (const item of document.items as { id?: unknown }[]) {
+    if (typeof item?.id === 'string') texts.set(item.id, JSON.stringify([item, appearance[item.id]]))
+  }
+  return texts
+}
+
 export function parseCanonicalDocument(source: string): CanonicalDocument {
   if (new TextEncoder().encode(source).byteLength > MAX_DOCUMENT_BYTES)
     fail('LIMIT_DOCUMENT_DECODED_SIZE', 'Document exceeds the 4 MiB limit.')
   rejectDuplicateKeys(source)
   let value: unknown
   try { value = JSON.parse(source) } catch { fail('DOCUMENT_JSON', 'Document is not valid JSON.') }
-  return validateCanonicalDocument(migrateLanguage(migrateDocument(value)))
+  const raw = value as { formatVersion?: unknown; languageVersion?: unknown }
+  const formatMigrated = migrateDocument(value)
+  const languageMigrated = migrateLanguage(formatMigrated)
+  const document = validateCanonicalDocument(languageMigrated)
+  if (raw.formatVersion !== CURRENT_FORMAT_VERSION || raw.languageVersion !== CURRENT_LANGUAGE_VERSION) {
+    const before = itemTexts(formatMigrated)
+    const after = itemTexts(languageMigrated)
+    migrations.set(document, {
+      formatVersion: Number(raw.formatVersion),
+      languageVersion: Number(raw.languageVersion),
+      rewrittenRows: [...after].filter(([id, text]) => before.get(id) !== text).length,
+    })
+  }
+  return document
 }
 
 /**

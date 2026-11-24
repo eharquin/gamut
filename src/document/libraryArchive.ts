@@ -1,6 +1,7 @@
 import {
   DocumentFormatError,
   MAX_DOCUMENT_BYTES,
+  documentMigration,
   parseCanonicalDocument,
   parseCanonicalDocumentBytes,
   serializeCanonicalDocument,
@@ -312,6 +313,8 @@ export type LibraryArchiveImport = LibraryFolderWrite & Readonly<{
   /** The folder the graphs went into, or null when the archive held no valid document. */
   folder: FolderPath | null
   imported: number
+  /** How many of the imported graphs were written by an earlier version and migrated (#343). */
+  migrated: number
   skipped: LibraryArchiveContent['skipped']
   warnings: readonly string[]
 }>
@@ -336,10 +339,11 @@ export async function importLibraryArchive(
   const content = await readLibraryArchive(new Uint8Array(await file.arrayBuffer()), { validate: options.validate, now: date })
   if (content.graphs.length === 0) {
     const library = readLibrary(storage, options)
-    return { entries: library.entries, folders: library.folders, folder: null, imported: 0, skipped: content.skipped, warnings: content.warnings }
+    return { entries: library.entries, folders: library.folders, folder: null, imported: 0, migrated: 0, skipped: content.skipped, warnings: content.warnings }
   }
   const written = importGraphsToLibrary(storage, importFolderName(date), content.graphs, content.folders, options)
-  return { ...written, imported: content.graphs.length, skipped: content.skipped, warnings: content.warnings }
+  const migrated = content.graphs.filter((graph) => documentMigration(graph.document) !== null).length
+  return { ...written, imported: content.graphs.length, migrated, skipped: content.skipped, warnings: content.warnings }
 }
 
 /** One sentence that states what an import did, for the panel and its live region. */
@@ -348,5 +352,7 @@ export function describeArchiveImport(result: LibraryArchiveImport): string {
   const skipped = result.skipped.length === 0 ? '' : ` ${result.skipped.length} ${result.skipped.length === 1 ? 'entry was' : 'entries were'} skipped.`
   return result.folder === null
     ? `No graph was imported: the archive holds no valid document.${skipped}`
-    : `Imported ${graphs(result.imported)} into the folder ${describeFolder(result.folder)}.${skipped}`
+    : `Imported ${graphs(result.imported)} into the folder ${describeFolder(result.folder)}.${
+      result.migrated === 0 ? '' : ` ${result.migrated === result.imported ? (result.imported === 1 ? 'It was' : 'All were')
+        : `${result.migrated} ${result.migrated === 1 ? 'was' : 'were'}`} written by an earlier version of GAMUT and updated to the current format.`}${skipped}`
 }

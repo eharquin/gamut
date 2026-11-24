@@ -1,4 +1,5 @@
 import type { PastedRows } from './application/pastedLines'
+import { migrationNotice } from './document/migrationNotice'
 import {
   useCallback,
   useEffect,
@@ -91,8 +92,10 @@ import { requireAvailableAlgebra } from './application/algebraAvailability'
 import {
   DocumentFormatError,
   fromCanonicalDocument,
+  documentMigration,
   parseCanonicalDocument,
   resolveCanonicalImport,
+  type DocumentMigration,
   toCanonicalDocument,
   type CanonicalDocument,
   type ThemeMode,
@@ -317,10 +320,15 @@ function persistReferenceHeight(height: number): void {
   }
 }
 
+/** How long the notice of a migrated graph stays (#343). */
+const MIGRATION_NOTICE_MS = 12_000
+
 type SharedDocument = ReturnType<typeof fromCanonicalDocument>
 
 function SharedScene({ embed }: { embed: EmbedOptions | null }) {
-  const [result, setResult] = useState<{ document?: SharedDocument; diagnostic?: string; code?: string } | null>(null)
+  const [result, setResult] = useState<{
+    document?: SharedDocument; diagnostic?: string; code?: string; migrationNotice?: string | null
+  } | null>(null)
   useEffect(() => {
     let cancelled = false
     const load = async () => {
@@ -328,7 +336,7 @@ function SharedScene({ embed }: { embed: EmbedOptions | null }) {
         const canonical = await decodeSceneFragment(window.location.hash)
         const restored = fromCanonicalDocument(canonical, restoreOptions)
         requireAvailableAlgebra(algebraRegistry, restored.document.algebra)
-        if (!cancelled) setResult({ document: restored })
+        if (!cancelled) setResult({ document: restored, migrationNotice: migrationNotice(documentMigration(canonical)) })
       } catch (error) {
         const code = error instanceof DocumentFormatError ? error.code : 'SHARE_LOAD_FAILED'
         if (!cancelled) setResult({ code, diagnostic: error instanceof DocumentFormatError
@@ -344,7 +352,8 @@ function SharedScene({ embed }: { embed: EmbedOptions | null }) {
   if (embed && !result.document) {
     return <EmbeddedSceneUnavailable message={`This scene could not be opened: its link may be incomplete or damaged. (${result.code})`} />
   }
-  return <Editor sharedDocument={result.document} sceneDiagnostic={result.diagnostic} sharedSession embed={embed} />
+  return <Editor sharedDocument={result.document} sceneDiagnostic={result.diagnostic}
+    sharedMigrationNotice={result.migrationNotice ?? null} sharedSession embed={embed} />
 }
 
 function App() {
@@ -369,9 +378,11 @@ function App() {
   return embed ? <Editor embed={embed} /> : <Editor />
 }
 
-function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed = null }: {
+function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null, sharedSession = false, embed = null }: {
   sharedDocument?: SharedDocument
   sceneDiagnostic?: string
+  /** What a scene link written by an earlier version changed as it opened (#343). */
+  sharedMigrationNotice?: string | null
   sharedSession?: boolean
   /** Embed mode (#215): the canvas alone, in a session that never touches storage. */
   embed?: EmbedOptions | null
@@ -629,7 +640,15 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
   const [shareResult, setShareResult] = useState<{ content: string; label: string; message: string } | null>(null)
   // A copied link is confirmed briefly; the panel with the text only appears
   // when the clipboard refuses the copy.
-  const [copyNotice, setCopyNotice] = useState<Readonly<{ message: string; durationMs: number }> | null>(null)
+  const [copyNotice, setCopyNotice] = useState<Readonly<{ message: string; durationMs: number }> | null>(
+    // A scene link written by an earlier version says so as it opens (#343).
+    () => !embed && sharedMigrationNotice ? { message: sharedMigrationNotice, durationMs: MIGRATION_NOTICE_MS } : null,
+  )
+  /** Tells the reader that the graph just opened was migrated from an earlier version (#343). */
+  const showMigrationNotice = (migration: DocumentMigration | null) => {
+    const message = migrationNotice(migration)
+    if (message) setCopyNotice({ message, durationMs: MIGRATION_NOTICE_MS })
+  }
   useEffect(() => {
     if (!copyNotice) return
     const timer = window.setTimeout(() => setCopyNotice(null), copyNotice.durationMs)
@@ -2063,6 +2082,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
       viewportCreatedItemIds.current.clear()
       nextId.current = imported.document.items.length + 1
       setDocumentDiagnostic(imported.recoveryDiagnostic)
+      showMigrationNotice(documentMigration(parsed))
     } catch (error) {
       setDocumentDiagnostic(
         documentFileDiagnostic(error, 'DOCUMENT_IMPORT_FAILED: The document could not be imported.'),
@@ -2485,10 +2505,13 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
       return
     }
     try {
-      const restored = fromCanonicalDocument(loadFromLibrary(browserLibraryStorage(), entry.id), restoreOptions)
+      const stored = loadFromLibrary(browserLibraryStorage(), entry.id)
+      const restored = fromCanonicalDocument(stored, restoreOptions)
       requireAvailableAlgebra(algebraRegistry, restored.document.algebra)
       if (!keepFormerDocument()) return
       openGraph(restored.document, restored.theme, restored.recoveryDiagnostic, entry.id)
+      // The entry stays in its stored format until it is saved.
+      showMigrationNotice(documentMigration(stored))
     } catch (error) {
       reportLibraryFailure(error, error instanceof DocumentFormatError
         ? `LIBRARY_ENTRY_INVALID: “${entry.name}” could not be opened. ${error.code}: ${error.message}`

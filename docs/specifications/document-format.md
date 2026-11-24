@@ -604,6 +604,16 @@ previous one; the implementation records the migrations in
 | 12 | `Appearance.labelOnly`, a boolean that draws the label without its object, and `labelAnchor` adds `center`; `labelOnly` is a label setting, so a folder that overwrites the appearance of its rows leaves it to each row. `Appearance.draggable` holds an object in place on the canvas when it is `false`. `Appearance.sliderInCanvas` draws a scalar's slider on the canvas when it is `true`. `ViewState.display.labelsVisible` turns every label of the graph on or off. The eight label positions move onto the circle of radius the label distance, and the default distance becomes 20 pixels. The label angle is in radians and periodic, taking any finite value. The migration sets `labelOnly: false`, `draggable: true` and `sliderInCanvas: false` in every item and folder appearance and `labelsVisible: true`, and rewrites a non-empty `labelAngleSource` `s`, which was in degrees, as `s * pi / 180` for a number and `(s) * pi / 180` otherwise, so the label keeps its angle. |
 | 13 | `primitiveStyles.points.fill`, a boolean that tints the polygon of a list of points, and `primitiveStyles.points.fillOpacitySource`, its share of the list's color in percent (empty: 20); a list's points, border and fill are drawn independently, so its points may be hidden without a border. The migration sets `fill: false` and an empty `fillOpacitySource` in every points block, items and folders alike, so version 12 lists draw as before; version 12 was already served by the deployed site, hence a new version rather than a change to 12. |
 
+When the reader opens a document written in an earlier format or language
+version, by importing or dropping a file, from the library or by a scene
+link, a polite status message says so (#343): the versions it was written
+in, the current ones, how many rows the language migration rewrote, and that
+saving writes the new format. Opening never writes: a library entry stays
+stored as it was until it is saved, and the message does not mark the graph
+as changed. A document in the current versions shows nothing, embed mode
+shows nothing, and an archive import adds to its summary how many of its
+graphs were migrated.
+
 A release can open only the format versions it knows. Release 0.2.0 cannot
 open a version 8, 9, 10, 11, or 12 document; protecting an older release against a document
 stored in a newer format is deferred to
