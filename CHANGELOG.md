@@ -21,13 +21,17 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `norm(A + B)`. The shipped examples are written in version 2. A document of
   a later language version is refused.
 - The names `norm`, `normalize`, `inorm`, `inormalize`, `dual`, `inverse`,
-  `reverse` and `involution` are reserved in every algebra: an item declared
+  `reverse`, `involution` and `sum` are reserved in every algebra: an item declared
   with one of them becomes a diagnostic.
 
 ### Added
 
 - `normalize(A)` and, in PGA(2), `inormalize(A)` divide a value by its norm or
   its ideal norm; a zero norm is a domain diagnostic (#342).
+- List reductions `min(L)`, `max(L)` and `sum(L)` (#338): `min([d0, d1, d2])`
+  replaces a tree of two-argument `min` calls, and `sum(points) / 3` is a
+  centroid. `min` and `max` of an empty list, or of a list with a non-scalar
+  element, report a diagnostic with the element index; `sum([])` is zero.
 
 ## 0.3.0 - 2026-11-20
 

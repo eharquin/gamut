@@ -148,6 +148,8 @@ export function functionsSection(examples: Readonly<{ dual: ReferenceExample }>)
       { source: 'sinh(0)', inspection: '0' }, { source: 'cosh(0)', inspection: '1' }),
     entry('abs(a), sqrt(a), log(a), min(a, b), max(a, b)', 'scalar functions',
       { source: 'sqrt(4)', inspection: '2' }, { source: 'max(1, 2)', inspection: '2' }),
+    entry('min(L), max(L), sum(L)', 'smallest or largest scalar of a list, and the sum of its elements',
+      { source: 'min([3, -1, 4])', inspection: '-1' }, { source: 'sum([e1, 2e2, e1])', inspection: '2e1 + 2e2' }),
     entry('pi, tau', 'predefined scalar constants', { source: 'cos(pi)', inspection: '-1' }, { source: 'cos(tau)', inspection: '1' }),
   ]
 }

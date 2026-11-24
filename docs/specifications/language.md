@@ -457,7 +457,7 @@ Parentheses may always make grouping explicit.
 
 The common language provides, in every algebra, the scalar functions `abs`,
 `sqrt`, `exp`, `log`, `sin`, `cos`, `tan`, `sinh`, `cosh`, `tanh`, `asin`,
-`acos`, `atan`, `atan2`, `min`, and `max`, and the operations on a value
+`acos`, `atan`, `atan2`, `min`, and `max`, the list reduction `sum`, and the operations on a value
 `norm`, `normalize`, `inorm`, `inormalize`, `dual`, `inverse`, `reverse`, and
 `involution`. Scalar-only functions require pure grade-zero arguments unless
 an algebra capability explicitly defines their multivector extension. In
@@ -484,11 +484,21 @@ the odd grades; and `inverse(A)` is the inverse, `A**-1`, when it exists. The
 algebra conventions define each of them.
 
 `min(a, b)` and `max(a, b)` require exactly two finite scalar arguments and
-return a grade-zero multivector. `atan2(y, x)` is the two-argument arc tangent,
+return a grade-zero multivector. With one argument, `min(L)`, `max(L)` and
+`sum(L)` reduce a list to one value (#338). The argument shall evaluate to a
+list; any other value is a `LANG_LIST_REQUIRED` diagnostic, so `min(a)` of a
+scalar is an error, not the identity. `min(L)` and `max(L)` require pure
+grade-zero elements and return the smallest or largest; an element that is
+not scalar fails the call with its zero-based index, and an empty list is a
+domain diagnostic. `sum(L)` adds the elements, which may be any multivectors,
+with the algebra's addition, in list order; `sum([])` is scalar zero. A
+reduction returns a single value, not a list, and a call with zero or three
+arguments remains a syntax diagnostic. `atan2(y, x)` is the two-argument arc tangent,
 the oriented angle of the direction `(x, y)` in `(-pi, pi]`; it is undefined at
 the origin. Scalar functions broadcast over lists like every other operation of
 section 11, elementwise for a list argument and pairwise for two lists of equal
-length; variadic and list-reduction forms require a later language design.
+length. Variadic forms, with more than two arguments, are not part of the
+language.
 Factorial is not part of the initial language.
 
 Scalar functions reject non-finite results and produce a domain diagnostic
@@ -523,7 +533,9 @@ diagnostic ordering, without observable side effects. Supported unary
 operations, scalar functions, and postfix extractors distribute over lists and
 preserve length and order. A function or operator not advertised as
 distributive rejects a list argument. The scalar functions, `min` and `max`
-included, broadcast like binary operations (section 10).
+included, broadcast like binary operations (section 10); the one-argument
+reductions `min(L)`, `max(L)` and `sum(L)` consume a list and return one
+value.
 
 Binary operations follow these rules:
 
@@ -638,9 +650,9 @@ insertions of labels), each postfix `.reverse`, `.dual`, `.involution`,
 from the parse tree so that the operand keeps its grouping: `(A + B).norm`
 becomes `norm(A + B)` and `A.inverse.norm` becomes `norm(inverse(A))`. A
 source that does not parse is kept unchanged with its diagnostic, and notes
-are text. Version 2 also reserves `normalize`, `inormalize` and the names of
-the operations, so a version 1 item declared with one of them becomes a
-diagnostic.
+are text. Version 2 also reserves `normalize`, `inormalize`, `sum` and the
+names of the operations, so a version 1 item declared with one of them
+becomes a diagnostic.
 
 Unknown function calls produce diagnostics. Syntax for user-defined and
 parametric functions is not reserved by the initial language and requires a

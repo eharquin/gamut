@@ -72,6 +72,8 @@ describe('PGA(2) sources through the language', () => {
     expect(value('ps').inspection).toBe('e012')
     expect(value('normalize(point(2, 4, 2))').inspection).toBe('2e01 - e02 + e12')
     expect(value('inormalize(ipoint(0, 2))').inspection).toBe('e01')
+    // The centroid of three points is the sum of the points over their count (#338).
+    expect(value('sum([point(0, 0), point(3, 0), point(0, 3)]) / 3').inspection).toBe('e01 - e02 + e12')
     expect(evaluateSource('normalize(ipoint(1, 0))', context)).toMatchObject({
       status: 'invalid', diagnostic: { code: 'ALG_DOMAIN' },
     })
