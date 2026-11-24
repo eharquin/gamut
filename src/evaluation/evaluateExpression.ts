@@ -638,7 +638,9 @@ function evaluateIterate(
   if (steps + 1 > MAX_GENERATED_VALUES) {
     throw new ExpressionEvaluationError(
       'LIMIT_GENERATED_VALUES',
-      `This iteration would generate ${steps + 1} elements; the limit is ${MAX_GENERATED_VALUES}.`,
+      Number.isSafeInteger(steps + 1)
+        ? `This iteration would generate ${steps + 1} elements; the limit is ${MAX_GENERATED_VALUES}.`
+        : `This iteration would generate more than ${MAX_GENERATED_VALUES} elements, the limit.`,
       expression.origin,
     )
   }
@@ -669,11 +671,13 @@ function evaluateIterate(
   return ownedList(states.map((state, ordinal) => {
     const id = `${scope}:iterate:${expression.origin.start}:${expression.origin.end}:${ordinal}`
     // A copy, so that a state never takes over the identity of the value it
-    // came from, such as the initial item.
+    // came from, such as the initial item; it keeps that value's lineage, so
+    // a positioned vector stays at its position.
     const value = ownedMultivector(state.coefficients, state.basis)
     const construction = outerConstruction(state)
     if (construction) retainOuterConstruction(value, construction)
-    return { id, value, sources: [id] }
+    const lineage = valueLineage(state)
+    return { id, value, sources: lineage.length > 0 ? lineage : [id] }
   }))
 }
 

@@ -79,6 +79,31 @@ describe('iterate(f, x0, n) (#341)', () => {
     expect(path.evaluation.value.elements.map((element) => element.id)).not.toContain(O.evaluation.elementId)
   })
 
+  it('keeps the positions of positioned vectors, as [v, f(v)] does', () => {
+    const positions = (source: string) => {
+      const items = evaluateDocument(expressionDocument([
+        { id: 'v', source: 'v = e1', positionSource: '(1, 1)' },
+        { id: 'f', source: 'f(x) = 2 * x' },
+        { id: 'l', source },
+      ]), vga)
+      const last = items.at(-1)!.evaluation
+      if (last?.status !== 'valid' || last.valueType !== 'list') throw new Error(JSON.stringify(last))
+      return last.elements.map((element) => element.position)
+    }
+    expect(positions('L = iterate(f, v, 2)')).toEqual([{ x: 1, y: 1 }, { x: 1, y: 1 }, { x: 1, y: 1 }])
+    expect(positions('L = iterate(f, v, 1)')).toEqual(positions('L = [v, f(v)]'))
+  })
+
+  it('reports a bad function in a label as a row does', () => {
+    const items = evaluated(vga, 'a = 2', 'g(x) = x + zz')
+    expect(valueSourceEvaluator(items, vga.engine)('iterate(a, 0, 2)')).toMatchObject({
+      status: 'invalid', diagnostic: { code: 'LANG_NOT_A_FUNCTION' },
+    })
+    expect(valueSourceEvaluator(items, vga.engine)('iterate(g, 0, 2)')).toMatchObject({
+      status: 'invalid', diagnostic: { code: 'LANG_INVALID_DEPENDENCY' },
+    })
+  })
+
   it('may be used in a label', () => {
     const items = evaluated(vga, 'f(x) = 2 * x')
     const result = valueSourceEvaluator(items, vga.engine)('iterate(f, 1, 3)[3]')
