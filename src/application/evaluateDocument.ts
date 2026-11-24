@@ -223,7 +223,9 @@ export function declarationDependsOn(
     if (!item) continue
     for (const source of [item.source, item.positionSource ?? '']) {
       const parsed = parseDocumentExpression(source)
-      if (parsed.ok) pending.push(...collectReferences(parsed.source.expression).map((reference) => reference.name))
+      // A called function is a dependency too, through its body (#340).
+      if (parsed.ok) pending.push(...[...collectReferences(parsed.source.expression), ...collectCalls(parsed.source.expression)]
+        .map((reference) => reference.name))
     }
   }
   return false
@@ -270,7 +272,8 @@ export function evaluateDocument(
           declaration: parsed.source.declaration,
           references: collectReferences(parsed.source.expression)
             .filter((reference) => !parameters.has(reference.name)),
-          calls: collectCalls(parsed.source.expression),
+          // A function of the active algebra, such as `line`, is never a dependency.
+          calls: collectCalls(parsed.source.expression).filter((call) => !engine.functions.has(call.name)),
         })
       }
     }
@@ -297,7 +300,7 @@ export function evaluateDocument(
         expression: parsedPosition.expression,
         declaration: null,
         references: collectReferences(parsedPosition.expression),
-        calls: collectCalls(parsedPosition.expression),
+        calls: collectCalls(parsedPosition.expression).filter((call) => !engine.functions.has(call.name)),
       })
     }
   })
@@ -400,12 +403,15 @@ export function evaluateDocument(
         results.set(node.key, invalid)
         return invalid
       }
-      // A parameter never hides a name of the document.
-      const shadowing = parameters.find((parameter) => declarations.has(parameter.name))
+      // A parameter never hides a name of the document or of the algebra.
+      const shadowing = parameters.find((parameter) =>
+        declarations.has(parameter.name) || engine.functions.has(parameter.name))
       if (shadowing) {
         const invalid = diagnostic(
           'LANG_PARAMETER_NAME',
-          `The parameter “${shadowing.name}” has the name of an item of the document.`,
+          declarations.has(shadowing.name)
+            ? `The parameter “${shadowing.name}” has the name of an item of the document.`
+            : `The parameter “${shadowing.name}” has the name of a function of the active algebra.`,
           shadowing.span,
         )
         results.set(node.key, invalid)

@@ -89,6 +89,13 @@ describe('calling a declared function (#340)', () => {
     expect(valueSourceEvaluator(items, vga.engine)('sq')).toMatchObject({
       status: 'invalid', diagnostic: { code: 'LANG_FUNCTION_VALUE' },
     })
+    const broken = evaluated(vga, 'g(x) = x + Z', 'A = 2')
+    expect(valueSourceEvaluator(broken, vga.engine)('g(1)')).toMatchObject({
+      status: 'invalid', diagnostic: { code: 'LANG_INVALID_DEPENDENCY', message: 'The function “g” is invalid.' },
+    })
+    expect(valueSourceEvaluator(broken, vga.engine)('A(1)')).toMatchObject({
+      status: 'invalid', diagnostic: { code: 'LANG_NOT_A_FUNCTION', message: '“A” is not a function.' },
+    })
   })
 
   it('reports the errors of a call', () => {
@@ -107,6 +114,18 @@ describe('calling a declared function (#340)', () => {
     expect(rows(vga, 'x = 1', 'f(x) = x')[1]).toBe('LANG_PARAMETER_NAME: The parameter “x” has the name of an item of the document.')
     expect(rows(pga, 'point(x) = x')[0]).toBe('LANG_RESERVED_NAME: “point” is a function of the active algebra.')
     expect(rows(vga, 'f(x) = 1', 'f(y) = 2', 'f(3)')[2]).toBe('LANG_DUPLICATE_NAME: The name “f” is declared more than once.')
+    expect(rows(pga, 'f(point) = point * 2')[0])
+      .toBe('LANG_PARAMETER_NAME: The parameter “point” has the name of a function of the active algebra.')
+  })
+
+  it('never makes a call of an algebra function a dependency', () => {
+    const [P, line] = rows(pga, 'P = line(1, 2, 3)', 'line = P')
+    expect(P).toBe(line)
+    expect(P).not.toMatch(/^LANG_/)
+  })
+
+  it('names every function of a failing chain', () => {
+    expect(rows(vga, 'g(x) = 1 / x', 'f(x) = g(x) + 1', 'A = f(0)')[2]).toMatch(/^ALG_SINGULAR: In “f”: In “g”: /)
   })
 
   it('reports direct and mutual recursion as cycles', () => {

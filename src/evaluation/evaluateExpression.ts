@@ -364,8 +364,9 @@ function callUserFunction(
   } catch (error) {
     if (!(error instanceof ExpressionEvaluationError)) throw error
     // The body belongs to another row, so the call carries the diagnostic;
-    // a limit keeps its message, any other failure names the function.
-    const message = error.code.startsWith('LIMIT_') || error.message.startsWith('In “')
+    // a limit keeps its message, any other failure names the chain of
+    // functions, as in `In “f”: In “g”: …`.
+    const message = error.code.startsWith('LIMIT_')
       ? error.message
       : `In “${declared.name}”: ${error.message}`
     throw new ExpressionEvaluationError(error.code, message, expression.origin)

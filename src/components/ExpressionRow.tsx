@@ -492,6 +492,9 @@ export function ExpressionRow({
                   aria-hidden="true"
                 />
               </button>
+          ) : evaluation?.status === 'function' ? (
+            // A declared function is valid but draws nothing: no swatch, no error.
+            <span className="expression-action-spacer" aria-hidden="true" />
           ) : !annotation && !empty && (
             // A note has no status, nor has an empty row, which may yet become an
             // expression, a note or a folder: their column stays, so that their

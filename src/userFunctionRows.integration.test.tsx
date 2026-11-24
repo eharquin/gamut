@@ -39,6 +39,8 @@ describe('rows of declared functions (#340)', () => {
     expect(within(declaration).getByText('sq(x)')).toHaveClass('function-signature')
     expect(declaration.querySelector('output')).toBeNull()
     expect(declaration.querySelector('.appearance-swatch')).toBeNull()
+    // A valid declaration is not an error.
+    expect(declaration.querySelector('.expression-status-pastille.is-error')).toBeNull()
     expect(within(declaration).queryByRole('button', { name: /^Drag / })).not.toBeInTheDocument()
 
     expect(within(row(1)).getByText('9')).toBeInTheDocument()
