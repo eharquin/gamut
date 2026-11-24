@@ -13,7 +13,7 @@ import {
   type ListElement,
 } from '../domain/languageValue'
 import type { CoreExpressionNode } from '../language/ast'
-import { languageFunction } from '../language/functions'
+import { languageFunction, type ListReduction } from '../language/functions'
 
 export class ExpressionEvaluationError extends Error {
   readonly code: string
@@ -237,9 +237,18 @@ function evaluateExpressionUnchecked(
         )
       }
       const args = expression.arguments.map(evaluate)
+      if (entry.reduction && args.length === 1) {
+        return reduceList(expression, expression.name, args[0], entry.reduction, engine, budget)
+      }
+      const apply = entry.apply
+      if (!apply) {
+        throw new ExpressionEvaluationError(
+          'LANG_ARITY', `“${expression.name}” has no form for ${args.length} arguments.`, expression.origin,
+        )
+      }
       return entry.distribution === 'operation' && args.length === 1
-        ? unary(expression, args[0], (value) => entry.apply(engine, [value]), budget)
-        : nary(expression, args, (values) => entry.apply(engine, values), budget)
+        ? unary(expression, args[0], (value) => apply(engine, [value]), budget)
+        : nary(expression, args, (values) => apply(engine, values), budget)
     }
     case 'grade':
       return unary(expression, evaluate(expression.operand),
@@ -385,6 +394,60 @@ function transformedConstruction(
     if (error instanceof AlgebraOperationError) return result
     throw error
   }
+}
+
+/**
+ * A one-argument reduction such as `min(L)` or `sum(L)` (#338): the argument
+ * shall be a list, and its elements are combined in list order into one
+ * value. A rejected element fails the call with its index.
+ */
+function reduceList(
+  expression: CoreExpressionNode,
+  name: string,
+  value: LanguageValue,
+  reduction: ListReduction,
+  engine: AlgebraEngine,
+  budget: EvaluationBudget,
+): LanguageValue {
+  if (value.kind !== 'list') {
+    throw new ExpressionEvaluationError(
+      'LANG_LIST_REQUIRED',
+      name === 'sum'
+        ? '“sum” takes a list.'
+        : `“${name}” of one argument takes a list; write ${name}(a, b) for two values.`,
+      expression.origin,
+    )
+  }
+  chargeWork(budget, value.elements.length, expression)
+  const values = value.elements.map((element, index) => {
+    try {
+      reduction.element?.(element.value)
+    } catch (error) {
+      if (error instanceof AlgebraOperationError) {
+        throw new ExpressionEvaluationError(
+          error.code, `List element ${index}: ${error.message}`, expression.origin,
+        )
+      }
+      throw error
+    }
+    return element.value
+  })
+  if (values.length === 0) {
+    const empty = reduction.empty(engine)
+    if (empty === null) {
+      throw new ExpressionEvaluationError(
+        'ALG_DOMAIN', `“${name}” of an empty list is undefined.`, expression.origin,
+      )
+    }
+    return empty
+  }
+  // The first element is copied, so that a one-element list never returns
+  // the element itself with its identity: `sum([V])` is not an alias of `V`.
+  const first = ownedMultivector(values[0].coefficients, values[0].basis)
+  return withLineage(
+    values.slice(1).reduce((accumulated, next) => reduction.combine(engine, accumulated, next), first),
+    values,
+  )
 }
 
 /** Records operand lineage on a freshly computed single value. */

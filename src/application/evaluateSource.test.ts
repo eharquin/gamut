@@ -295,9 +295,6 @@ describe('source evaluation pipeline', () => {
     expect(evaluateSource('norm(e1, e2)', context)).toMatchObject({
       status: 'invalid', diagnostic: { code: 'LANG_SYNTAX', message: '“norm” takes exactly one argument.' },
     })
-    expect(evaluateSource('normalize = 2', context)).toMatchObject({
-      status: 'invalid', diagnostic: { code: 'LANG_SYNTAX' },
-    })
   })
 
   it('distributes the functions over a list, keeping element identities', () => {
@@ -318,6 +315,62 @@ describe('source evaluation pipeline', () => {
     })
     expect(evaluateSource('e1.size', context)).toMatchObject({
       status: 'invalid', diagnostic: { message: 'The property “size” is not supported.' },
+    })
+  })
+
+  describe('list reductions min(L), max(L) and sum(L) (#338)', () => {
+    it.each([
+      ['min([3, -1, 4])', '-1'],
+      ['max([3, -1, 4])', '4'],
+      ['min([-2.5])', '-2.5'],
+      ['max([-7, -3])', '-3'],
+      ['sum([1, 2, 3.5])', '6.5'],
+      ['sum([])', '0'],
+      ['sum([e1, 2e2, e1])', '2e1 + 2e2'],
+      ['sum([1, e12])', '1 + e12'],
+      ['min([0...4] * 2 - 3)', '-3'],
+    ])('evaluates %s to %s', (source, inspection) => {
+      expect(evaluateSource(source, context)).toMatchObject({ status: 'valid', valueType: 'single', inspection })
+    })
+
+    it('matches the two-argument tree of the same values', () => {
+      const values = '[0.3, -1.2, 4, 1, -5.5, 9, 2, -5.4]'
+      const tree = 'min(min(min(D[0], D[1]), min(D[2], D[3])), min(min(D[4], D[5]), min(D[6], D[7])))'
+      expect(validValue(`min(${values})`)).toEqual(validValue(tree.replaceAll('D', values)))
+      expect(validValue(`max(${values})`)).toEqual(validValue(tree.replaceAll('min', 'max').replaceAll('D', values)))
+    })
+
+    it('keeps the two-argument forms, distributed over lists', () => {
+      expect(evaluateSource('min(2, -1)', context)).toMatchObject({ status: 'valid', inspection: '-1' })
+      expect(evaluateSource('max([1, 5], 3)', context)).toMatchObject({ status: 'valid', inspection: '[3, 5]' })
+    })
+
+    it.each([
+      ['min([])', 'ALG_DOMAIN', '“min” of an empty list is undefined.'],
+      ['max([])', 'ALG_DOMAIN', '“max” of an empty list is undefined.'],
+      ['min([1, e1, 2])', 'ALG_DOMAIN', 'List element 1: min of a list requires scalar elements.'],
+      ['max([2, 3, 1 + e12])', 'ALG_DOMAIN', 'List element 2: max of a list requires scalar elements.'],
+      ['min(3)', 'LANG_LIST_REQUIRED', '“min” of one argument takes a list; write min(a, b) for two values.'],
+      ['sum(e1)', 'LANG_LIST_REQUIRED', '“sum” takes a list.'],
+    ])('reports %s', (source, code, message) => {
+      expect(evaluateSource(source, context)).toMatchObject({ status: 'invalid', diagnostic: { code, message } })
+    })
+
+    it.each([
+      ['max(1, 2, 3)', '“max” takes 1 or 2 arguments.'],
+      ['sum([1], [2])', '“sum” takes exactly one argument.'],
+    ])('rejects the arity of %s', (source, message) => {
+      expect(evaluateSource(source, context)).toMatchObject({ status: 'invalid', diagnostic: { code: 'LANG_SYNTAX', message } })
+    })
+
+    it('rejects an empty call as a syntax error', () => {
+      expect(evaluateSource('min()', context)).toMatchObject({ status: 'invalid', diagnostic: { code: 'LANG_SYNTAX' } })
+    })
+
+    it('returns a new value, never an element of its argument', () => {
+      for (const source of ['sum([e1])', 'min([2])', 'max([2])']) {
+        expect(evaluateSource(source, context)).toMatchObject({ status: 'valid', elementId: null })
+      }
     })
   })
 

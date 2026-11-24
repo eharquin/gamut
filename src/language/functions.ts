@@ -24,7 +24,22 @@ export type LanguageFunction = Readonly<{
   distribution: 'operation' | 'scalar'
   /** Whether the active algebra provides the function. */
   available(engine: AlgebraEngine): boolean
-  apply(engine: AlgebraEngine, args: readonly OwnedMultivector[]): OwnedMultivector
+  /** The function of its values, for every arity but the one-argument reduction. */
+  apply?(engine: AlgebraEngine, args: readonly OwnedMultivector[]): OwnedMultivector
+  /**
+   * With one argument, the function reduces a list to one value instead
+   * (`min(L)`, `sum(L)`): the argument shall be a list, and each element is
+   * passed in list order.
+   */
+  reduction?: ListReduction
+}>
+
+export type ListReduction = Readonly<{
+  /** The value of an empty list, or null when it has none. */
+  empty(engine: AlgebraEngine): OwnedMultivector | null
+  /** Checks one element; throws a domain error for an element it does not accept. */
+  element?(value: OwnedMultivector): void
+  combine(engine: AlgebraEngine, accumulated: OwnedMultivector, value: OwnedMultivector): OwnedMultivector
 }>
 
 const always = () => true
@@ -58,16 +73,49 @@ function normalized(engine: AlgebraEngine, value: OwnedMultivector, kind: NormKi
   )
 }
 
+/** A pure grade-zero value, or a domain error naming the function. */
+function requireScalar(name: string): (value: OwnedMultivector) => void {
+  return (value) => {
+    if (value.coefficients.slice(1).some((coefficient) => coefficient !== 0)) {
+      throw new AlgebraOperationError('ALG_DOMAIN', `${name} of a list requires scalar elements.`)
+    }
+  }
+}
+
+/** `min(L)` or `max(L)`: the smallest or largest scalar element; an empty list has none. */
+function extremum(name: 'min' | 'max'): ListReduction {
+  return {
+    empty: () => null,
+    element: requireScalar(name),
+    combine: (engine, accumulated, value) =>
+      engine.scalarFunction(name, [accumulated, value]),
+  }
+}
+
 const FUNCTIONS: readonly LanguageFunction[] = [
   operation('exp', (engine, value) => engine.exp(value)),
   ...SCALAR_FUNCTION_NAMES.map((name): LanguageFunction => ({
     name,
-    arities: [SCALAR_FUNCTIONS[name].arity],
+    // `min(L)` and `max(L)` also reduce a list (#338).
+    arities: name === 'min' || name === 'max' ? [1, 2] : [SCALAR_FUNCTIONS[name].arity],
     scalarResult: true,
     distribution: 'scalar',
     available: always,
     apply: (engine, args) => engine.scalarFunction(name, args),
+    ...(name === 'min' || name === 'max' ? { reduction: extremum(name) } : {}),
   })),
+  {
+    // The sum of the elements of a list, with the algebra's addition; zero for an empty list.
+    name: 'sum',
+    arities: [1],
+    scalarResult: false,
+    distribution: 'scalar',
+    available: always,
+    reduction: {
+      empty: (engine) => engine.scalar(0),
+      combine: (engine, accumulated, value) => engine.add(accumulated, value),
+    },
+  },
   operation('norm', (engine, value) => engine.norm(value), { scalarResult: true }),
   operation('inorm', (engine, value) => engine.idealNorm!(value), {
     scalarResult: true, available: hasIdealNorm,

@@ -956,3 +956,19 @@ describe('declaration dependencies of a kept weight (#181)', () => {
     expect(declarationDependsOn(items, 'c2', new Set(['u']))).toBe(false)
   })
 })
+
+describe('list reductions in a document (#338)', () => {
+  it('never lets a reduced value move or share the position of a list element', () => {
+    const positionOf = (items: readonly ExpressionItem[]) => {
+      const [list] = evaluateItems(items)
+      if (list.evaluation?.status !== 'valid' || list.evaluation.valueType !== 'list') throw new Error('Expected a list')
+      return list.evaluation.elements[0].position
+    }
+    const alone = positionOf([{ id: 'v', source: 'V = [vector(1, 0)]' }])
+    const reduced = positionOf([
+      { id: 'v', source: 'V = [vector(1, 0)]' },
+      { id: 's', source: 'S = sum(V)', positionSource: '(5, 5)' },
+    ])
+    expect(reduced).toEqual(alone)
+  })
+})
