@@ -115,6 +115,15 @@ const FUNCTIONS: readonly LanguageFunction[] = [
     available: always,
   },
   {
+    // `iterate(f, x0, n)` takes a function name, not a value, so it is
+    // lowered to its own node instead of being applied (#341).
+    name: 'iterate',
+    arities: [3],
+    scalarResult: false,
+    distribution: 'scalar',
+    available: always,
+  },
+  {
     // The sum of the elements of a list, with the algebra's addition; zero for an empty list.
     name: 'sum',
     arities: [1],

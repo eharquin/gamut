@@ -197,6 +197,18 @@ export type CoreExpressionNode =
       }>)
   | (CoreNodeBase &
       Readonly<{
+        /**
+         * `iterate(f, x0, n)` (#341): `f` names a declared function, or is
+         * null when the first argument is not a name.
+         */
+        kind: 'iterate'
+        functionName: string | null
+        functionOrigin: SourceSpan
+        initial: CoreExpressionNode
+        count: CoreExpressionNode
+      }>)
+  | (CoreNodeBase &
+      Readonly<{
         /** `if(condition, whenTrue, whenFalse)`: only the selected branch is evaluated. */
         kind: 'conditional'
         condition: CoreExpressionNode

@@ -257,6 +257,8 @@ function evaluateExpressionUnchecked(
     }
     case 'conditional':
       return evaluateConditional(expression, evaluate, budget)
+    case 'iterate':
+      return evaluateIterate(expression, evaluate, engine, scope, budget, functions)
     case 'regressive':
       return binary(expression, evaluate(expression.left), evaluate(expression.right), engine.regressive, budget)
     case 'negate':
@@ -317,7 +319,7 @@ function evaluateExpressionUnchecked(
  * call, and a failure in the body fails the call and names the function.
  */
 function callUserFunction(
-  expression: Extract<CoreExpressionNode, { kind: 'call' }>,
+  expression: Readonly<{ origin: CoreExpressionNode['origin'] }>,
   declared: UserFunction,
   args: readonly LanguageValue[],
   engine: AlgebraEngine,
@@ -586,6 +588,92 @@ function evaluateConditional(
       value: copy,
       sources: [...new Set([conditionElement.id, ...sources])],
     }
+  }))
+}
+
+/**
+ * `iterate(f, x0, n)` (#341): the list `[x0, f(x0), …, f^n(x0)]` of `n + 1`
+ * states. `f` is a declared function of one parameter, every state a single
+ * value, and `n` a non-negative integer; the length is checked against the
+ * generated-value limit before the first step. Element `k` has an identity
+ * derived from the node and `k`, so labels stay attached when `n` changes.
+ */
+function evaluateIterate(
+  expression: Extract<CoreExpressionNode, { kind: 'iterate' }>,
+  evaluate: (expression: CoreExpressionNode) => LanguageValue,
+  engine: AlgebraEngine,
+  scope: string,
+  budget: EvaluationBudget,
+  functions: FunctionScope | undefined,
+): LanguageValue {
+  const declared = expression.functionName === null ? undefined : functions?.resolve(expression.functionName)
+  if (!declared) {
+    throw new ExpressionEvaluationError(
+      'LANG_ITERATE_FUNCTION',
+      expression.functionName === null
+        ? 'The first argument of “iterate” shall be the name of a declared function.'
+        : `“${expression.functionName}” is not a declared function.`,
+      expression.functionOrigin,
+    )
+  }
+  if (declared.parameters.length !== 1) {
+    throw new ExpressionEvaluationError(
+      'LANG_ARITY',
+      `“iterate” needs a function of one parameter; “${declared.name}” takes ${declared.parameters.length}.`,
+      expression.functionOrigin,
+    )
+  }
+  const countValue = evaluate(expression.count)
+  if (countValue.kind === 'list') {
+    throw new ExpressionEvaluationError(
+      'LANG_SCALAR_REQUIRED', 'The step count of “iterate” must be one scalar value.', expression.count.origin,
+    )
+  }
+  const steps = scalarMultivectorBoundary(countValue, expression.count, 'The step count of “iterate”')
+  if (!Number.isInteger(steps) || steps < 0) {
+    throw new ExpressionEvaluationError(
+      'LANG_INDEX_DOMAIN', 'The step count of “iterate” must be a non-negative integer.', expression.count.origin,
+    )
+  }
+  if (steps + 1 > MAX_GENERATED_VALUES) {
+    throw new ExpressionEvaluationError(
+      'LIMIT_GENERATED_VALUES',
+      `This iteration would generate ${steps + 1} elements; the limit is ${MAX_GENERATED_VALUES}.`,
+      expression.origin,
+    )
+  }
+  const initial = evaluate(expression.initial)
+  if (initial.kind === 'list') {
+    throw new ExpressionEvaluationError(
+      'LANG_NESTED_LIST', 'The initial state of “iterate” must be one value, not a list.', expression.initial.origin,
+    )
+  }
+  chargeElements(budget, steps + 1, expression)
+  const states: OwnedMultivector[] = [initial]
+  for (let step = 1; step <= steps; step += 1) {
+    let next: LanguageValue
+    try {
+      next = callUserFunction(expression, declared, [states[step - 1]], engine,
+        `${scope}:iterate:${expression.origin.start}:${expression.origin.end}:${step}`, budget, functions!)
+    } catch (error) {
+      if (!(error instanceof ExpressionEvaluationError) || error.code.startsWith('LIMIT_')) throw error
+      throw new ExpressionEvaluationError(error.code, `Step ${step}: ${error.message}`, expression.origin)
+    }
+    if (next.kind === 'list') {
+      throw new ExpressionEvaluationError(
+        'LANG_NESTED_LIST', `Step ${step}: “${declared.name}” returns a list; each state must be one value.`, expression.origin,
+      )
+    }
+    states.push(next)
+  }
+  return ownedList(states.map((state, ordinal) => {
+    const id = `${scope}:iterate:${expression.origin.start}:${expression.origin.end}:${ordinal}`
+    // A copy, so that a state never takes over the identity of the value it
+    // came from, such as the initial item.
+    const value = ownedMultivector(state.coefficients, state.basis)
+    const construction = outerConstruction(state)
+    if (construction) retainOuterConstruction(value, construction)
+    return { id, value, sources: [id] }
   }))
 }
 

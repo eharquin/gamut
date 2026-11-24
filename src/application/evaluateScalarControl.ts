@@ -37,7 +37,9 @@ function references(expression: SurfaceExpressionNode): readonly Readonly<{
     case 'property-expression': return references(expression.object)
     case 'vector-constructor':
     case 'tuple': return expression.components.flatMap(references)
-    case 'call-expression': return expression.arguments.flatMap(references)
+    // The function `iterate` names is not a value (#341).
+    case 'call-expression': return (expression.callee === 'iterate' && expression.arguments[0]?.kind === 'reference'
+      ? expression.arguments.slice(1) : expression.arguments).flatMap(references)
     case 'list-expression': return expression.elements.flatMap(references)
     case 'range-expression': return [expression.start, ...(expression.next ? [expression.next] : []), expression.end].flatMap(references)
     case 'index-expression': return [...references(expression.object), ...references(expression.index)]
