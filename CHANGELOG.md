@@ -21,7 +21,7 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `norm(A + B)`. The shipped examples are written in version 2. A document of
   a later language version is refused.
 - The names `norm`, `normalize`, `inorm`, `inormalize`, `dual`, `inverse`,
-  `reverse`, `involution` and `sum` are reserved in every algebra: an item declared
+  `reverse`, `involution`, `sum`, `if` and `sign` are reserved in every algebra: an item declared
   with one of them becomes a diagnostic.
 
 ### Added
@@ -32,6 +32,12 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   replaces a tree of two-argument `min` calls, and `sum(points) / 3` is a
   centroid. `min` and `max` of an empty list, or of a list with a non-scalar
   element, report a diagnostic with the element index; `sum([])` is zero.
+- Comparisons `<`, `<=`, `>`, `>=`, `==` and `!=`, the conditional
+  `if(c, a, b)` and `sign(x)` (#339). A comparison gives `1` or `0`, exactly,
+  with no tolerance; `if` evaluates only the branch it selects, so
+  `if(u != 0, u / abs(u), 0)` is defined at `u = 0`, and a list condition
+  selects element by element. A row `a == b` no longer reads as a declaration
+  of `a`.
 
 ## 0.3.0 - 2026-11-20
 

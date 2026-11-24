@@ -12,7 +12,7 @@ import {
   type LanguageValue,
   type ListElement,
 } from '../domain/languageValue'
-import type { CoreExpressionNode } from '../language/ast'
+import type { ComparisonOperator, CoreExpressionNode } from '../language/ast'
 import { languageFunction, type ListReduction } from '../language/functions'
 
 export class ExpressionEvaluationError extends Error {
@@ -219,6 +219,17 @@ function evaluateExpressionUnchecked(
         }, budget)
     case 'inner':
       return binary(expression, evaluate(expression.left), evaluate(expression.right), engine.inner, budget)
+    case 'compare': {
+      const operator = expression.operator
+      return binary(expression, evaluate(expression.left), evaluate(expression.right),
+        (left, right) => engine.scalar(compared(
+          operator,
+          comparisonOperand(left, 'left'),
+          comparisonOperand(right, 'right'),
+        ) ? 1 : 0), budget)
+    }
+    case 'conditional':
+      return evaluateConditional(expression, evaluate, budget)
     case 'regressive':
       return binary(expression, evaluate(expression.left), evaluate(expression.right), engine.regressive, budget)
     case 'negate':
@@ -394,6 +405,98 @@ function transformedConstruction(
     if (error instanceof AlgebraOperationError) return result
     throw error
   }
+}
+
+/** A pure grade-zero comparison operand, or a domain error naming its side. */
+function comparisonOperand(value: OwnedMultivector, side: 'left' | 'right'): number {
+  if (value.coefficients.slice(1).some((coefficient) => coefficient !== 0)) {
+    throw new AlgebraOperationError('ALG_DOMAIN', `The ${side} operand of a comparison must be scalar.`)
+  }
+  return value.coefficients[0]
+}
+
+/** An exact IEEE 754 comparison; no tolerance applies (#339). */
+function compared(operator: ComparisonOperator, left: number, right: number): boolean {
+  switch (operator) {
+    case '<': return left < right
+    case '<=': return left <= right
+    case '>': return left > right
+    case '>=': return left >= right
+    case '==': return left === right
+    case '!=': return left !== right
+  }
+}
+
+/** The condition of `if` as a truth value: a scalar is true when it is not zero. */
+function conditionTruth(value: OwnedMultivector, expression: CoreExpressionNode, position?: number): boolean {
+  const prefix = position === undefined ? '' : `Condition element ${position}: `
+  if (value.coefficients.slice(1).some((coefficient) => coefficient !== 0)) {
+    throw new ExpressionEvaluationError(
+      'ALG_DOMAIN', `${prefix}The condition of “if” must be scalar.`, expression.origin,
+    )
+  }
+  return value.coefficients[0] !== 0
+}
+
+/**
+ * `if(condition, whenTrue, whenFalse)` (#339). A single condition evaluates
+ * only the branch it selects, so the other may fail without failing the
+ * expression. A list condition selects element by element: the condition and
+ * the list branches follow the broadcasting rules of `binary`, and each
+ * branch is evaluated only when at least one element selects it. An empty
+ * condition selects nothing and gives an empty list.
+ */
+function evaluateConditional(
+  expression: Extract<CoreExpressionNode, { kind: 'conditional' }>,
+  evaluate: (expression: CoreExpressionNode) => LanguageValue,
+  budget: EvaluationBudget,
+): LanguageValue {
+  const condition = evaluate(expression.condition)
+  if (condition.kind === 'multivector') {
+    return evaluate(conditionTruth(condition, expression.condition) ? expression.whenTrue : expression.whenFalse)
+  }
+  const truths = condition.elements.map((element, index) =>
+    conditionTruth(element.value, expression.condition, index))
+  if (truths.length === 0) return ownedList([])
+  const whenTrue = truths.includes(true) ? evaluate(expression.whenTrue) : null
+  const whenFalse = truths.includes(false) ? evaluate(expression.whenFalse) : null
+  const lengths = [condition, whenTrue, whenFalse]
+    .flatMap((value) => (value?.kind === 'list' ? [value.elements.length] : []))
+  if (lengths.some((length) => length === 0)) {
+    throw new ExpressionEvaluationError(
+      'LANG_LIST_LENGTH', 'An empty list is incompatible with a non-empty list.', expression.origin,
+    )
+  }
+  const length = Math.max(...lengths)
+  if (lengths.some((candidate) => candidate !== 1 && candidate !== length)) {
+    throw new ExpressionEvaluationError(
+      'LANG_LIST_LENGTH',
+      `List lengths ${[...new Set(lengths)].join(' and ')} are incompatible.`,
+      expression.origin,
+    )
+  }
+  chargeElements(budget, length, expression)
+  const pick = <T,>(elements: readonly T[], index: number) => elements[elements.length === 1 ? 0 : index]
+  return ownedList(Array.from({ length }, (_, index) => {
+    const conditionElement = pick(condition.elements, index)
+    const truth = pick(truths, index)
+    // A singleton condition selects one branch for every element, which
+    // was evaluated only if it is selected.
+    const selected = (truth ? whenTrue : whenFalse)!
+    const element = selected.kind === 'list' ? pick(selected.elements, index) : null
+    const value = element?.value ?? selected as OwnedMultivector
+    // A copy, so that the list never takes over the identity of the value it
+    // selects, which may be another item's (as in a gather).
+    const copy = ownedMultivector(value.coefficients, value.basis)
+    const construction = outerConstruction(value)
+    if (construction) retainOuterConstruction(copy, construction)
+    const sources = element ? [element.id] : valueLineage(value)
+    return {
+      id: `${expression.origin.start}:${expression.origin.end}:${index}:${conditionElement.id}:${element?.id ?? (truth ? 'true' : 'false')}`,
+      value: copy,
+      sources: [...new Set([conditionElement.id, ...sources])],
+    }
+  }))
 }
 
 /**

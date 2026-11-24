@@ -40,9 +40,12 @@ export type UnaryExpressionNode = Readonly<{
   span: SourceSpan
 }>
 
+/** The comparisons of section 9, which give the scalar 1 when they hold and 0 otherwise (#339). */
+export type ComparisonOperator = '<' | '<=' | '>' | '>=' | '==' | '!='
+
 export type BinaryExpressionNode = Readonly<{
   kind: 'binary-expression'
-  operator: '+' | '-' | '*' | '/' | '%' | '**' | '^' | '|' | '&' | '>>>'
+  operator: '+' | '-' | '*' | '/' | '%' | '**' | '^' | '|' | '&' | '>>>' | ComparisonOperator
   left: SurfaceExpressionNode
   right: SurfaceExpressionNode
   implicit: boolean
@@ -184,6 +187,21 @@ export type CoreExpressionNode =
           | 'sandwich'
         left: CoreExpressionNode
         right: CoreExpressionNode
+      }>)
+  | (CoreNodeBase &
+      Readonly<{
+        kind: 'compare'
+        operator: ComparisonOperator
+        left: CoreExpressionNode
+        right: CoreExpressionNode
+      }>)
+  | (CoreNodeBase &
+      Readonly<{
+        /** `if(condition, whenTrue, whenFalse)`: only the selected branch is evaluated. */
+        kind: 'conditional'
+        condition: CoreExpressionNode
+        whenTrue: CoreExpressionNode
+        whenFalse: CoreExpressionNode
       }>)
   | (CoreNodeBase &
       Readonly<{

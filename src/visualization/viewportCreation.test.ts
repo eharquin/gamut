@@ -13,6 +13,8 @@ import { MAX_PIXELS_PER_UNIT, MIN_PIXELS_PER_UNIT } from './viewport'
 describe('viewport vector creation', () => {
   it('names created objects A to Z, then A1 to Z1, skipping declared names', () => {
     expect(nextObjectName([])).toBe('A')
+    // A comparison row declares no name (#339).
+    expect(nextObjectName(['A == B'])).toBe('A')
     expect(nextObjectName([
       'A = point(1, 2)',
       '  B = vector(3, 0)',

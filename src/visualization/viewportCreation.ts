@@ -1,6 +1,6 @@
 import { formatRoundTripNumber } from '../domain/numberFormat'
+import { declaredName } from '../language/declaredName'
 
-const DECLARATION_NAME = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/
 const MAX_COORDINATE_DECIMALS = 8
 
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
@@ -12,7 +12,7 @@ const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 export function nextObjectName(sources: readonly string[]): string {
   const declarations = new Set(
     sources.flatMap((source) => {
-      const name = DECLARATION_NAME.exec(source)?.[1]
+      const name = declaredName(source)
       return name ? [name] : []
     }),
   )

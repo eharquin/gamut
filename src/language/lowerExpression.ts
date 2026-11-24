@@ -1,5 +1,6 @@
 import { LANGUAGE_PROPERTIES, languageFunction } from './functions'
 import type {
+  ComparisonOperator,
   CoreExpressionNode,
   SurfaceExpressionNode,
 } from './ast'
@@ -29,6 +30,12 @@ function add(
   origin: SurfaceExpressionNode['span'],
 ): CoreExpressionNode {
   return { kind: 'add', left, right, origin }
+}
+
+const COMPARISONS: ReadonlySet<string> = new Set(['<', '<=', '>', '>=', '==', '!='])
+
+function isComparison(operator: string): operator is ComparisonOperator {
+  return COMPARISONS.has(operator)
 }
 
 /**
@@ -89,6 +96,9 @@ export function lowerExpression(
     case 'binary-expression': {
       const left = lowerExpression(expression.left)
       const right = lowerExpression(expression.right)
+      if (isComparison(expression.operator)) {
+        return { kind: 'compare', operator: expression.operator, left, right, origin: expression.span }
+      }
       if (expression.operator === '*') {
         return multiply(left, right, expression.span)
       }
@@ -147,6 +157,9 @@ export function lowerExpression(
       }
     case 'call-expression': {
       const args = expression.arguments.map(lowerExpression)
+      if (expression.callee === 'if' && args.length === 3) {
+        return { kind: 'conditional', condition: args[0], whenTrue: args[1], whenFalse: args[2], origin: expression.span }
+      }
       if (languageFunction(expression.callee)) {
         return { kind: 'function', name: expression.callee, arguments: args, origin: expression.span }
       }

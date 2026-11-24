@@ -4,6 +4,7 @@ import type { Diagnostic, SourceSpan } from '../domain/diagnostic'
 import type { LanguageValue } from '../domain/languageValue'
 import { evaluateExpression, ExpressionEvaluationError } from '../evaluation/evaluateExpression'
 import type { SurfaceExpressionNode } from '../language/ast'
+import { declaredName } from '../language/declaredName'
 import { lowerExpression } from '../language/lowerExpression'
 import { parseExpression } from '../language/parseExpression'
 import type { EvaluatedDocumentItem } from './evaluateDocument'
@@ -45,10 +46,6 @@ function references(expression: SurfaceExpressionNode): readonly Readonly<{
 
 function invalid(code: string, message: string, span: SourceSpan): Readonly<{ status: 'invalid'; diagnostic: Diagnostic }> {
   return { status: 'invalid', diagnostic: { code, severity: 'error', message, span } }
-}
-
-function declarationName(source: string): string | null {
-  return /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/.exec(source)?.[1] ?? null
 }
 
 /** Diagnostic codes and messages for a source that is not a finite real scalar. */
@@ -99,7 +96,7 @@ export function valueSourceEvaluator(
 ): (source: string) => SourceValueState {
   const declarations = new Map<string, EvaluatedDocumentItem[]>()
   items.forEach((item) => {
-    const name = declarationName(item.item.source)
+    const name = declaredName(item.item.source)
     if (!name) return
     declarations.set(name, [...(declarations.get(name) ?? []), item])
   })

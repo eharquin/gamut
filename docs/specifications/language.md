@@ -406,6 +406,9 @@ The initial language provides:
 | `A.e1`                | blade coefficient                              |
 | `A.g1`                | grade projection                               |
 | `L[i]`, `L[I]`        | scalar and gather list indexing                |
+| `a < b`, `a <= b`     | comparisons, `1` when they hold, else `0`      |
+| `a > b`, `a >= b`     |                                                |
+| `a == b`, `a != b`    | exact equality and inequality                  |
 
 The other operations on a value are functions of section 10: `reverse(A)`,
 `dual(A)`, `involution(A)`, `inverse(A)`, `norm(A)` and the others. `~A` and
@@ -426,6 +429,14 @@ rules of section 11.
 Unsupported or undefined operations produce structured diagnostics and never a
 silent `null` or approximate substitute.
 
+The comparisons `<`, `<=`, `>`, `>=`, `==` and `!=` (#339) take two finite
+pure grade-zero values and return the grade-zero value `1` when the
+comparison holds and `0` otherwise; there is no separate boolean kind, so
+`w * d` keeps `d` where `w` holds. They are exact IEEE 754 comparisons and
+never apply the convention tolerance: `0.1 + 0.2 == 0.3` is `0`. A
+non-scalar operand is a domain diagnostic. Comparisons follow the binary list
+rules of section 11. `!=` is one token, never the dual `!` followed by `=`.
+
 Language version 1 also wrote these operations as postfix properties,
 `A.reverse`, `A.dual`, `A.involution`, `A.inverse`, `A.norm` and `A.inorm`.
 Version 2 removes them (section 15); abbreviations such as `rev` and `invo`
@@ -441,14 +452,17 @@ From strongest to weakest, precedence is:
 4. `^`, `&`, `|`, and `<<`;
 5. `*`, `/`, and `%`;
 6. `>>>`;
-7. `+` and `-`.
+7. `+` and `-`;
+8. the comparisons `<`, `<=`, `>`, `>=`, `==`, and `!=`.
 
 Power is right-associative. Other binary operators are left-associative within
-their level. Consequently:
+their level, except the comparisons, which are not associative: `a < b < c` is
+a syntax diagnostic. Consequently:
 
 ```text
-A * B ^ C   == A * (B ^ C)
-R >>> A + B == (R >>> A) + B
+A * B ^ C     is  A * (B ^ C)
+R >>> A + B   is  (R >>> A) + B
+a + b < c * d is  (a + b) < (c * d)
 ```
 
 Parentheses may always make grouping explicit.
@@ -457,7 +471,8 @@ Parentheses may always make grouping explicit.
 
 The common language provides, in every algebra, the scalar functions `abs`,
 `sqrt`, `exp`, `log`, `sin`, `cos`, `tan`, `sinh`, `cosh`, `tanh`, `asin`,
-`acos`, `atan`, `atan2`, `min`, and `max`, the list reduction `sum`, and the operations on a value
+`acos`, `atan`, `atan2`, `min`, `max`, and `sign`, the list reduction `sum`,
+the conditional `if`, and the operations on a value
 `norm`, `normalize`, `inorm`, `inormalize`, `dual`, `inverse`, `reverse`, and
 `involution`. Scalar-only functions require pure grade-zero arguments unless
 an algebra capability explicitly defines their multivector extension. In
@@ -476,6 +491,21 @@ against the constructors and functions the active algebra registers (such as
 (`LANG_ARITY`). An algebra-registered name belongs to its algebra, so a source
 that uses it is an unsupported-function diagnostic after a switch to an
 algebra without it.
+
+`sign(x)` is `-1`, `0` or `1`, distributive like the other scalar functions;
+the sign of zero is `0`, never negative.
+
+`if(c, a, b)` returns `a` when the condition `c` is not zero and `b` when it
+is zero (#339). `c` shall be a finite pure grade-zero value, such as a
+comparison. Only the selected branch is evaluated, so `if(u != 0, u / abs(u),
+0)` is valid at `u = 0`; the names of both branches remain dependencies of the
+item, so the dependency graph does not change with the values. When `c` is a
+list, `if` selects element by element: the condition and the branches are
+broadcast together under the rules of section 11, and a branch is evaluated
+only when at least one element selects it. An empty condition selects
+nothing and gives an empty list. A selected branch is evaluated as a whole, so a
+failure in one of its elements fails the expression even where another
+element selects the other branch.
 
 The operations on a value distribute over a list and keep the identity of
 each element, like the unary operators. `reverse(A)` and `dual(A)` are `~A`
@@ -651,8 +681,8 @@ insertions of labels), each postfix `.reverse`, `.dual`, `.involution`,
 from the parse tree so that the operand keeps its grouping: `(A + B).norm`
 becomes `norm(A + B)` and `A.inverse.norm` becomes `norm(inverse(A))`. A
 source that does not parse is kept unchanged with its diagnostic, and notes
-are text. Version 2 also reserves `normalize`, `inormalize`, `sum` and the
-names of the operations, so a version 1 item declared with one of them
+are text. Version 2 also reserves `normalize`, `inormalize`, `sum`, `if`,
+`sign` and the names of the operations, so a version 1 item declared with one of them
 becomes a diagnostic.
 
 Unknown function calls produce diagnostics. Syntax for user-defined and
