@@ -1,4 +1,5 @@
 import { defaultStyleForKind, STUDIO_COLORS } from '../components/appearancePalette'
+import { CURRENT_LANGUAGE_VERSION, migrateLabelToVersion2, migrateSourceToVersion2 } from '../language/migrateLanguage'
 import type {
   ExpressionControl,
   ExpressionDocument,
@@ -59,7 +60,7 @@ export type CanonicalViewport = Readonly<{ kind: 'none' }> | Readonly<{ kind: 't
 export type CanonicalDocument = Readonly<{
   id: string
   formatVersion: typeof CURRENT_FORMAT_VERSION
-  languageVersion: number
+  languageVersion: typeof CURRENT_LANGUAGE_VERSION
   algebra: Readonly<{ algebraId: string; definitionVersion: number; conventionVersion: number; parameters: Readonly<Record<string, unknown>> }>
   interpretation: Readonly<{ interpretationId: string; interpretationVersion: number }> | null
   metadata: Readonly<{ title: string; description: string }>
@@ -221,7 +222,7 @@ export function parseCanonicalDocument(source: string): CanonicalDocument {
   rejectDuplicateKeys(source)
   let value: unknown
   try { value = JSON.parse(source) } catch { fail('DOCUMENT_JSON', 'Document is not valid JSON.') }
-  return validateCanonicalDocument(migrateDocument(value))
+  return validateCanonicalDocument(migrateLanguage(migrateDocument(value)))
 }
 
 /**
@@ -429,6 +430,56 @@ export function migrateDocument(value: unknown): unknown {
 }
 
 /**
+ * Language migration, after the format migration: a document of language
+ * version 1 has every expression source rewritten in version 2 (`A.norm`
+ * becomes `norm(A)`), in its items, slider bounds, appearance sources and
+ * label insertions. Annotations are text and stay unchanged. A version newer
+ * than this build is refused.
+ */
+export function migrateLanguage(value: unknown): unknown {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return value
+  const document = value as Record<string, unknown>
+  const version = document.languageVersion
+  if (typeof version === 'number' && Number.isInteger(version) && version > CURRENT_LANGUAGE_VERSION)
+    fail('DOCUMENT_LANGUAGE_VERSION', 'Unsupported language version ' + String(version) + '.')
+  if (version !== 1) return value
+  // A source the rewrite would take over the source limit keeps its version 1
+  // text, which reports the function form instead of refusing the document.
+  const bounded = (text: string, migrated: string) => migrated.length > MAX_SOURCE_LENGTH ? text : migrated
+  const source = (text: string) => bounded(text, migrateSourceToVersion2(text))
+  const sources = (entry: unknown): unknown => {
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) return entry
+    return Object.fromEntries(Object.entries(entry as Record<string, unknown>).map(([key, field]) => [key,
+      typeof field === 'string' && key.endsWith('Source') ? source(field)
+        : typeof field === 'string' && key === 'label' ? bounded(field, migrateLabelToVersion2(field))
+          : key === 'primitiveStyles' || key === 'points' || key === 'lines' || key === 'control' ? sources(field)
+            : field]))
+  }
+  const item = (entry: unknown): unknown => {
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) return entry
+    const record = sources(entry) as Record<string, unknown>
+    return record.kind === 'expression' && typeof record.source === 'string'
+      ? { ...record, source: source(record.source) }
+      : record
+  }
+  const appearance = document.appearance
+  return {
+    ...document,
+    languageVersion: CURRENT_LANGUAGE_VERSION,
+    items: Array.isArray(document.items) ? document.items.map(item) : document.items,
+    appearance: appearance !== null && typeof appearance === 'object' && !Array.isArray(appearance)
+      ? Object.fromEntries(Object.entries(appearance).map(([id, entry]) => [id, sources(entry)]))
+      : appearance,
+    folders: Array.isArray(document.folders)
+      ? document.folders.map((folder: unknown) => folder !== null && typeof folder === 'object' && !Array.isArray(folder) &&
+        'appearance' in folder
+        ? { ...folder, appearance: sources((folder as Record<string, unknown>).appearance) }
+        : folder)
+      : document.folders,
+  }
+}
+
+/**
  * Version 11 to 12: a label angle source in degrees, as the same angle in
  * radians. A plain number keeps its digits (`30` becomes `30 * pi / 180`); an
  * expression is put in parentheses.
@@ -620,6 +671,12 @@ function folderList(value: unknown): CanonicalFolder[] {
   return folders
 }
 
+function languageVersion(value: unknown): typeof CURRENT_LANGUAGE_VERSION {
+  const version = positiveInteger(value, 'languageVersion')
+  if (version !== CURRENT_LANGUAGE_VERSION) fail('DOCUMENT_LANGUAGE_VERSION', 'Unsupported language version ' + String(version) + '.')
+  return CURRENT_LANGUAGE_VERSION
+}
+
 export function validateCanonicalDocument(value: unknown): CanonicalDocument {
   const root = record(value, 'document', requiredRoot)
   if (root.formatVersion !== CURRENT_FORMAT_VERSION) fail('DOCUMENT_FORMAT_VERSION', 'Unsupported format version ' + String(root.formatVersion) + '.')
@@ -694,7 +751,7 @@ export function validateCanonicalDocument(value: unknown): CanonicalDocument {
     fail('DOCUMENT_SCHEMA', 'view.display.theme is invalid.')
   return {
     id: text(root.id, 'document.id', true), formatVersion: CURRENT_FORMAT_VERSION,
-    languageVersion: positiveInteger(root.languageVersion, 'languageVersion'),
+    languageVersion: languageVersion(root.languageVersion),
     algebra: { algebraId: text(algebra.algebraId, 'algebra.algebraId', true), definitionVersion: positiveInteger(algebra.definitionVersion, 'algebra.definitionVersion'), conventionVersion: positiveInteger(algebra.conventionVersion, 'algebra.conventionVersion'), parameters },
     interpretation: interpretation && { interpretationId: text(interpretation.interpretationId, 'interpretation.interpretationId', true), interpretationVersion: positiveInteger(interpretation.interpretationVersion, 'interpretation.interpretationVersion') },
     metadata: { title: text(metadata.title, 'metadata.title'), description: text(metadata.description, 'metadata.description') },
@@ -802,7 +859,7 @@ export function toCanonicalDocument(
     canonicalAppearance(document.appearance[item.id], resolvedStyles[item.id], resolvedOrientation[item.id]),
   ]))
   return validateCanonicalDocument({
-    id: document.id, formatVersion: CURRENT_FORMAT_VERSION, languageVersion: document.languageVersion,
+    id: document.id, formatVersion: CURRENT_FORMAT_VERSION, languageVersion: CURRENT_LANGUAGE_VERSION,
     algebra: document.algebra,
     interpretation: document.interpretation,
     metadata: { title: document.title, description: document.description },

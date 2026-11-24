@@ -5,7 +5,10 @@
 **Initial scope:** VGA core
 **Refines:** LANG-001 through LANG-009
 **Amended:** 2026-11-12, section 7: a coordinate tuple is resolved by the
-active algebra (#180); the language version does not change (section 15)
+active algebra (#180); the language version does not change (section 15).
+2026-11-24, sections 8, 10, 13 and 15: language version 2 writes the
+operations on a value as functions, `norm(A)` instead of `A.norm`, and adds
+`normalize` and `inormalize` (#342)
 **License:** MIT
 
 ## 1. Purpose and authority
@@ -29,7 +32,7 @@ subtraction, geometric product, outer product, inner product, regressive
 product, reverse, dual, grade involution, pseudoscalar, grade-projection, and
 coefficient-extraction subset. Coordinate tuples are implemented for every
 algebra that declares a tuple constructor (section 7): VGA(2) and PGA(2). The read-only `V.position` and
-`V.head` properties resolve the separately evaluated position and the derived
+`V.head` item-part references resolve the separately evaluated position and the derived
 sum `V.position + V` for named positioned vectors. Pure bivectors receive the
 same separate position capability through `B.position` but have no `head`
 property. The expression panel classifies exact VGA(2) values as scalars,
@@ -44,14 +47,16 @@ and partial list results are rejected. Positioned vector and bivector elements
 retain positions through supported list operations without a list-level
 position field; `position` and vector `head` distribute over compatible lists.
 
-The scalar functions of section 10 are implemented, including `atan2`.
+The functions of section 10 are implemented, including `atan2`, `norm`,
+`normalize`, and, in PGA(2), `inorm` and `inormalize`, through one registry
+of common-language functions.
 Annotations are implemented as notes: a quotation mark typed first in an
 expression row makes the row an annotation, and an expression that
 becomes an annotation loses its position source, normalization, and control
 in the same undoable edit. Their text renders the Markdown subset of section
-3. The remaining properties and operators, serialization, and the
-generalized algebra-symbol and capability registries in this specification
-remain planned. This section records implementation evidence; it
+3. The left contraction `<<`, the property descriptors of section 13, and
+the generalized algebra-symbol and capability registries in this
+specification remain planned. This section records implementation evidence; it
 does not narrow the normative language.
 
 ## 2. Semantic values
@@ -290,9 +295,9 @@ e139 == e1 * e3 * e9
 Non-numeric generator aliases such as `einf` are complete registered symbols;
 they are not segments in compact concatenated blades and shall be combined
 explicitly with an operator. Multi-digit generator indices are not supported by
-language version 1. The
+the current language. The
 character sequence `e{` is lexically reserved through the matching `}` for a
-future explicit blade syntax. In version 1 it always produces the dedicated
+future explicit blade syntax. It always produces the dedicated
 `LANG_RESERVED_BLADE_SYNTAX` diagnostic and shall not be tokenized as an
 identifier followed by another construct. Reserving it does not commit a later
 version to accepting it.
@@ -397,13 +402,14 @@ The initial language provides:
 | `-A`, `+A`            | unary sign                                     |
 | `~A`                  | reverse                                        |
 | `!A`                  | dual when defined                              |
-| `A.reverse`, `A.dual` | postfix reverse and dual                       |
-| `A.involution`        | grade involution                               |
 | `A**n`                | geometric integer power                        |
-| `A.inverse`           | inverse when it exists                         |
 | `A.e1`                | blade coefficient                              |
 | `A.g1`                | grade projection                               |
 | `L[i]`, `L[I]`        | scalar and gather list indexing                |
+
+The other operations on a value are functions of section 10: `reverse(A)`,
+`dual(A)`, `involution(A)`, `inverse(A)`, `norm(A)` and the others. `~A` and
+`!A` are the same as `reverse(A)` and `dual(A)`.
 
 `A**0` is scalar one and `A**-1` is the inverse. A multivector exponent shall be
 a finite integer scalar. The Studio-only `A^-1` spelling and the `§` commutator
@@ -420,8 +426,10 @@ rules of section 11.
 Unsupported or undefined operations produce structured diagnostics and never a
 silent `null` or approximate substitute.
 
-The explicit postfix names are canonical. Abbreviations such as `.rev` and
-`.invo` are not language-version-one aliases.
+Language version 1 also wrote these operations as postfix properties,
+`A.reverse`, `A.dual`, `A.involution`, `A.inverse`, `A.norm` and `A.inorm`.
+Version 2 removes them (section 15); abbreviations such as `rev` and `invo`
+are not aliases.
 
 ## 9. Precedence and associativity
 
@@ -447,13 +455,33 @@ Parentheses may always make grouping explicit.
 
 ## 10. Built-in functions and norms
 
-The initial VGA core provides `abs`, `sqrt`, `exp`, `log`, `sin`, `cos`, `tan`,
-`sinh`, `cosh`, `tanh`, `asin`, `acos`, `atan`, `atan2`, `min`, and `max`.
-Scalar-only functions require pure grade-zero arguments unless an algebra
-capability explicitly defines their multivector extension. In particular, an
-algebra may expose a multivector exponential through `exp`. These names are
-reserved: they cannot be declared, and a call with the wrong number of
-arguments is a syntax diagnostic.
+The common language provides, in every algebra, the scalar functions `abs`,
+`sqrt`, `exp`, `log`, `sin`, `cos`, `tan`, `sinh`, `cosh`, `tanh`, `asin`,
+`acos`, `atan`, `atan2`, `min`, and `max`, and the operations on a value
+`norm`, `normalize`, `inorm`, `inormalize`, `dual`, `inverse`, `reverse`, and
+`involution`. Scalar-only functions require pure grade-zero arguments unless
+an algebra capability explicitly defines their multivector extension. In
+particular, an algebra may expose a multivector exponential through `exp`.
+These names are reserved in every algebra, whether or not the active algebra
+provides the function: they cannot be declared, and a call with the wrong
+number of arguments is a syntax diagnostic. A call to one the active algebra
+does not provide, such as `inorm` in VGA(2), is an unsupported-function
+diagnostic.
+
+Every function is called as `name(arguments)`; a function is never written
+as a property. The common-language functions above are resolved first, and
+their arity is checked when the source is parsed. Any other call resolves
+against the constructors and functions the active algebra registers (such as
+`vector`, `point`, `ipoint` and `line`), whose arity is checked at evaluation
+(`LANG_ARITY`). An algebra-registered name belongs to its algebra, so a source
+that uses it is an unsupported-function diagnostic after a switch to an
+algebra without it.
+
+The operations on a value distribute over a list and keep the identity of
+each element, like the unary operators. `reverse(A)` and `dual(A)` are `~A`
+and `!A` of section 8; `involution(A)` is the grade involution, which negates
+the odd grades; and `inverse(A)` is the inverse, `A**-1`, when it exists. The
+algebra conventions define each of them.
 
 `min(a, b)` and `max(a, b)` require exactly two finite scalar arguments and
 return a grade-zero multivector. `atan2(y, x)` is the two-argument arc tangent,
@@ -470,11 +498,12 @@ produces a domain diagnostic at its representable poles using the
 convention-version numeric comparison bound; these numerical boundary checks
 do not alter any multivector grade or algebraic-domain classification.
 
-`A.norm` denotes the primary norm defined by the active algebra's versioned
-conventions. `A.inorm` is available only for an algebra that explicitly defines
-an ideal norm; such an algebra also registers `norm(A)` and `inorm(A)` as
-functions, and `A.inorm` is equivalent to `inorm(A)`. Norm-bar syntax is not part of language version 1, avoiding
-ambiguity with the infix `|` inner product. The evaluator shall not select a
+`norm(A)` denotes the primary norm defined by the active algebra's versioned
+conventions. `inorm(A)` is available only for an algebra that explicitly
+defines an ideal norm. `normalize(A)` is `A / norm(A)` and `inormalize(A)` is
+`A / inorm(A)`; a zero norm is a domain diagnostic and a non-finite one the
+engine's non-finite diagnostic, never the value returned unchanged. Norm-bar syntax is not part of the language,
+avoiding ambiguity with the infix `|` inner product. The evaluator shall not select a
 different norm using a visual or geometric-classification heuristic. An
 undefined norm produces a diagnostic.
 
@@ -493,8 +522,8 @@ expressions but not lists. Elements evaluate left to right for deterministic
 diagnostic ordering, without observable side effects. Supported unary
 operations, scalar functions, and postfix extractors distribute over lists and
 preserve length and order. A function or operator not advertised as
-distributive rejects a list argument. `min` and `max` are explicitly
-non-distributive in language version 1.
+distributive rejects a list argument. The scalar functions, `min` and `max`
+included, broadcast like binary operations (section 10).
 
 Binary operations follow these rules:
 
@@ -555,20 +584,30 @@ truncated result.
 ## 13. Capability properties
 
 Postfix property access has the form `object.property`, where `property` matches
-the identifier grammar. The common language defines the syntax but does not
-hard-code algebra- or interpretation-specific property names or meanings.
-Properties are registered through stable capability descriptors supplied by the
-active algebra definition or geometry interpretation.
+the identifier grammar. The common language defines the syntax and two
+families of properties; it does not hard-code algebra- or
+interpretation-specific property names or meanings.
 
-Each descriptor declares the receiver kinds it accepts, its result kind, whether
-it distributes over lists, and the capability required for evaluation. An
-unknown property, an invalid receiver, or an unavailable capability produces the
-corresponding structured diagnostic. A distributive property preserves list
-order and evaluated element identity; a non-distributive property rejects a list
-receiver.
+Properties specific to an algebra definition or geometry interpretation are a
+planned extension: they will be registered through stable capability
+descriptors, each declaring the receiver kinds it accepts, its result kind,
+whether it distributes over lists, and the capability required for
+evaluation. An unknown property, an invalid receiver, or an unavailable
+capability produces the corresponding structured diagnostic. A distributive
+property preserves list order and evaluated element identity; a
+non-distributive property rejects a list receiver.
+
+The two common-language families are both distributive: the grade
+projection `A.gN` and the blade coefficient `A.eN`, in any generator order
+(section 6). `.position` and `.head` are not properties of a value: they are
+references to the separately evaluated position of a named item and to its
+derived head (section 1, current implementation subset). A property is never a function:
+operations on a value are written as calls (section 10), and the removed
+version 1 properties, such as `A.norm`, produce an unsupported-property
+diagnostic that names the function form.
 
 Property access is read-only expression syntax. Top-level or nested property
-assignment is not part of language version 1. Specific property semantics belong
+assignment is not part of the language. Specific property semantics belong
 to the requirement document that owns the registering algebra definition or
 geometry interpretation.
 
@@ -590,6 +629,18 @@ silently. Correcting the cause automatically reevaluates dependants.
 change increments it. A strictly compatible addition may retain the version only
 when it changes the interpretation of no previously valid source. Loading and
 migration are explicit and deterministic.
+
+The current version is 2. A document of a later version is refused. A
+document of version 1 is migrated on load: in every expression source (item
+sources, positions, slider bounds, appearance sources and the `${…}`
+insertions of labels), each postfix `.reverse`, `.dual`, `.involution`,
+`.inverse`, `.norm` and `.inorm` is rewritten as the call of the same name,
+from the parse tree so that the operand keeps its grouping: `(A + B).norm`
+becomes `norm(A + B)` and `A.inverse.norm` becomes `norm(inverse(A))`. A
+source that does not parse is kept unchanged with its diagnostic, and notes
+are text. Version 2 also reserves `normalize`, `inormalize` and the names of
+the operations, so a version 1 item declared with one of them becomes a
+diagnostic.
 
 Unknown function calls produce diagnostics. Syntax for user-defined and
 parametric functions is not reserved by the initial language and requires a

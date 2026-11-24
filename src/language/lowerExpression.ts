@@ -1,4 +1,4 @@
-import { isScalarFunctionName } from '../domain/scalarFunctions'
+import { LANGUAGE_PROPERTIES, languageFunction } from './functions'
 import type {
   CoreExpressionNode,
   SurfaceExpressionNode,
@@ -146,68 +146,25 @@ export function lowerExpression(
         origin: expression.span,
       }
     case 'call-expression': {
-      if (expression.callee === 'exp' && expression.arguments.length === 1) {
-        return { kind: 'exp', operand: lowerExpression(expression.arguments[0]), origin: expression.span }
-      }
-      if (isScalarFunctionName(expression.callee)) {
-        return {
-          kind: 'scalar-function',
-          name: expression.callee,
-          arguments: expression.arguments.map(lowerExpression),
-          origin: expression.span,
-        }
+      const args = expression.arguments.map(lowerExpression)
+      if (languageFunction(expression.callee)) {
+        return { kind: 'function', name: expression.callee, arguments: args, origin: expression.span }
       }
       // Every other call resolves against the active algebra's registered
       // functions at evaluation (ALG-029).
-      return {
-        kind: 'call',
-        name: expression.callee,
-        arguments: expression.arguments.map(lowerExpression),
-        origin: expression.span,
-      }
+      return { kind: 'call', name: expression.callee, arguments: args, origin: expression.span }
     }
     case 'property-expression': {
       const operand = lowerExpression(expression.object)
-      if (
-        expression.property === 'dual' ||
-        expression.property === 'reverse' ||
-        expression.property === 'involution' ||
-        expression.property === 'inverse' ||
-        expression.property === 'norm'
-      ) {
-        return {
-          kind: expression.property === 'dual' ? 'dual'
-            : expression.property === 'reverse' ? 'reverse'
-              : expression.property === 'involution' ? 'grade-involution'
-                : expression.property === 'inverse' ? 'inverse' : 'norm',
-          operand,
-          origin: expression.span,
-        }
-      }
-      if (expression.property === 'inorm') {
-        return { kind: 'call', name: 'inorm', arguments: [operand], origin: expression.span }
-      }
-      if (/^g\d+$/.test(expression.property)) {
-        return {
-          kind: 'grade',
-          operand,
-          grade: Number(expression.property.slice(1)),
-          origin: expression.span,
-        }
-      }
-      if (/^e\d*$/.test(expression.property)) {
-        return {
-          kind: 'coefficient',
-          operand,
-          blade: expression.property,
-          origin: expression.span,
-        }
-      }
+      const property = LANGUAGE_PROPERTIES.find((candidate) => candidate.matches(expression.property))
+      if (property) return property.lower(operand, expression.property, expression.span)
       return {
         kind: 'unsupported-property',
         operand,
         property: expression.property,
         propertyOrigin: expression.propertySpan,
+        // A function of one argument is never a property: `A.norm` and `A.exp` name the call.
+        functionForm: languageFunction(expression.property)?.arities.includes(1) ? expression.property : null,
         origin: expression.span,
       }
     }

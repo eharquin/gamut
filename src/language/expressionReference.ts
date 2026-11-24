@@ -122,29 +122,35 @@ export function operatorsSection(examples: Readonly<{ regressive: ReferenceExamp
       entry('A | B', 'inner product', { source: 'e1 | e1', inspection: '1' }),
       entry('A & B', 'regressive product', examples.regressive),
       entry('+A, -A', 'unary sign', { source: '-e1', inspection: '-e1' }),
-      entry('~A, A.reverse', 'reverse', { source: '~e12', inspection: '-e12' }, { source: 'e12.reverse', inspection: '-e12' }),
-      entry('!A, A.dual', 'dual', examples.dual),
-      entry('A.involution', 'grade involution', { source: '(1 + e1).involution', inspection: '1 - e1' }),
+      entry('~A', 'reverse, as reverse(A)', { source: '~e12', inspection: '-e12' }),
+      entry('!A', 'dual, as dual(A)', examples.dual),
       entry('R >>> A', 'sandwich action R * A * ~R', { source: 'e12 >>> e1', inspection: '-e1' }),
     ],
   }
 }
 
-export const INVERSE = entry('A.inverse', 'inverse when it exists', { source: '(2e1).inverse', inspection: '0.5e1' })
-
-export const FUNCTIONS: readonly ReferenceEntry[] = [
-  entry('exp(A)', 'scalar or closed-form multivector exponential',
-    { source: 'exp(0)', inspection: '1' }, { source: 'exp(0 * e12)', inspection: '1' }),
-  entry('sin(a), cos(a), tan(a)', 'scalar trigonometric functions',
-    { source: 'sin(0)', inspection: '0' }, { source: 'cos(0)', inspection: '1' }),
-  entry('asin(a), acos(a), atan(a), atan2(y, x)', 'scalar inverse trigonometric functions',
-    { source: 'asin(0)', inspection: '0' }, { source: 'atan2(0, 1)', inspection: '0' }),
-  entry('sinh(a), cosh(a), tanh(a)', 'scalar hyperbolic functions',
-    { source: 'sinh(0)', inspection: '0' }, { source: 'cosh(0)', inspection: '1' }),
-  entry('abs(a), sqrt(a), log(a), min(a, b), max(a, b)', 'scalar functions',
-    { source: 'sqrt(4)', inspection: '2' }, { source: 'max(1, 2)', inspection: '2' }),
-  entry('pi, tau', 'predefined scalar constants', { source: 'cos(pi)', inspection: '-1' }, { source: 'cos(tau)', inspection: '1' }),
-]
+/** The functions of every algebra, with a dual example suited to the algebra. */
+export function functionsSection(examples: Readonly<{ dual: ReferenceExample }>): readonly ReferenceEntry[] {
+  return [
+    entry('norm(A)', 'primary norm of the algebra', { source: 'norm(3e1 + 4e2)', inspection: '5' }),
+    entry('normalize(A)', 'A / norm(A), when the norm is not zero', { source: 'normalize(-2e2)', inspection: '-e2' }),
+    entry('inverse(A)', 'inverse when it exists', { source: 'inverse(2e1)', inspection: '0.5e1' }),
+    entry('reverse(A), involution(A)', 'reverse and grade involution',
+      { source: 'reverse(e12)', inspection: '-e12' }, { source: 'involution(1 + e1)', inspection: '1 - e1' }),
+    entry('dual(A)', 'dual', { ...examples.dual, source: `dual(${examples.dual.source.replace(/^!/, '')})` }),
+    entry('exp(A)', 'scalar or closed-form multivector exponential',
+      { source: 'exp(0)', inspection: '1' }, { source: 'exp(0 * e12)', inspection: '1' }),
+    entry('sin(a), cos(a), tan(a)', 'scalar trigonometric functions',
+      { source: 'sin(0)', inspection: '0' }, { source: 'cos(0)', inspection: '1' }),
+    entry('asin(a), acos(a), atan(a), atan2(y, x)', 'scalar inverse trigonometric functions',
+      { source: 'asin(0)', inspection: '0' }, { source: 'atan2(0, 1)', inspection: '0' }),
+    entry('sinh(a), cosh(a), tanh(a)', 'scalar hyperbolic functions',
+      { source: 'sinh(0)', inspection: '0' }, { source: 'cosh(0)', inspection: '1' }),
+    entry('abs(a), sqrt(a), log(a), min(a, b), max(a, b)', 'scalar functions',
+      { source: 'sqrt(4)', inspection: '2' }, { source: 'max(1, 2)', inspection: '2' }),
+    entry('pi, tau', 'predefined scalar constants', { source: 'cos(pi)', inspection: '-1' }, { source: 'cos(tau)', inspection: '1' }),
+  ]
+}
 
 export const PRECEDENCE: ReferenceSection = {
   title: 'Precedence',
@@ -168,8 +174,7 @@ export function generalReference(examples: Readonly<{ regressive: ReferenceExamp
     { title: 'Values and names', entries: [SCALAR_LITERALS, NAME_REFERENCE] },
     LISTS_AND_RANGES,
     operatorsSection(examples),
-    { title: 'Properties', entries: [INVERSE] },
-    { title: 'Functions', entries: FUNCTIONS },
+    { title: 'Functions', entries: functionsSection(examples) },
     PRECEDENCE,
   ]
 }

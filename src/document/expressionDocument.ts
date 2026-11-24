@@ -1,3 +1,4 @@
+import { CURRENT_LANGUAGE_VERSION } from '../language/migrateLanguage'
 import type { FolderPath } from './folderModel'
 
 export const MAX_EXPRESSION_ITEMS = 1_000
@@ -187,7 +188,7 @@ export function expressionDocument(
     id: metadata.id ?? 'local-document',
     title: metadata.title ?? 'Untitled document',
     description: metadata.description ?? '',
-    languageVersion: 1,
+    languageVersion: CURRENT_LANGUAGE_VERSION,
     algebra: {
       algebraId: 'org.multivector.vga',
       definitionVersion: 1,

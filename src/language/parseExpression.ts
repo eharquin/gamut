@@ -1,5 +1,5 @@
 import type { Diagnostic, SourceSpan } from '../domain/diagnostic'
-import { SCALAR_FUNCTIONS, SCALAR_FUNCTION_NAMES, isScalarFunctionName } from '../domain/scalarFunctions'
+import { LANGUAGE_FUNCTION_NAMES, languageFunction } from './functions'
 import type {
   BasisBladeNode,
   SurfaceExpressionNode,
@@ -33,12 +33,17 @@ type NodeResult =
   | Readonly<{ ok: true; node: SurfaceExpressionNode }>
   | Readonly<{ ok: false; diagnostic: Diagnostic }>
 
-const RESERVED_FUNCTION_NAMES = new Set(['exp', ...SCALAR_FUNCTION_NAMES])
+const RESERVED_FUNCTION_NAMES = LANGUAGE_FUNCTION_NAMES
 
-/** The fixed argument count of a reserved function, checked at parse time. */
-function reservedArity(callee: string): number | null {
-  if (callee === 'exp') return 1
-  return isScalarFunctionName(callee) ? SCALAR_FUNCTIONS[callee].arity : null
+/** The argument counts a common-language function accepts, checked at parse time. */
+function reservedArities(callee: string): readonly number[] | null {
+  return languageFunction(callee)?.arities ?? null
+}
+
+function arityText(arities: readonly number[]): string {
+  const words = ['no argument', 'one argument']
+  if (arities.length === 1) return `exactly ${words[arities[0]] ?? `${arities[0]} arguments`}`
+  return `${arities.slice(0, -1).join(', ')} or ${arities[arities.length - 1]} arguments`
 }
 
 function syntaxDiagnostic(message: string, span: SourceSpan): Diagnostic {
@@ -80,7 +85,7 @@ function isScalarExpression(expression: SurfaceExpressionNode): boolean {
     case 'call-expression':
       return expression.callee === 'exp'
         ? isScalarExpression(expression.arguments[0])
-        : RESERVED_FUNCTION_NAMES.has(expression.callee)
+        : languageFunction(expression.callee)?.scalarResult ?? false
     case 'property-expression':
       return (
         /^e\d*$/.test(expression.property) ||
@@ -610,12 +615,12 @@ class Parser {
         ),
       }
     }
-    const arity = reservedArity(callee.text)
-    if (arity !== null && argumentNodes.length !== arity) {
+    const arities = reservedArities(callee.text)
+    if (arities !== null && !arities.includes(argumentNodes.length)) {
       return {
         ok: false,
         diagnostic: syntaxDiagnostic(
-          `“${callee.text}” takes exactly ${arity === 1 ? 'one argument' : `${arity} arguments`}.`,
+          `“${callee.text}” takes ${arityText(arities)}.`,
           { start: callee.span.start, end: rightParenthesis.span.end },
         ),
       }

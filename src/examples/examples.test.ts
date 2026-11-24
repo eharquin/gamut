@@ -8,6 +8,7 @@ import {
   parseCanonicalDocument,
   serializeCanonicalDocument,
 } from '../document/canonicalDocument'
+import { CURRENT_LANGUAGE_VERSION, migrateSourceToVersion2 } from '../language/migrateLanguage'
 import { readExamples, SHIPPED_EXAMPLES } from '.'
 
 const registry = createBuiltinAlgebraRegistry()
@@ -35,10 +36,35 @@ describe('shipped examples (#266, STORE-015)', () => {
     expect(readExamples().diagnostic).toBeNull()
   })
 
+  it('migrates the language version 1 sources of 0.3.0 to the shipped ones (#342)', () => {
+    // Every source of the 0.3.0 examples that used a removed property.
+    const sources = SHIPPED_EXAMPLES.flatMap(({ source }) =>
+      (JSON.parse(source).items as { source: string }[]).map((item) => item.source))
+    for (const [version1, version2] of [
+      ['AB = (B & A) / (B & A).norm', 'AB = (B & A) / norm(B & A)'],
+      ['BC = (C & B) / (C & B).norm', 'BC = (C & B) / norm(C & B)'],
+      ['CA = (C & A) / (C & A).norm', 'CA = (C & A) / norm(C & A)'],
+      ['dAB = (A & B).norm', 'dAB = norm(A & B)'],
+      ['dBC = (B & C).norm', 'dBC = norm(B & C)'],
+      ['dCA = (C & A).norm', 'dCA = norm(C & A)'],
+      ['dB = (B & CA).norm', 'dB = norm(B & CA)'],
+      ['a = line(0.5, 1, 1.5) / line(0.5, 1, 1.5).norm', 'a = line(0.5, 1, 1.5) / norm(line(0.5, 1, 1.5))'],
+      ['b = line(1.4, 0.8, 2.5) / line(1.4, 0.8, 2.5).norm', 'b = line(1.4, 0.8, 2.5) / norm(line(1.4, 0.8, 2.5))'],
+      ['hC = (L ^ C).e012 / L.norm', 'hC = (L ^ C).e012 / norm(L)'],
+      ['R = sqrt(M * L / (M.norm * L.norm))', 'R = sqrt(M * L / (norm(M) * norm(L)))'],
+    ]) {
+      expect(migrateSourceToVersion2(version1)).toBe(version2)
+      expect(sources).toContain(version2)
+    }
+    // No other source changes, and none keeps a removed property.
+    for (const source of sources) expect(migrateSourceToVersion2(source)).toBe(source)
+  })
+
   for (const { id, source } of SHIPPED_EXAMPLES) {
     describe(id, () => {
       it('is stored in the current canonical format, byte for byte', () => {
         expect(JSON.parse(source).formatVersion, REGENERATE).toBe(CURRENT_FORMAT_VERSION)
+        expect(JSON.parse(source).languageVersion, REGENERATE).toBe(CURRENT_LANGUAGE_VERSION)
         expect(source, REGENERATE).toBe(`${serializeCanonicalDocument(parseCanonicalDocument(source))}\n`)
       })
 

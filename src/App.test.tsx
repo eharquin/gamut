@@ -2815,7 +2815,7 @@ describe('VGA 2D vertical slice', () => {
     expect(dialog).toHaveTextContent('Geometric interpretation')
     expect(dialog).toHaveTextContent('Sub-algebras')
     expect(dialog).not.toHaveTextContent('Available operations')
-    expect(dialog).not.toHaveTextContent('A.involution')
+    expect(dialog).not.toHaveTextContent('involution(A)')
 
     fireEvent.keyDown(document, { key: 'Escape' })
 
@@ -3070,7 +3070,7 @@ describe('expression reference docked in the expression panel', () => {
 
     // General: true in every algebra, ending with Style.
     expect(panel()).toHaveAccessibleName('General')
-    expect(titles()).toEqual(['Values and names', 'Lists and ranges', 'Operators', 'Properties', 'Functions', 'Precedence', 'Comments', 'Style'])
+    expect(titles()).toEqual(['Values and names', 'Lists and ranges', 'Operators', 'Functions', 'Precedence', 'Comments', 'Style'])
     expect(panel()).toHaveTextContent('A ^ B')
     expect(panel()).toHaveTextContent('Note " text')
     expect(panel()).toHaveTextContent('Color 9 hues × 6 shades')
@@ -3195,12 +3195,12 @@ describe('expression reference of a PGA(2) document', () => {
     const algebra = within(reference).getByRole('tabpanel')
     expect(within(algebra).getAllByRole('heading', { level: 3 })[0]).toHaveTextContent('Primitives')
     expect(algebra).toHaveTextContent('point(x, y, w)')
-    expect(algebra).toHaveTextContent('A.inorm')
+    expect(algebra).toHaveTextContent('inorm(A)')
     expect(reference).toHaveTextContent('Line line(a, b, c), A & Ba·x + b·y + c = 0, or the line through A and B')
     expect(reference).toHaveTextContent('off · auto · norm · inorm')
     for (const syntax of [
       'point(x, y)', 'point(x, y, w)', 'ipoint(x, y)', 'line(a, b, c)',
-      'e0, e1, e2, e01, e02, e12, e012', 'A.inorm', 'A.e012', 'log(M), sqrt(M)', 'I.head',
+      'e0, e1, e2, e01, e02, e12, e012', 'inorm(A)', 'A.e012', 'log(M), sqrt(M)', 'I.head',
       'position point(x, y)', 'log(M)', '-0.5e12',
     ]) expect(reference).toHaveTextContent(syntax)
     expect(reference).not.toHaveTextContent('VGA')
