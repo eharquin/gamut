@@ -972,3 +972,15 @@ describe('list reductions in a document (#338)', () => {
     expect(reduced).toEqual(alone)
   })
 })
+
+describe('the drag guard through declared functions (#340)', () => {
+  it('follows calls to the functions a weight depends on', () => {
+    const items = [
+      { id: 'a', source: 'a = 2' },
+      { id: 'f', source: 'f(x) = x * a' },
+      { id: 'w', source: 'w = f(1)' },
+    ]
+    expect(declarationDependsOn(items, 'w', new Set(['a']))).toBe(true)
+    expect(declarationDependsOn(items, 'w', new Set(['b']))).toBe(false)
+  })
+})

@@ -38,6 +38,13 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `if(u != 0, u / abs(u), 0)` is defined at `u = 0`, and a list condition
   selects element by element. A row `a == b` no longer reads as a declaration
   of `a`.
+- Functions declared in the document, `f(x, …) = body` (#340): a formula used
+  in several places is written once, as in
+  `sdf(P) = min(norm(P & C) - rc, (G ^ P).e012 / norm(G))`, and called with
+  values or lists. A function row shows its signature and draws nothing.
+  Recursion is reported as a cycle, a parameter cannot have the name of an
+  item, and calls nest at most 32 deep. Labels and slider bounds may call
+  functions.
 
 ## 0.3.0 - 2026-11-20
 

@@ -15,7 +15,8 @@ function rows(context: typeof vga | typeof pga, ...sources: string[]) {
   return evaluateDocument(
     expressionDocument(sources.map((source, index) => ({ id: `item-${index}`, source }))),
     context,
-  ).map(({ evaluation }) => evaluation?.status === 'valid' ? evaluation.inspection : evaluation?.diagnostic.code)
+  ).map(({ evaluation }) => evaluation?.status === 'valid' ? evaluation.inspection
+    : evaluation?.status === 'invalid' ? evaluation.diagnostic.code : evaluation?.status)
 }
 
 describe('comparisons, if and sign (#339)', () => {

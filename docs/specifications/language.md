@@ -91,7 +91,11 @@ Each item contains at most one declaration, expression, or annotation.
 a = 1
 V = vector(a)
 V + e1
+f(x) = x * x
 ```
+
+A declaration `name(p1, …, pk) = body`, with at least one parameter,
+declares a function instead of a value (section 10, *Declared functions*).
 
 A fourth row may be a note, such as `A visible annotation`: an annotation is
 a kind of item, not a syntax, so its source carries no marker.
@@ -555,6 +559,57 @@ including magnitude-relative terms where noise scales with magnitude, are
 governed by ALG-031 in the
 [algebra definition requirements](../requirements/algebras/algebra-definition.md).
 
+### Declared functions
+
+A document may declare its own functions (#340):
+
+```text
+sdf(P) = min(norm(P & C) - rc, (G ^ P).e012 / norm(G))
+d0 = sdf(O)
+ds = sdf([O, X])
+```
+
+- **Declaration.** An item `name(p1, …, pk) = body` with `k >= 1` declares a
+  function. Its name shares the document namespace: it is unique among item
+  names and is neither a reserved name nor a function of the active algebra
+  (`LANG_RESERVED_NAME`, such as `point` in PGA(2)).
+- **Parameters** are names local to the body, pairwise distinct, and not
+  reserved. A parameter shall not have the name of a document item or of a
+  function of the active algebra (`LANG_PARAMETER_NAME`), so a body never
+  hides another name. A parameter
+  has no `.position` or `.head`.
+- **Free names.** Every other name in the body refers to a document item and
+  is a dependency of the function; changing it reevaluates every call. An
+  unknown free name is a diagnostic of the function row even if the function
+  is never called.
+- **No recursion.** A function that calls itself, directly or through other
+  functions, is reported as a dependency cycle.
+- **Calls.** A call `name(a1, …, ak)` resolves first to a common-language
+  function, then to a function of the active algebra, then to a declared
+  function. It requires exactly `k` arguments (`LANG_ARITY`). The arguments
+  are evaluated once, then the body with each parameter bound to its
+  argument, which may be any value, lists included; lists then follow the
+  rules of section 11 inside the body. Calling a value item is
+  `LANG_NOT_A_FUNCTION`, and calling an invalid function
+  `LANG_INVALID_DEPENDENCY`; a call of an algebra function is never a
+  dependency on an item of the same name.
+- **Function rows** have no value and are never drawn: the panel shows their
+  signature, such as `sdf(P)`, and their own diagnostics. Using a function
+  name as a value, as in `d = sdf`, is `LANG_FUNCTION_VALUE`. Functions are
+  not values: there are no lambdas or function arguments.
+- **Failures.** An error in the body during a call fails the calling
+  expression; its diagnostic is placed on the call and its message names the
+  chain of functions, as in `In “f”: In “sdf”: …`.
+- **Identity.** List elements created in the body take the identities the
+  same operations would give in the calling row: a list returned by a call
+  keeps stable identities across reevaluation, and positions flow through a
+  call as through the unrolled formula.
+- **Limits.** Work inside calls is charged to the document evaluation
+  budget, and calls nest at most 32 deep (`LIMIT_CALL_DEPTH`, limits and
+  constants).
+- Labels (`${…}`), slider bounds and appearance sources may call declared
+  functions.
+
 ## 11. Lists, broadcasting, and indexing
 
 `[]` is a valid empty list. A list literal is `[expression, ...]`; a trailing
@@ -685,7 +740,9 @@ are text. Version 2 also reserves `normalize`, `inormalize`, `sum`, `if`,
 `sign` and the names of the operations, so a version 1 item declared with one of them
 becomes a diagnostic.
 
-Unknown function calls produce diagnostics. Syntax for user-defined and
-parametric functions is not reserved by the initial language and requires a
-later approved design. Dynamic appearance, factorial, slices, nested lists,
-comprehensions, and higher-order operations are also outside this scope.
+Unknown function calls produce diagnostics. Declared functions (section 10)
+are part of language version 2; a declaration `f(x) = …` and a call to an
+undeclared function were diagnostics in version 1, so they need no
+migration. Recursive functions, functions as values, lambdas, dynamic
+appearance, factorial, slices, nested lists, comprehensions, and other
+higher-order operations remain outside this scope.

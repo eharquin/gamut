@@ -94,6 +94,9 @@ export function pseudoscalarEntry(blade: string): ReferenceEntry {
 export const NAME_REFERENCE = entry('V', 'case-sensitive reference to a named expression',
   'V = 2', { source: 'V', inspection: '2' })
 
+export const FUNCTION_DECLARATION = entry('f(x) = …', 'a function of the document, called as f(3)',
+  'f(x) = x * x + 1', { source: 'f(3)', inspection: '10' })
+
 export const LISTS_AND_RANGES: ReferenceSection = {
   title: 'Lists and ranges',
   entries: [
@@ -180,7 +183,7 @@ export const PRECEDENCE: ReferenceSection = {
  */
 export function generalReference(examples: Readonly<{ regressive: ReferenceExample; dual: ReferenceExample }>): readonly ReferenceSection[] {
   return [
-    { title: 'Values and names', entries: [SCALAR_LITERALS, NAME_REFERENCE] },
+    { title: 'Values and names', entries: [SCALAR_LITERALS, NAME_REFERENCE, FUNCTION_DECLARATION] },
     LISTS_AND_RANGES,
     operatorsSection(examples),
     { title: 'Functions', entries: functionsSection(examples) },

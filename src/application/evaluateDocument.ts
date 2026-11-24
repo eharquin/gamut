@@ -20,7 +20,9 @@ import {
   evaluateExpression,
   ExpressionEvaluationError,
   type EvaluationBudget,
+  type FunctionScope,
 } from '../evaluation/evaluateExpression'
+import { languageFunction } from '../language/functions'
 import { type AnyInterpretation, type InterpretedEntity, type PrimitiveConstruction } from '../geometry/interpretation'
 import type { SurfaceExpressionNode } from '../language/ast'
 import { lowerExpression } from '../language/lowerExpression'
@@ -58,8 +60,38 @@ type ParsedNode = Readonly<{
   property: NodeProperty
   expression: SurfaceExpressionNode
   declaration: ParsedDocumentExpression['declaration']
+  /** The names the source uses as values; a function's parameters are not among them. */
   references: readonly Reference[]
+  /** The names the source calls that may be declared functions (#340). */
+  calls: readonly Reference[]
 }>
+
+/** Every name called as `name(…)` that is not a common-language function. */
+function collectCalls(expression: SurfaceExpressionNode): Reference[] {
+  const own: Reference[] = expression.kind === 'call-expression' && !languageFunction(expression.callee)
+    ? [{ name: expression.callee, property: null, span: expression.span }]
+    : []
+  return [...own, ...surfaceChildren(expression).flatMap(collectCalls)]
+}
+
+/** The direct sub-expressions of a node. */
+function surfaceChildren(expression: SurfaceExpressionNode): readonly SurfaceExpressionNode[] {
+  switch (expression.kind) {
+    case 'unary-expression': return [expression.operand]
+    case 'binary-expression': return [expression.left, expression.right]
+    case 'property-expression': return [expression.object]
+    case 'vector-constructor':
+    case 'tuple': return expression.components
+    case 'call-expression': return expression.arguments
+    case 'list-expression': return expression.elements
+    case 'range-expression': return [expression.start, ...(expression.next ? [expression.next] : []), expression.end]
+    case 'index-expression': return [expression.object, expression.index]
+    case 'reference':
+    case 'scalar-literal':
+    case 'basis-blade':
+    case 'pseudoscalar': return []
+  }
+}
 
 function nodeKey(itemId: string, property: NodeProperty): string {
   return `${itemId}:${property}`
@@ -191,7 +223,9 @@ export function declarationDependsOn(
     if (!item) continue
     for (const source of [item.source, item.positionSource ?? '']) {
       const parsed = parseDocumentExpression(source)
-      if (parsed.ok) pending.push(...collectReferences(parsed.source.expression).map((reference) => reference.name))
+      // A called function is a dependency too, through its body (#340).
+      if (parsed.ok) pending.push(...[...collectReferences(parsed.source.expression), ...collectCalls(parsed.source.expression)]
+        .map((reference) => reference.name))
     }
   }
   return false
@@ -228,6 +262,7 @@ export function evaluateDocument(
           diagnostic: parsed.diagnostic,
         })
       } else {
+        const parameters = new Set(parsed.source.declaration?.parameters?.map(({ name }) => name))
         nodes.set(valueKey, {
           key: valueKey,
           item,
@@ -235,10 +270,15 @@ export function evaluateDocument(
           property: 'value',
           expression: parsed.source.expression,
           declaration: parsed.source.declaration,
-          references: collectReferences(parsed.source.expression),
+          references: collectReferences(parsed.source.expression)
+            .filter((reference) => !parameters.has(reference.name)),
+          // A function of the active algebra, such as `line`, is never a dependency.
+          calls: collectCalls(parsed.source.expression).filter((call) => !engine.functions.has(call.name)),
         })
       }
     }
+    // A function has no position of its own.
+    if (nodes.get(valueKey)?.declaration?.parameters) return
 
     const positionSource = document.view.positionEnabled
       ? item.positionSource?.trim() ?? ''
@@ -260,6 +300,7 @@ export function evaluateDocument(
         expression: parsedPosition.expression,
         declaration: null,
         references: collectReferences(parsedPosition.expression),
+        calls: collectCalls(parsedPosition.expression).filter((call) => !engine.functions.has(call.name)),
       })
     }
   })
@@ -312,7 +353,7 @@ export function evaluateDocument(
       return
     }
     visiting.push(node.key)
-    for (const reference of node.references) {
+    for (const reference of [...node.references, ...node.calls]) {
       dependencyKeys(reference).forEach((key) => {
         const dependency = nodes.get(key)
         if (dependency) findCycles(dependency)
@@ -335,9 +376,65 @@ export function evaluateDocument(
     )
   }
 
+  /** The declared function a call names, once its row has been evaluated (#340). */
+  const functionScope: FunctionScope = {
+    depth: 0,
+    resolve: (name) => {
+      const targets = declarations.get(name)
+      if (targets?.length !== 1 || !targets[0].declaration?.parameters) return undefined
+      const state = results.get(targets[0].key)
+      return state?.status === 'function' ? state.definition : undefined
+    },
+  }
+
   const evaluateNode = (node: ParsedNode): EvaluationState => {
     const existing = results.get(node.key)
     if (existing !== undefined && existing !== null) return existing
+
+    const parameters = node.declaration?.parameters ?? null
+    if (parameters) {
+      const name = node.declaration!.name
+      if (engine.functions.has(name)) {
+        const invalid = diagnostic(
+          'LANG_RESERVED_NAME',
+          `“${name}” is a function of the active algebra.`,
+          node.declaration!.span,
+        )
+        results.set(node.key, invalid)
+        return invalid
+      }
+      // A parameter never hides a name of the document or of the algebra.
+      const shadowing = parameters.find((parameter) =>
+        declarations.has(parameter.name) || engine.functions.has(parameter.name))
+      if (shadowing) {
+        const invalid = diagnostic(
+          'LANG_PARAMETER_NAME',
+          declarations.has(shadowing.name)
+            ? `The parameter “${shadowing.name}” has the name of an item of the document.`
+            : `The parameter “${shadowing.name}” has the name of a function of the active algebra.`,
+          shadowing.span,
+        )
+        results.set(node.key, invalid)
+        return invalid
+      }
+    }
+
+    // A call to a declared function needs that function, valid.
+    for (const call of node.calls) {
+      const targets = declarations.get(call.name)
+      if (!targets || engine.functions.has(call.name)) continue
+      const failure = targets.length > 1
+        ? diagnostic('LANG_DUPLICATE_NAME', `The name “${call.name}” is declared more than once.`, call.span)
+        : !targets[0].declaration?.parameters
+          ? diagnostic('LANG_NOT_A_FUNCTION', `“${call.name}” is not a function.`, call.span)
+          : evaluateNode(targets[0]).status === 'invalid'
+            ? diagnostic('LANG_INVALID_DEPENDENCY', `The function “${call.name}” is invalid.`, call.span)
+            : null
+      if (failure) {
+        results.set(node.key, failure)
+        return failure
+      }
+    }
 
     const resolved = new Map<string, LanguageValue>()
     for (const reference of node.references) {
@@ -367,6 +464,15 @@ export function evaluateDocument(
         const invalid = diagnostic(
           'LANG_INVALID_DEPENDENCY',
           `The dependency “${reference.name}” is invalid.`,
+          reference.span,
+        )
+        results.set(node.key, invalid)
+        return invalid
+      }
+      if (valueResult.status === 'function') {
+        const invalid = diagnostic(
+          'LANG_FUNCTION_VALUE',
+          `“${reference.name}” is a function: call it, as in ${valueResult.signature}.`,
           reference.span,
         )
         results.set(node.key, invalid)
@@ -496,7 +602,7 @@ export function evaluateDocument(
       }
       if (reference.property !== null && positionNode) {
         const positionResult = evaluateNode(positionNode)
-        if (positionResult.status === 'invalid') {
+        if (positionResult.status !== 'valid') {
           const invalid = diagnostic(
             'LANG_INVALID_DEPENDENCY',
             `The dependency “${reference.name}.position” is invalid.`,
@@ -536,15 +642,32 @@ export function evaluateDocument(
       )
     }
 
+    const resolveReference = (name: string, property: 'position' | 'head' | null) =>
+      resolved.get(`${name}:${property ?? 'value'}`)!
+    if (parameters) {
+      const state: EvaluationState = {
+        status: 'function',
+        signature: `${node.declaration!.name}(${parameters.map(({ name }) => name).join(', ')})`,
+        definition: {
+          name: node.declaration!.name,
+          parameters: parameters.map(({ name }) => name),
+          body: lowerExpression(node.expression),
+          resolveReference,
+        },
+      }
+      results.set(node.key, state)
+      return state
+    }
+
     let value: LanguageValue
     try {
       value = evaluateExpression(
         lowerExpression(node.expression),
         engine,
-        (name, property) =>
-          resolved.get(`${name}:${property ?? 'value'}`)!,
+        resolveReference,
         node.item.id,
         evaluationBudget,
+        functionScope,
       )
     } catch (error) {
       if (!(error instanceof ExpressionEvaluationError)) throw error

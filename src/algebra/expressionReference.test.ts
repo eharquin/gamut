@@ -9,6 +9,7 @@ const registry = createBuiltinAlgebraRegistry()
 
 function describeState(state: EvaluationState | null): string {
   if (state === null) return 'no value'
+  if (state.status === 'function') return `function ${state.signature}`
   return state.status === 'valid' ? state.inspection : `invalid: ${state.diagnostic.message}`
 }
 
@@ -59,7 +60,8 @@ describe('expression reference', () => {
           entry.examples.forEach((example, index) => {
             const { evaluation, positionEvaluation } = evaluated[index]
             const label = `${example.source}${example.positionSource ? ` @ ${example.positionSource}` : ''}`
-            expect(evaluation?.status, `${label}: ${describeState(evaluation)}`).toBe('valid')
+            // A function declaration has no value: it evaluates to its signature (#340).
+            expect(['valid', 'function'], `${label}: ${describeState(evaluation)}`).toContain(evaluation?.status)
             if (example.inspection !== undefined)
               expect(describeState(evaluation), label).toBe(example.inspection)
             if (example.positionSource !== undefined && example.positionSource.trim() !== '') {

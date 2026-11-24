@@ -1865,6 +1865,17 @@ body.reordering-items .reorder-handle {
   flex-shrink: 0;
 }
 
+/* The signature of a declared function, in place of a value (#340). */
+.function-signature {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* The norm button ends the line, at its right edge. */
 .expression-kind-line .normalize-control {
   margin-left: auto;

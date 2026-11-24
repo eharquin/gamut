@@ -2,11 +2,12 @@ import type { AlgebraEngine } from '../algebra/algebraEngine'
 import type { ExpressionControl } from '../document/expressionDocument'
 import type { Diagnostic, SourceSpan } from '../domain/diagnostic'
 import type { LanguageValue } from '../domain/languageValue'
-import { evaluateExpression, ExpressionEvaluationError } from '../evaluation/evaluateExpression'
+import { evaluateExpression, ExpressionEvaluationError, type FunctionScope } from '../evaluation/evaluateExpression'
 import type { SurfaceExpressionNode } from '../language/ast'
 import { declaredName } from '../language/declaredName'
 import { lowerExpression } from '../language/lowerExpression'
-import { parseExpression } from '../language/parseExpression'
+import { parseDocumentExpression, parseExpression } from '../language/parseExpression'
+import { languageFunction } from '../language/functions'
 import type { EvaluatedDocumentItem } from './evaluateDocument'
 
 export type ScalarControlField = 'minimum' | 'maximum' | 'step'
@@ -42,6 +43,28 @@ function references(expression: SurfaceExpressionNode): readonly Readonly<{
     case 'index-expression': return [...references(expression.object), ...references(expression.index)]
     default: return []
   }
+}
+
+/** The calls of a source to names that are not common-language functions (#340). */
+function calls(expression: SurfaceExpressionNode): readonly Readonly<{ name: string; span: SourceSpan }>[] {
+  const own = expression.kind === 'call-expression' && !languageFunction(expression.callee)
+    ? [{ name: expression.callee, span: expression.span }]
+    : []
+  const children = (): readonly SurfaceExpressionNode[] => {
+    switch (expression.kind) {
+      case 'unary-expression': return [expression.operand]
+      case 'binary-expression': return [expression.left, expression.right]
+      case 'property-expression': return [expression.object]
+      case 'vector-constructor':
+      case 'tuple': return expression.components
+      case 'call-expression': return expression.arguments
+      case 'list-expression': return expression.elements
+      case 'range-expression': return [expression.start, ...(expression.next ? [expression.next] : []), expression.end]
+      case 'index-expression': return [expression.object, expression.index]
+      default: return []
+    }
+  }
+  return [...own, ...children().flatMap(calls)]
 }
 
 function invalid(code: string, message: string, span: SourceSpan): Readonly<{ status: 'invalid'; diagnostic: Diagnostic }> {
@@ -101,6 +124,16 @@ export function valueSourceEvaluator(
     declarations.set(name, [...(declarations.get(name) ?? []), item])
   })
 
+  // Labels and bounds may call the functions the document declares (#340).
+  const functions: FunctionScope = {
+    depth: 0,
+    resolve: (name) => {
+      const targets = declarations.get(name)
+      const evaluation = targets?.length === 1 ? targets[0].evaluation : null
+      return evaluation?.status === 'function' ? evaluation.definition : undefined
+    },
+  }
+
   return (source) => {
     const parsed = parseExpression(source)
     if (!parsed.ok) return { status: 'invalid', diagnostic: parsed.diagnostic }
@@ -115,8 +148,21 @@ export function valueSourceEvaluator(
       if (!targets) return invalid('LANG_UNDEFINED_NAME', `The name “${reference.name}” is not defined.`, reference.span)
       if (targets.length !== 1) return invalid('LANG_DUPLICATE_NAME', `The name “${reference.name}” is declared more than once.`, reference.span)
       const evaluation = targets[0].evaluation
+      if (evaluation?.status === 'function') return invalid('LANG_FUNCTION_VALUE', `“${reference.name}” is a function: call it, as in ${evaluation.signature}.`, reference.span)
       if (evaluation?.status !== 'valid') return invalid('LANG_INVALID_DEPENDENCY', `The dependency “${reference.name}” is invalid.`, reference.span)
       resolved.set(reference.name, evaluation.value)
+    }
+    // A call to a declared name needs a valid function, as in a row.
+    for (const call of calls(parsed.expression)) {
+      const targets = declarations.get(call.name)
+      if (!targets || engine.functions.has(call.name)) continue
+      if (targets.length !== 1) return invalid('LANG_DUPLICATE_NAME', `The name “${call.name}” is declared more than once.`, call.span)
+      const evaluation = targets[0].evaluation
+      if (evaluation?.status === 'function') continue
+      const declared = parseDocumentExpression(targets[0].item.source)
+      return declared.ok && declared.source.declaration?.parameters
+        ? invalid('LANG_INVALID_DEPENDENCY', `The function “${call.name}” is invalid.`, call.span)
+        : invalid('LANG_NOT_A_FUNCTION', `“${call.name}” is not a function.`, call.span)
     }
     let value: LanguageValue
     try {
@@ -126,6 +172,7 @@ export function valueSourceEvaluator(
         (name) => resolved.get(name)!,
         'scalar-control',
         { work: 0, generatedValues: 0 },
+        functions,
       )
     } catch (error) {
       if (!(error instanceof ExpressionEvaluationError)) throw error

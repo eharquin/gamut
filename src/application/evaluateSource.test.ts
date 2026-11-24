@@ -16,7 +16,7 @@ const context = { engine, interpretation: VGA_2D_INTERPRETATION }
 
 function validValue(source: string) {
   const result = evaluateSource(source, context)
-  if (result.status !== 'valid') throw new Error(result.diagnostic.message)
+  if (result.status !== 'valid') throw new Error(JSON.stringify(result))
   if (result.valueType !== 'single') throw new Error('Expected one multivector')
   return result.value
 }
