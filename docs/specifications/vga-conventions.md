@@ -76,7 +76,7 @@ cliffordConjugate(eJ) = (-1)^(k(k+1)/2) eJ
 ```
 
 They are owned algebra operations. The initial source language exposes reverse
-through `~A` and `A.reverse`, and grade involution through `A.involution`;
+through `~A` and `reverse(A)`, and grade involution through `involution(A)`;
 Clifford conjugation remains internal to algebra capabilities that require it.
 
 ## 4. Outer, inner, and contraction products
@@ -184,7 +184,7 @@ The primary VGA norm reproduces the non-degenerate VGA behavior validated in
 MultiVector Studio:
 
 ```text
-A.norm = sqrt(abs(<A * cliffordConjugate(A)>0))
+norm(A) = sqrt(abs(<A * cliffordConjugate(A)>0))
 ```
 
 It returns a finite, non-negative grade-zero multivector when its intermediate
@@ -193,12 +193,13 @@ arbitrary mixed-grade multivectors: a non-zero multivector may have norm zero.
 No `inorm` capability is advertised for VGA.
 
 `abs(a)` is the ordinary absolute value when `a` is a scalar. Convention version
-1 does not define `abs(A)` as an alias for `A.norm` when `A` is non-scalar.
+1 does not define `abs(A)` as an alias for `norm(A)` when `A` is non-scalar.
 
-When a normalization service is requested, it returns `A / A.norm` only when
-`A.norm` is finite and strictly positive. A zero-norm value is left unchanged
+When a normalization service is requested, it returns `A / norm(A)` only when
+`norm(A)` is finite and strictly positive. A zero-norm value is left unchanged
 and receives an explicit normalization-unavailable state; it is not divided by
-an epsilon.
+an epsilon. The language function `normalize(A)` divides by the same norm and
+reports a zero or non-finite norm as a domain diagnostic (language section 10).
 
 ## 8. Exponential
 

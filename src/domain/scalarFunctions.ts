@@ -66,7 +66,3 @@ export const SCALAR_FUNCTIONS = {
 export type ScalarFunctionName = keyof typeof SCALAR_FUNCTIONS
 
 export const SCALAR_FUNCTION_NAMES = Object.keys(SCALAR_FUNCTIONS) as readonly ScalarFunctionName[]
-
-export function isScalarFunctionName(name: string): name is ScalarFunctionName {
-  return Object.hasOwn(SCALAR_FUNCTIONS, name)
-}

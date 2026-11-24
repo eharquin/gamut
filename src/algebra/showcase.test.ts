@@ -10,8 +10,8 @@ import { OPAQUE_INTERPRETATION } from '../geometry/interpretation'
 const TRIANGLE = [
   'A = point(-2, 1)', 'B = point(2, 2)', 'C = point(1, -2)', 'L = A & B', 'M = A & C',
   'dAB = norm(A & B)', 'dBC = norm(B & C)', 'alpha = atan2((L ^ M).e12, L | M)', 'deg = alpha * 180 / pi',
-  'hC = (L ^ C).e012 / L.norm', 'area = (A & B & C) / 2', 'N = line(1, 0, -1)', 'beta = atan2((L ^ N).e12, L | N)',
-  'R = sqrt(M * L / (M.norm * L.norm))', 't = 0.5', 'S = exp(t * log(R)) >>> B',
+  'hC = (L ^ C).e012 / norm(L)', 'area = (A & B & C) / 2', 'N = line(1, 0, -1)', 'beta = atan2((L ^ N).e12, L | N)',
+  'R = sqrt(M * L / (norm(M) * norm(L)))', 't = 0.5', 'S = exp(t * log(R)) >>> B',
 ]
 const triangleItems = (sources: readonly string[]) => sources.map((source, index) => ({ id: `item-${index + 1}`, source }))
 

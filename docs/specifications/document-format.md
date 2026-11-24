@@ -234,7 +234,7 @@ unknown field as an implicit extension.
 | --- | --- | --- |
 | `id` | string | Non-empty opaque immutable document identity. |
 | `formatVersion` | positive integer | Exactly the current version (`13`) after migration (section 4.1). |
-| `languageVersion` | positive integer | Selects source syntax and semantics. |
+| `languageVersion` | positive integer | Exactly the current language version (`2`) after migration; selects source syntax and semantics. Version 1 sources are rewritten on load (language section 15); a later version is refused with `DOCUMENT_LANGUAGE_VERSION`. |
 | `algebra` | `AlgebraReference` | Selects one validated algebra configuration. |
 | `interpretation` | `InterpretationReference \| null` | At most one active interpretation. |
 | `metadata` | `Metadata` | Descriptive, non-executable document metadata. |

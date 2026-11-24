@@ -891,7 +891,7 @@ describe('coordinate tuples resolved by the active algebra (#180)', () => {
     const [pgaTuple, pgaCall] = evaluatePga('T = ([0, 1], 2)', 'C = point([0, 1], 2)')
     expect(pgaTuple.evaluation).toMatchObject({ status: 'valid', inspection: '[2e01 + e12, 2e01 - e02 + e12]' })
     expect(pgaTuple.evaluation).toMatchObject({ inspection: (pgaCall.evaluation as { inspection: string }).inspection })
-    const [, , indexed, norm] = evaluatePga('X = [3, 4]', 'A = line(3, 4, 0)', 'P = (X[1], 2)', 'Q = (A.norm, 1)')
+    const [, , indexed, norm] = evaluatePga('X = [3, 4]', 'A = line(3, 4, 0)', 'P = (X[1], 2)', 'Q = (norm(A), 1)')
     expect(indexed.evaluation).toMatchObject({ status: 'valid', entity: { kind: 'euclidean-point', x: 4, y: 2 } })
     expect(norm.evaluation).toMatchObject({ status: 'valid', entity: { kind: 'euclidean-point', x: 5, y: 1 } })
   })

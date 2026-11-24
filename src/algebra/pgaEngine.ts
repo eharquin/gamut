@@ -158,7 +158,7 @@ function unitMotor(value: OwnedMultivector, name: 'log' | 'sqrt'): Readonly<{ s:
   if (ODD.some((index) => coefficients[index] !== 0) || Math.abs(s * s + w * w - 1) > bound) {
     throw new AlgebraOperationError(
       'ALG_UNSUPPORTED_DOMAIN',
-      `“${name}” requires a unit motor (an even element with M * ~M = 1); divide by M.norm.`,
+      `“${name}” requires a unit motor (an even element with M * ~M = 1); divide by norm(M).`,
     )
   }
   if (1 + s <= bound) {
@@ -223,8 +223,6 @@ export function createPga2Engine(): AlgebraEngine {
       ['point', [2, 3]],
       ['ipoint', [2]],
       ['line', [3]],
-      ['norm', [1]],
-      ['inorm', [1]],
     ]),
     // `(x, y)` is `point(x, y)` and `(x, y, w)` the homogeneous
     // `point(x, y, w)`; a triple is never a line (#180).
@@ -247,10 +245,6 @@ export function createPga2Engine(): AlgebraEngine {
           result[requireBladeIndex(basis, 'e0')] = number(2, 'A line coefficient')
           return finiteOwned(result)
         }
-        case 'norm':
-          return scalar(normScalar(args[0]))
-        case 'inorm':
-          return scalar(idealNormScalar(args[0]))
         default:
           throw new AlgebraOperationError('ALG_UNSUPPORTED_FUNCTION', `The function “${name}” is not provided by this algebra.`)
       }

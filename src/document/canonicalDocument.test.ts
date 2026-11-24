@@ -240,6 +240,37 @@ describe('canonical document format', () => {
     expect(parseCanonicalDocument(JSON.stringify(version6(sample()))).view.display.valuesVisible).toBe(true)
   })
 
+  it('migrates language version 1 sources to function calls (#342)', () => {
+    const current = toCanonicalDocument(expressionDocument(
+      [
+        { id: 'a', source: 'd = (A & B).norm', positionSource: 'P.dual', control: {
+          mode: 'slider', minimumSource: '-A.norm', maximumSource: 'B.inorm', stepSource: '0.1', animation: null,
+        } },
+        { id: 'n', kind: 'annotation', source: 'Write A.norm' },
+      ],
+      {
+        a: { label: 'd = ${(A & B).norm}', opacitySource: 'A.inverse.norm', primitiveStyles: { points: { pointSizeSource: 'X.reverse' } } },
+      },
+    ), 'system')
+    expect(current.languageVersion).toBe(2)
+    const legacy = { ...current, languageVersion: 1 }
+    const migrated = parseCanonicalDocument(JSON.stringify(legacy))
+    expect(migrated.languageVersion).toBe(2)
+    expect(migrated.items[0]).toMatchObject({
+      source: 'd = norm(A & B)', positionSource: 'dual(P)',
+      control: { minimumSource: '-norm(A)', maximumSource: 'inorm(B)', stepSource: '0.1' },
+    })
+    // A note is text, not a source.
+    expect(migrated.items[1].source).toBe('Write A.norm')
+    expect(migrated.appearance.a).toMatchObject({
+      label: 'd = ${norm(A & B)}', opacitySource: 'norm(inverse(A))',
+      primitiveStyles: { points: { pointSizeSource: 'reverse(X)' } },
+    })
+    // A version 2 document is read as written, and a later version is refused.
+    expect(parseCanonicalDocument(JSON.stringify({ ...current, items: [{ ...current.items[0], source: 'A.norm' }, current.items[1]] })).items[0].source).toBe('A.norm')
+    expect(() => parseCanonicalDocument(JSON.stringify({ ...current, languageVersion: 3 }))).toThrow('Unsupported language version 3.')
+  })
+
   it('round-trips valuesVisible, defaults it to true, and validates it', () => {
     expect(sample().view.display.valuesVisible).toBe(true)
     for (const valuesVisible of [true, false]) {

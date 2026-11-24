@@ -13,6 +13,7 @@ import {
   type ListElement,
 } from '../domain/languageValue'
 import type { CoreExpressionNode } from '../language/ast'
+import { languageFunction } from '../language/functions'
 
 export class ExpressionEvaluationError extends Error {
   readonly code: string
@@ -226,17 +227,20 @@ function evaluateExpressionUnchecked(
       return unary(expression, evaluate(expression.operand), engine.reverse, budget)
     case 'dual':
       return unary(expression, evaluate(expression.operand), engine.dual, budget)
-    case 'grade-involution':
-      return unary(expression, evaluate(expression.operand), engine.gradeInvolution, budget)
-    case 'inverse':
-      return unary(expression, evaluate(expression.operand), engine.inverse, budget)
-    case 'norm':
-      return unary(expression, evaluate(expression.operand), engine.norm, budget)
-    case 'exp':
-      return unary(expression, evaluate(expression.operand), engine.exp, budget)
-    case 'scalar-function':
-      return nary(expression, expression.arguments.map(evaluate),
-        (args) => engine.scalarFunction(expression.name, args), budget)
+    case 'function': {
+      const entry = languageFunction(expression.name)
+      if (!entry || !entry.available(engine)) {
+        throw new ExpressionEvaluationError(
+          'LANG_UNSUPPORTED_FUNCTION',
+          `The function “${expression.name}” is not supported by the active algebra.`,
+          expression.origin,
+        )
+      }
+      const args = expression.arguments.map(evaluate)
+      return entry.distribution === 'operation' && args.length === 1
+        ? unary(expression, args[0], (value) => entry.apply(engine, [value]), budget)
+        : nary(expression, args, (values) => entry.apply(engine, values), budget)
+    }
     case 'grade':
       return unary(expression, evaluate(expression.operand),
         (value) => engine.grade(value, expression.grade), budget)
@@ -251,7 +255,9 @@ function evaluateExpressionUnchecked(
     case 'unsupported-property':
       throw new ExpressionEvaluationError(
         'LANG_UNSUPPORTED_PROPERTY',
-        `The property “${expression.property}” is not supported.`,
+        expression.functionForm
+          ? `The property “${expression.property}” is written as a function: ${expression.functionForm}(…).`
+          : `The property “${expression.property}” is not supported.`,
         expression.propertyOrigin,
       )
   }

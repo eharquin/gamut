@@ -56,7 +56,7 @@ describe('PGA(2) engine against the convention reference fixtures', () => {
     it(`${fixture.id} (${fixture.decision}): norms of ${fixture.description}`, () => {
       const value = owned(fixture.value)
       expect(engine.norm(value).coefficients[0]).toBeCloseTo(fixture.euclideanNorm, 12)
-      expect(engine.call('inorm', [value]).coefficients[0]).toBeCloseTo(fixture.idealNorm, 12)
+      expect(engine.idealNorm!(value).coefficients[0]).toBeCloseTo(fixture.idealNorm, 12)
       const normalized = engine.normalize(value)
       if (fixture.normalized) {
         expect(normalized.status).toBe('normalized')

@@ -68,8 +68,16 @@ describe('PGA(2) sources through the language', () => {
     expect(value('norm(line(3, 4, 5))').inspection).toBe('5')
     expect(value('inorm(line(3, 4, 5))').inspection).toBe('5')
     expect(value('inorm(ipoint(3, 4))').inspection).toBe('5')
-    expect(value('ipoint(3, 4).inorm').inspection).toBe('5')
+    expect(value('inorm(ipoint(3, 4))').inspection).toBe('5')
     expect(value('ps').inspection).toBe('e012')
+    expect(value('normalize(point(2, 4, 2))').inspection).toBe('2e01 - e02 + e12')
+    expect(value('inormalize(ipoint(0, 2))').inspection).toBe('e01')
+    expect(evaluateSource('normalize(ipoint(1, 0))', context)).toMatchObject({
+      status: 'invalid', diagnostic: { code: 'ALG_DOMAIN' },
+    })
+    expect(evaluateSource('inormalize(line(0, 0, 0))', context)).toMatchObject({
+      status: 'invalid', diagnostic: { code: 'ALG_DOMAIN', message: 'inormalize requires a non-zero ideal norm.' },
+    })
   })
 
   it('evaluates motors and reflections with the convention signs', () => {
@@ -86,7 +94,7 @@ describe('PGA(2) sources through the language', () => {
     // Distance between unit points: the norm of their join.
     expect(scalar('norm(point(-2, 1) & point(2, 2))')).toBeCloseTo(Math.hypot(4, 1), 12)
     // Angle between unit lines: cosine from the inner product, sine from the meet's weight.
-    expect(scalar('acos(line(1, 0, -1) | (line(1, 1, 0) / line(1, 1, 0).norm))')).toBeCloseTo(Math.PI / 4, 12)
+    expect(scalar('acos(line(1, 0, -1) | normalize(line(1, 1, 0)))')).toBeCloseTo(Math.PI / 4, 12)
     expect(scalar('atan2((line(1, 0, 0) ^ line(0, 1, 0)).e12, line(1, 0, 0) | line(0, 1, 0))')).toBeCloseTo(Math.PI / 2, 12)
     expect(scalar('atan2((line(0, 1, 0) ^ line(1, 0, 0)).e12, line(0, 1, 0) | line(1, 0, 0))')).toBeCloseTo(-Math.PI / 2, 12)
     // Signed distance from a unit line to a unit point: the e012 coefficient of their outer product.
@@ -121,7 +129,7 @@ describe('PGA(2) sources through the language', () => {
     const vga = { engine: createVga2Engine(), interpretation: VGA_2D_INTERPRETATION }
     expect(evaluateSource('point(1, 2)', vga)).toMatchObject({ status: 'invalid', diagnostic: { code: 'LANG_UNSUPPORTED_FUNCTION' } })
     expect(evaluateSource('inorm(e1)', vga)).toMatchObject({ status: 'invalid', diagnostic: { code: 'LANG_UNSUPPORTED_FUNCTION' } })
-    expect(evaluateSource('e1.inorm', vga)).toMatchObject({ status: 'invalid', diagnostic: { code: 'LANG_UNSUPPORTED_FUNCTION' } })
+    expect(evaluateSource('inorm(e1)', vga)).toMatchObject({ status: 'invalid', diagnostic: { code: 'LANG_UNSUPPORTED_FUNCTION' } })
     expect(evaluateSource('vector(1, 2)', vga)).toMatchObject({ status: 'valid', inspection: 'e1 + 2e2' })
     expect(evaluateSource('log(exp(e12))', vga)).toMatchObject({ status: 'invalid', diagnostic: { code: 'ALG_DOMAIN' } })
     expect(evaluateSource('sqrt(e1)', vga)).toMatchObject({ status: 'invalid', diagnostic: { code: 'ALG_DOMAIN' } })

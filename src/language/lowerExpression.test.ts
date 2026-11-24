@@ -36,8 +36,16 @@ describe('surface-to-core lowering', () => {
       name: 'point',
       arguments: [{ value: 1 }, { value: 2 }, { value: 3 }],
     })
-    expect(lowerExpression(parse('exp(1)'))).toMatchObject({ kind: 'exp' })
-    expect(lowerExpression(parse('sin(1)'))).toMatchObject({ kind: 'scalar-function', name: 'sin' })
+    expect(lowerExpression(parse('exp(1)'))).toMatchObject({ kind: 'function', name: 'exp' })
+    expect(lowerExpression(parse('sin(1)'))).toMatchObject({ kind: 'function', name: 'sin' })
+    expect(lowerExpression(parse('norm(e1)'))).toMatchObject({ kind: 'function', name: 'norm' })
+  })
+
+  it('lowers grade and coefficient properties, and names the function of a removed one', () => {
+    expect(lowerExpression(parse('A.g1'))).toMatchObject({ kind: 'grade', grade: 1 })
+    expect(lowerExpression(parse('A.e21'))).toMatchObject({ kind: 'coefficient', blade: 'e21' })
+    expect(lowerExpression(parse('A.norm'))).toMatchObject({ kind: 'unsupported-property', property: 'norm', functionForm: 'norm' })
+    expect(lowerExpression(parse('A.size'))).toMatchObject({ kind: 'unsupported-property', property: 'size', functionForm: null })
   })
 
   it('retains surface origins on generated constructor operations', () => {

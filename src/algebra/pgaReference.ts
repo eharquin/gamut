@@ -56,8 +56,6 @@ export const PGA_2_REFERENCE: readonly ReferenceSection[] = [
     title: 'Properties',
     entries: [
       entry('A.g0, A.g1, A.g2, A.g3', 'project onto one grade', 'A = 1 + e1 + e12 + e012', { source: 'A.g3', inspection: 'e012' }),
-      entry('A.norm', 'Euclidean norm', { source: 'point(2, 4, 2).norm', inspection: '2' }, { source: 'line(3, 4, 1).norm', inspection: '5' }),
-      entry('A.inorm', 'ideal norm', { source: 'ipoint(3, 4).inorm', inspection: '5' }, { source: 'line(0, 0, 2).inorm', inspection: '2' }),
       entry('A.e, A.e0, A.e1, A.e2, A.e01, A.e02, A.e12, A.e012', 'extract one coefficient as a scalar',
         'A = 1 + 2e0 + 3e01 + 4e012', { source: 'A.e01', inspection: '3' }),
       entry('I.position', 'position of a named ideal point, a Euclidean point',
@@ -71,6 +69,9 @@ export const PGA_2_REFERENCE: readonly ReferenceSection[] = [
   {
     title: 'Functions',
     entries: [
+      entry('norm(P), norm(L)', 'Euclidean norm: the weight of a point, the length of a line normal', { source: 'norm(point(2, 4, 2))', inspection: '2' }, { source: 'norm(line(3, 4, 1))', inspection: '5' }),
+      entry('inorm(A)', 'ideal norm', { source: 'inorm(ipoint(3, 4))', inspection: '5' }, { source: 'inorm(line(0, 0, 2))', inspection: '2' }),
+      entry('inormalize(A)', 'A / inorm(A), when the ideal norm is not zero', { source: 'inormalize(ipoint(0, 2))', inspection: 'e01' }),
       entry('log(M), sqrt(M)', 'principal logarithm and square root of a unit motor',
         'M = exp(-0.5 * e12)', { source: 'log(M)', inspection: '-0.5e12' }),
     ],

@@ -46,7 +46,6 @@ export const VGA_2_REFERENCE: readonly ReferenceSection[] = [
     title: 'Properties',
     entries: [
       entry('A.g0, A.g1, A.g2', 'project onto one grade', 'A = 1 + e1 + e12', { source: 'A.g1', inspection: 'e1' }),
-      entry('A.norm', 'primary VGA norm', { source: '(3e1 + 4e2).norm', inspection: '5' }),
       entry('A.e, A.e1, A.e2, A.e12', 'extract one coefficient as a scalar',
         'A = 1 + 2e1 + 3e2 + 4e12', { source: 'A.e2', inspection: '3' }),
       entry('V.position', 'position of a named vector',

@@ -125,7 +125,7 @@ describe('expression reference', () => {
     expect(syntax).toEqual(expect.arrayContaining([
       'point(x, y)', 'point(x, y, w)', '(x, y), (x, y, w)', 'ipoint(x, y)', 'line(a, b, c)',
       'e0, e1, e2, e01, e02, e12, e012', 'e0 * e0',
-      'A.norm', 'A.inorm', 'A.e, A.e0, A.e1, A.e2, A.e01, A.e02, A.e12, A.e012',
+      'norm(P), norm(L)', 'inorm(A)', 'inormalize(A)', 'A.e, A.e0, A.e1, A.e2, A.e01, A.e02, A.e12, A.e012',
       'log(M), sqrt(M)', 'I.head', 'position point(x, y)',
     ]))
     const text = pga.expressionReference

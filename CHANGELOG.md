@@ -7,6 +7,28 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Changed
+
+- **Language version 2: operations on a value are functions** (#342). Write
+  `norm(A)`, `inorm(A)`, `dual(A)`, `inverse(A)`, `reverse(A)` and
+  `involution(A)` instead of `A.norm`, `A.inorm`, `A.dual`, `A.inverse`,
+  `A.reverse` and `A.involution`; the postfix forms now report a diagnostic
+  that names the function. `norm` works in VGA(2) as in PGA(2). `~A`, `!A`,
+  `A.e12`, `A.g1`, `P.position` and `V.head` are unchanged.
+- Documents, scene links, library entries and archives written in language
+  version 1 are rewritten on load, in item sources, positions, slider bounds,
+  appearance sources and label insertions: `(A + B).norm` becomes
+  `norm(A + B)`. The shipped examples are written in version 2. A document of
+  a later language version is refused.
+- The names `norm`, `normalize`, `inorm`, `inormalize`, `dual`, `inverse`,
+  `reverse` and `involution` are reserved in every algebra: an item declared
+  with one of them becomes a diagnostic.
+
+### Added
+
+- `normalize(A)` and, in PGA(2), `inormalize(A)` divide a value by its norm or
+  its ideal norm; a zero norm is a domain diagnostic (#342).
+
 ## 0.3.0 - 2026-11-20
 
 Release notes: [docs/releases/0.3.0.md](docs/releases/0.3.0.md); tag

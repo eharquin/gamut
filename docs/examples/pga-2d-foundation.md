@@ -31,11 +31,11 @@ norms; the scalar functions only turn them into numbers:
 | `dBC = norm(B & C)` | Scalar 4.12311 | the distance between `B` and `C` |
 | `alpha = atan2((L ^ M).e12, L \| M)` | Scalar −1.03038 | the oriented angle at `A` from `L` to `M`: the meet's weight is `‖L‖‖M‖ sin`, the inner product `‖L‖‖M‖ cos`, and `atan2` cancels the norms |
 | `deg = alpha * 180 / pi` | Scalar −59.0362 | the same angle in degrees; negative because `A → B → C` turns clockwise |
-| `hC = (L ^ C).e012 / L.norm` | Scalar −3.63803 | the signed distance from `L` to `C` (the height from `C`), negative on the side opposite the normal of `L` |
+| `hC = (L ^ C).e012 / norm(L)` | Scalar −3.63803 | the signed distance from `L` to `C` (the height from `C`), negative on the side opposite the normal of `L` |
 | `area = (A & B & C) / 2` | Scalar −7.5 | the signed area: the triple join is twice the oriented area |
 | `N = line(1, 0, -1)` | Line | the literal vertical line `x = 1`, movable from the viewport |
 | `beta = atan2((L ^ N).e12, L \| N)` | Scalar −1.81577 | the oriented angle from `L` to `N` |
-| `R = sqrt(M * L / (M.norm * L.norm))` | Motor | the rotation about `A` that turns `L` onto `M`: `M * L` reflects in `L` then in `M`, a rotation by twice the angle, and `sqrt` halves it |
+| `R = sqrt(M * L / (norm(M) * norm(L)))` | Motor | the rotation about `A` that turns `L` onto `M`: `M * L` reflects in `L` then in `M`, a rotation by twice the angle, and `sqrt` halves it |
 | `t = 0.5` | Scalar 0.5 | a slider from `0` to `1` |
 | `S = exp(t * log(R)) >>> B` | Point at (1.9735, −0.100595) | `B` turned about `A` by `t` times the angle: from `B` at `t = 0` to the side `M` at `t = 1` |
 
@@ -46,7 +46,7 @@ Play `t`: `S` sweeps the arc from `B` to `M` and back; drag `C` and the arc
 follows the angle at `A`.
 
 The recipes generalize: `norm(P & Q)` is a distance between unit points,
-`acos((L | M) / (L.norm * M.norm))` the unoriented angle between two lines in
+`acos((L | M) / (norm(L) * norm(M)))` the unoriented angle between two lines in
 `[0, pi]`, `inorm(L ^ P)` the absolute distance from a unit line to a unit
 point; swapping the operands of the oriented angle negates it.
 
@@ -91,7 +91,7 @@ as a scalar
    `Point at (-2, 1), weight −2.6264`: a rotation by `2 pi − 1.03038` the
    other way, and `exp(t * log(-R)) >>> B` sweeps the long arc.
 5. Write `log(2 * R)`: a diagnostic asks for a unit motor; divide by
-   `(2 * R).norm`. `log(-(1 - 1.5 e01))` and `sqrt(-1)` are refused on the
+   `norm(2 * R)`. `log(-(1 - 1.5 e01))` and `sqrt(-1)` are refused on the
    branch cut, where the scalar part is −1.
 
 ## Ideal points and the line at infinity

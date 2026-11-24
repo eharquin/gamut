@@ -1,5 +1,4 @@
 import type { SourceSpan } from '../domain/diagnostic'
-import type { ScalarFunctionName } from '../domain/scalarFunctions'
 
 export type ScalarLiteralNode = Readonly<{
   kind: 'scalar-literal'
@@ -194,20 +193,18 @@ export type CoreExpressionNode =
       }>)
   | (CoreNodeBase &
       Readonly<{
+        /** The operators `-A`, `~A` and `!A`. */
         kind:
           | 'negate'
           | 'reverse'
           | 'dual'
-          | 'grade-involution'
-          | 'inverse'
-          | 'norm'
-          | 'exp'
         operand: CoreExpressionNode
       }>)
   | (CoreNodeBase &
       Readonly<{
-        kind: 'scalar-function'
-        name: ScalarFunctionName
+        /** A function of the common language, such as `exp`, `abs` or `norm` (`functions.ts`). */
+        kind: 'function'
+        name: string
         arguments: readonly CoreExpressionNode[]
       }>)
   | (CoreNodeBase &
@@ -228,5 +225,7 @@ export type CoreExpressionNode =
         operand: CoreExpressionNode
         property: string
         propertyOrigin: SourceSpan
+        /** The function that replaced a property of language version 1, such as `norm`. */
+        functionForm: string | null
       }>)
 

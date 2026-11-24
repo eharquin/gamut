@@ -97,7 +97,7 @@ J(e2)  = e01      J(e01)  = e2
 ```
 
 and extends linearly. With three generators `J` is an involution:
-`J(J(A)) = A`. The source operations `!A` and `A.dual` evaluate `J(A)`.
+`J(J(A)) = A`. The source operations `!A` and `dual(A)` evaluate `J(A)`.
 
 `J` is stated directly rather than delegated to a backend operation named
 `Dual`. It coincides with the right complement of ganja.js and of MultiVector
@@ -130,7 +130,7 @@ produces a domain diagnostic and no value; the ideal norm of section 7 is not
 used to fabricate one.
 
 The sandwich action applies to every versor, even or odd, with no implicit
-grade involution. For a Euclidean line `L` normalized to `L.norm = 1`, `~L = L`
+grade involution. For a Euclidean line `L` normalized to `norm(L) = 1`, `~L = L`
 and `L >>> A` is the reflection of `A` in `L`; the weight of a reflected point
 is negated. The positive rotation direction follows VGA: for the unit bivector
 `e12`,
@@ -147,45 +147,47 @@ rotates by positive angle `alpha` about the origin under `R >>> A`, and
 Two norms are defined. Both return a finite, non-negative grade-zero
 multivector.
 
-The Euclidean norm `A.norm` is the VGA Clifford norm evaluated in `Cl(2, 0, 1)`:
+The Euclidean norm `norm(A)` is the VGA Clifford norm evaluated in `Cl(2, 0, 1)`:
 
 ```text
-A.norm = sqrt(abs(<A * cliffordConjugate(A)>0))
+norm(A) = sqrt(abs(<A * cliffordConjugate(A)>0))
 ```
 
 Because `e0` is null, this norm ignores every coefficient on a blade containing
 `e0`. For the entities of section 10 it evaluates to:
 
 ```text
-(a e1 + b e2 + c e0).norm          = sqrt(a*a + b*b)
-(w e12 - x e02 + y e01).norm       = abs(w)
+norm(a e1 + b e2 + c e0)          = sqrt(a*a + b*b)
+norm(w e12 - x e02 + y e01)       = abs(w)
 ```
 
-The ideal norm `A.inorm` is the Euclidean norm of the complement:
+The ideal norm `inorm(A)` is the Euclidean norm of the complement:
 
 ```text
-A.inorm = (J(A)).norm
+inorm(A) = norm(J(A))
 ```
 
 so that
 
 ```text
-(a e1 + b e2 + c e0).inorm         = abs(c)
-(w e12 - x e02 + y e01).inorm      = sqrt(x*x + y*y)
+inorm(a e1 + b e2 + c e0)         = abs(c)
+inorm(w e12 - x e02 + y e01)      = sqrt(x*x + y*y)
 ```
 
 `inorm` is a PGA capability with its own identifier; it is not advertised by
 VGA.
 
 When a normalization service is requested it uses the classification of
-section 10: it returns `A / A.norm` for a value classified Euclidean and
-`A / A.inorm` for a value classified ideal, in both cases only when that norm
+section 10: it returns `A / norm(A)` for a value classified Euclidean and
+`A / inorm(A)` for a value classified ideal, in both cases only when that norm
 is finite and strictly positive. The divisor is positive, so normalization
 preserves the sign of every coefficient, including the weight sign produced by
 odd versors. A value classified zero, or whose selected norm is not strictly
 positive, is left unchanged and receives an explicit normalization-unavailable
 state; it is never divided by a quantity that classification placed below its
-tolerance.
+tolerance. The language functions `normalize(A)` and `inormalize(A)` divide
+by the norm they name, whatever the classification, and report a zero or
+non-finite norm as a domain diagnostic (language section 10).
 
 This is the automatic mode (`natural`, shown as *auto*) of an item's
 normalization. A value the classification places neither Euclidean nor ideal,
@@ -210,7 +212,7 @@ exp(X) = 1 + X,                   when w = 0
 Consequences, each fixed by a reference fixture:
 
 - `exp(-(theta/2) e12)` is the rotation by `theta` about the origin;
-- `exp(-(theta/2) P)` for a Euclidean point `P` with `P.norm = 1` is the
+- `exp(-(theta/2) P)` for a Euclidean point `P` with `norm(P) = 1` is the
   rotation by `theta` about `P`;
 - `exp(-(1/2) e0 (dx e1 + dy e2)) = 1 - (dx/2) e01 - (dy/2) e02` is the
   translation by `(dx, dy)`;
@@ -244,7 +246,7 @@ coefficient of `M`:
 
 - a value whose odd coefficients are not all zero, or with
   `abs(s*s + w*w - 1)` above the bound, is not a unit motor and receives a
-  domain diagnostic that suggests dividing by `M.norm`;
+  domain diagnostic that suggests dividing by `norm(M)`;
 - `1 + s` at or below the bound is the branch cut (`M = -1`, `M = -T`) and
   receives a domain diagnostic for both functions;
 - `abs(w)` at or below the bound selects the translator branch of `log`.

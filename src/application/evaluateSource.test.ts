@@ -101,7 +101,7 @@ describe('source evaluation pipeline', () => {
     expect(evaluateSource('e1[0]', context)).toMatchObject({
       status: 'invalid', diagnostic: { code: 'LANG_INDEX_TYPE' },
     })
-    expect(evaluateSource('[1, 0].inverse', context)).toMatchObject({
+    expect(evaluateSource('inverse([1, 0])', context)).toMatchObject({
       status: 'invalid',
       diagnostic: {
         code: 'ALG_SINGULAR',
@@ -264,7 +264,7 @@ describe('source evaluation pipeline', () => {
     ['2ps', '2e12', 'bivector-2d'],
     ['(1 + 2e1 + 3e2 + 4e12).g1', '2e1 + 3e2', 'vector-2d'],
     ['(1 + 2e1 + 3e2 + 4e12).e12', '4', 'scalar'],
-    ['(1 + 2e1 + 3e2 + 4e12).involution', '1 - 2e1 - 3e2 + 4e12', 'mixed-multivector'],
+    ['involution(1 + 2e1 + 3e2 + 4e12)', '1 - 2e1 - 3e2 + 4e12', 'mixed-multivector'],
   ])('evaluates fundamental operation %s', (source, inspection, kind) => {
     expect(evaluateSource(source, context)).toMatchObject({
       status: 'valid',
@@ -274,8 +274,53 @@ describe('source evaluation pipeline', () => {
   })
 
   it('keeps prefix and canonical postfix dual and reverse forms equivalent', () => {
-    expect(validValue('!e1')).toEqual(validValue('e1.dual'))
-    expect(validValue('~e12')).toEqual(validValue('e12.reverse'))
+    expect(validValue('!e1')).toEqual(validValue('dual(e1)'))
+    expect(validValue('~e12')).toEqual(validValue('reverse(e12)'))
+  })
+
+  it('writes the operations on a value as functions in every algebra (#342)', () => {
+    expect(evaluateSource('norm(3e1 + 4e2)', context)).toMatchObject({ status: 'valid', inspection: '5' })
+    expect(evaluateSource('normalize(-2e2)', context)).toMatchObject({ status: 'valid', inspection: '-e2' })
+    expect(evaluateSource('inverse(2e1)', context)).toMatchObject({ status: 'valid', inspection: '0.5e1' })
+    expect(evaluateSource('involution(1 + e1)', context)).toMatchObject({ status: 'valid', inspection: '1 - e1' })
+    expect(evaluateSource('normalize(0 * e1)', context)).toMatchObject({
+      status: 'invalid', diagnostic: { code: 'ALG_DOMAIN', message: 'normalize requires a non-zero norm.' },
+    })
+    // VGA(2) has no ideal norm.
+    for (const source of ['inorm(e1)', 'inormalize(e1)']) {
+      expect(evaluateSource(source, context)).toMatchObject({
+        status: 'invalid', diagnostic: { code: 'LANG_UNSUPPORTED_FUNCTION' },
+      })
+    }
+    expect(evaluateSource('norm(e1, e2)', context)).toMatchObject({
+      status: 'invalid', diagnostic: { code: 'LANG_SYNTAX', message: '“norm” takes exactly one argument.' },
+    })
+    expect(evaluateSource('normalize = 2', context)).toMatchObject({
+      status: 'invalid', diagnostic: { code: 'LANG_SYNTAX' },
+    })
+  })
+
+  it('distributes the functions over a list, keeping element identities', () => {
+    const list = evaluateSource('normalize([2e1, -3e2])', context, 'L')
+    // The same literal at the same offset: an element keeps its identity.
+    const source = evaluateSource(`${' '.repeat('normalize('.length)}[2e1, -3e2]`, context, 'L')
+    expect(list).toMatchObject({ status: 'valid', inspection: '[e1, -e2]' })
+    if (list.status !== 'valid' || list.valueType !== 'list' ||
+        source.status !== 'valid' || source.valueType !== 'list') return
+    expect(list.value.elements.map((element) => element.id))
+      .toEqual(source.value.elements.map((element) => element.id))
+    expect(evaluateSource('norm([3e1, 4e2])', context)).toMatchObject({ status: 'valid', inspection: '[3, 4]' })
+  })
+
+  it('names the function of a removed property (#342)', () => {
+    expect(evaluateSource('e1.norm', context)).toMatchObject({
+      status: 'invalid',
+      diagnostic: {
+        code: 'LANG_UNSUPPORTED_PROPERTY',
+        message: 'The property “norm” is written as a function: norm(…).',
+        span: { start: 3, end: 7 },
+      },
+    })
   })
 
   it('does not reserve abbreviated involution aliases', () => {
@@ -416,9 +461,9 @@ describe('source evaluation pipeline', () => {
   })
 
   it('reports singular and scalar-domain failures with source spans', () => {
-    expect(evaluateSource('(1 + e1).inverse', context)).toMatchObject({
+    expect(evaluateSource('inverse(1 + e1)', context)).toMatchObject({
       status: 'invalid',
-      diagnostic: { code: 'ALG_SINGULAR', span: { start: 0, end: 16 } },
+      diagnostic: { code: 'ALG_SINGULAR', span: { start: 0, end: 15 } },
     })
     expect(evaluateSource('sin(e1)', context)).toMatchObject({
       status: 'invalid',
