@@ -409,6 +409,8 @@ export function useManipulation(options: ManipulationOptions) {
         return
       }
       event.preventDefault()
+      // Keep in step with finishManipulation('cancel'), which this repeats
+      // because that function is not stable for this listener.
       manipulationDrag.current = null
       // The drawing order frozen for the drag is released, as at its end.
       endDrag()
