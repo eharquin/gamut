@@ -102,7 +102,13 @@ import {
 import { documentFileDiagnostic, downloadBytes, downloadDocumentFile, readDocumentFile } from './document/documentFile'
 import { describeArchiveImport, exportLibraryArchive, importLibraryArchive } from './document/libraryArchive'
 import { ArchiveError } from './document/zipArchive'
-import { ACTIVE_DOCUMENT_KEY, browserDocumentStorage } from './document/documentStorage'
+import {
+  ACTIVE_DOCUMENT_KEY,
+  browserDocumentStorage,
+  discardKeptDocument,
+  keepUnreadableDocument,
+  readKeptDocument,
+} from './document/documentStorage'
 import {
   addCopyToLibrary,
   browserLibraryStorage,
@@ -321,6 +327,9 @@ function persistReferenceHeight(height: number): void {
 }
 
 /** How long the notice of a migrated graph stays (#343). */
+/** The status after a failed restore (#275). */
+const HELD_STORED_DOCUMENT = 'Nothing is saved over it until you edit this graph, and it is then kept for a version of GAMUT that can read it.'
+const UNKEPT_STORED_DOCUMENT = 'STORE_NOT_KEPT: The stored graph that could not be restored cannot be kept, so this graph is not saved automatically; save it in My library.'
 const MIGRATION_NOTICE_MS = 12_000
 
 type SharedDocument = ReturnType<typeof fromCanonicalDocument>
@@ -427,11 +436,16 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
         migrationNotice: migrationNotice(documentMigration(stored)),
       }
     } catch (error) {
+      const failure = error instanceof DocumentFormatError
+        ? error.code + ': ' + error.message
+        : 'STORE_READ_FAILED: The saved document could not be restored.'
+      // The stored document, perhaps written by a later version, is not
+      // saved over before an edit, and is kept first (#275).
+      const restore = failure + ' ' + HELD_STORED_DOCUMENT
       return {
         ...fallback,
-        diagnostic: sceneDiagnostic ?? (error instanceof DocumentFormatError
-          ? error.code + ': ' + error.message
-          : 'STORE_READ_FAILED: The saved document could not be restored.'),
+        diagnostic: sceneDiagnostic ? sceneDiagnostic + ' ' + restore : restore,
+        holdStored: 'until-edit' as const,
       }
     }
   })
@@ -1664,8 +1678,27 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
     }
   }, [history.lastResult])
 
+  /**
+   * After a failed restore the stored document is not saved over until the
+   * graph is edited, then kept first; when it cannot be kept, it is never
+   * saved over, and the status says so whenever it is free (#275).
+   */
+  const holdStored = useRef<'until-edit' | 'always' | null>('holdStored' in initial ? initial.holdStored : null)
   useEffect(() => {
     if (ephemeral || import.meta.env.MODE === 'test') return
+    if (holdStored.current === 'until-edit') {
+      if (expressionDoc === initial.document) return
+      if (!keepUnreadableDocument(window.localStorage)) {
+        holdStored.current = 'always'
+        setDocumentDiagnostic(UNKEPT_STORED_DOCUMENT)
+        return
+      }
+      holdStored.current = null
+    }
+    if (holdStored.current === 'always') {
+      setDocumentDiagnostic((current) => current ?? UNKEPT_STORED_DOCUMENT)
+      return
+    }
     try {
       persistence.save(toCanonicalDocument(expressionDoc, theme, resolvedStyles, resolvedOrientation))
       setDocumentDiagnostic((current) => current?.startsWith('DOCUMENT_VIEW_UNSUPPORTED') ? current : null)
@@ -2222,6 +2255,47 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
     return { migrationSource, library, boundId: bound ? id : null, saved }
   })
   const libraryOptions = () => ({ migrationSource: libraryStart.migrationSource })
+  // A document an earlier version could not restore, and kept (#275), goes
+  // to My library once a version that reads it opens, and the reader is told.
+  useEffect(() => {
+    if (temporary || import.meta.env.MODE === 'test') return
+    const storage = browserLibraryStorage()
+    if (storage === null) return
+    const kept = readKeptDocument(storage, (document) => {
+      requireAvailableAlgebra(algebraRegistry, fromCanonicalDocument(document, restoreOptions).document.algebra)
+    })
+    // Still the stored document, restored here: nothing was saved over it.
+    if (kept.status === 'unchanged' && 'restored' in initial) discardKeptDocument(storage)
+    if (kept.status !== 'readable') return
+    try {
+      // Already in My library as it is, as when the version that wrote it
+      // saved it there: nothing to add.
+      let stored: CanonicalDocument | null = null
+      try {
+        stored = loadFromLibrary(storage, kept.document.id)
+      } catch {
+        // Not a library graph, or unreadable: the copy is added.
+      }
+      if (stored !== null && comparableSource(stored) === comparableSource(kept.document)) {
+        discardKeptDocument(storage)
+        return
+      }
+      const added = addCopyToLibrary(storage, kept.document, libraryOptions())
+      discardKeptDocument(storage)
+      reportLibrary(added.entries, null)
+      const message = `“${added.name}”, which an earlier version of GAMUT could not open, was added to My library.`
+      // After the notice of a migrated working copy (#343), not instead of it.
+      setCopyNotice((current) => ({
+        message: current?.kind === 'migration' ? current.message + ' ' + message : message,
+        durationMs: MIGRATION_NOTICE_MS,
+        kind: current?.kind,
+      }))
+    } catch (error) {
+      reportLibraryFailure(error, 'LIBRARY_WRITE_FAILED: A graph kept from an earlier visit could not be added to the library; it stays kept.')
+    }
+    // Once, as the editor opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [library, setLibrary] = useState<LibraryRead | null>(libraryStart.library)
   /** The library graph the open document is, or `null` for a graph not saved there. */
   const [boundId, setBoundId] = useState<string | null>(libraryStart.boundId)

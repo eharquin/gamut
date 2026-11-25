@@ -616,11 +616,26 @@ Opening another graph withdraws it. A document in the current versions shows
 nothing, embed mode shows nothing, and an archive import adds to its summary
 how many of its graphs were migrated.
 
-A release can open only the format versions it knows. Release 0.2.0 cannot
-open a version 8, 9, 10, 11, or 12 document; protecting an older release against a document
-stored in a newer format is deferred to
-[#275](https://github.com/eharquin/gamut/issues/275) and accepted while GAMUT
-has no users. Likewise, release 0.3.0 does not check `languageVersion`: it
+A release can open only the format versions it knows. Releases 0.2.0 and
+0.3.0 replace a stored active document they cannot read, such as one in a
+later format, with the example at their first autosave. From 0.4.0
+([#275](https://github.com/eharquin/gamut/issues/275)), a release that cannot
+restore the stored active document reports why and saves nothing until the
+graph is edited, so that opening and leaving the page changes nothing; a
+failed scene link adds this to its own message. At the first edit, the stored
+text is copied unchanged to the kept-document key (`gamut.document.kept.v1`)
+before the graph is saved. A text that is no document of any version (not a
+JSON object with a numeric `formatVersion`) is not kept and may be saved
+over. When a different document, not yet recovered, is already kept, the
+stored one is never saved over in that visit, and the status says so
+(`STORE_NOT_KEPT`). At startup, a
+release that reads and restores the kept copy, its algebra included, adds it
+to My library under its title (a copy name when taken) unless the library
+already holds that graph unchanged, removes the key, and says so after any
+migration notice; a kept copy identical to the active document it restored
+is simply removed, and one it cannot restore stays for a later release.
+
+Release 0.3.0 does not check `languageVersion`: it
 opens a language version 2 document and reports the calls it does not know,
 such as `norm(…)` in VGA(2), as diagnostics.
 
