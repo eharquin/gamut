@@ -6,6 +6,9 @@ import { CURRENT_LANGUAGE_VERSION } from '../language/migrateLanguage'
  * (#343): the versions, the rows the language migration rewrote, and that
  * saving writes the new format. Nothing is written until then.
  */
+/** How long a migration notice stays, in milliseconds. */
+export const MIGRATION_NOTICE_MS = 12_000
+
 /** Rows named in the notice before the rest are counted. */
 const MAX_LISTED = 5
 
