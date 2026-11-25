@@ -41,7 +41,7 @@ import { AppearancePopover, FOLDER_STYLE_KINDS } from './components/AppearancePo
 import { ZoomLevelField } from './components/ZoomLevelField'
 import type { DisplaySettings } from './components/SettingsMenu'
 import { defaultStyleForKind, resolveItemAppearance, studioColor } from './components/appearancePalette'
-import { OPAQUE_INTERPRETATION, type Point2d } from './geometry/interpretation'
+import { OPAQUE_INTERPRETATION } from './geometry/interpretation'
 import {
   expressionDocument,
   MAX_EXPRESSION_ITEMS,
@@ -59,28 +59,16 @@ import {
   adaptiveGrid,
   clampZoom,
   DEFAULT_PIXELS_PER_UNIT,
-  keyboardManipulationStep,
   toMathematical,
   zoomAt,
   type Viewport2d,
 } from './visualization/viewport'
 import {
   creationSource,
-  formatViewportCoordinate,
   nextObjectName,
 } from './visualization/viewportCreation'
 import { describeViewport } from './visualization/viewportDescription'
-import type { HandleController } from './visualization/glyphs'
-import {
-  findAnchorCandidates,
-  nearbyAnchors,
-  rearmAnchors,
-  anchorKey,
-  selectAnchor,
-  type AnchorCandidate,
-  type AnchorProximity,
-} from './visualization/anchoring'
-import { collectRenderedPrimitives, lineNormalLength } from './visualization/layout'
+import { collectRenderedPrimitives } from './visualization/layout'
 import { requireAvailableAlgebra } from './application/algebraAvailability'
 import {
   DocumentFormatError,
@@ -139,21 +127,12 @@ import { labelPlacementInputs, layoutScene } from './visualization/sceneLayout'
 import { useLabelPlacement } from './hooks/useLabelPlacement'
 import { directScalarEdit } from './language/directScalarEdit'
 import { CanvasSliders } from './components/CanvasSliders'
-import { directPositionAnchorReference } from './language/directVectorEdit'
 import { useScalarPlayback } from './hooks/useScalarPlayback'
 import { useViewportNavigation } from './hooks/useViewportNavigation'
+import { useObjectSelection } from './hooks/useObjectSelection'
+import { useManipulation } from './hooks/useManipulation'
 import { declaredName } from './language/declaredName'
-import {
-  anchorTargets,
-  dragTargets,
-  gestureLabel,
-  lineCoefficients,
-  linePrimitive,
-  manipulationEdit,
-  projectOnLine,
-  type ManipulationContext,
-  type ManipulationKind,
-} from './application/viewportManipulation'
+import { dragTargets, type ManipulationContext } from './application/viewportManipulation'
 import './App.css'
 
 // Composition root: the runtime's registered definitions. A document's
@@ -183,8 +162,6 @@ function firstRunDocument(): ExpressionDocument {
   const definition = algebraRegistry.definitions().find((candidate) => candidate.algebraId === DEFAULT_ALGEBRA_ID)
   return (definition && showcaseDocument(definition)) ?? expressionDocument([{ id: 'item-1', source: '' }])
 }
-/** How far, in CSS pixels, a pressed handle must move before its drag starts. */
-const DRAG_DEAD_ZONE = 3
 
 /** The standard visualizer of an algebra, so that undo and redo keep each algebra's own visualizer. */
 function standardVisualizerId(algebra: ExpressionDocument['algebra']): string | null {
@@ -203,10 +180,6 @@ type EditorFocus = Readonly<{
   direction: 'forward' | 'backward' | 'none'
 }>
 
-/** Whether a node is a manipulation handle of the canvas. */
-function isHandleElement(target: EventTarget | null): boolean {
-  return target instanceof Element && target.hasAttribute('data-handle-key')
-}
 
 const defaultViewport: Viewport2d = {
   width: 640,
@@ -513,89 +486,12 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
   const viewportSvgRef = useRef<SVGSVGElement>(null)
   const canvasFrameRef = useRef<HTMLDivElement>(null)
   const workspaceRef = useRef<HTMLElement>(null)
-  const manipulationDrag = useRef<Readonly<{
-    itemId: string
-    kind: ManipulationKind
-    pointerId: number
-    /** Where the press was, in client pixels, until the pointer has moved past the dead zone. */
-    press: Readonly<{ x: number; y: number }> | null
-    /** Anchors a base drag started on, not taken until the pointer leaves them (#100). */
-    disarmedAnchors: ReadonlySet<string>
-  }> | null>(null)
-  /** Where a line translation started, so each move is measured from the press. */
-  const lineDragOrigin = useRef<Readonly<{
-    point: Point2d
-    anchor: Point2d
-    coefficients: readonly [number, number, number]
-  }> | null>(null)
-  /** The selected line and the anchor its normal handle is drawn from. */
-  const [selectedLine, setSelectedLine] = useState<Readonly<{ itemId: string; anchor: Point2d }> | null>(null)
-  const anchorValidityCache = useRef(new Map<string, boolean>())
-  const [hoveredManipulation, setHoveredManipulation] = useState<string | null>(null)
-  // Where handles coincide, those of the selected object are drawn on top and
-  // take the press (#100): the object whose expression row has focus or the
-  // pointer, otherwise the last object a pointer manipulated in the viewport.
-  // The drawing order is kept for the length of a drag and while a handle has
-  // keyboard focus, so that a handle is never moved in the document while it
-  // holds pointer capture or focus, which moving it would release.
-  const [rowFocusId, setRowFocusId] = useState<string | null>(null)
-  const [rowHoverId, setRowHoverId] = useState<string | null>(null)
-  const [lastManipulatedId, setLastManipulatedId] = useState<string | null>(null)
-  const [dragSelection, setDragSelection] = useState<Readonly<{ itemId: string | null }> | null>(null)
-  const [handleFocusSelection, setHandleFocusSelection] =
-    useState<Readonly<{ itemId: string | null }> | null>(null)
-  const frozenSelection = dragSelection ?? handleFocusSelection
-  // A deleted object's row fires neither blur nor pointer leave, so its id is
-  // ignored here and cleared once the document has changed.
-  const isPresentItem = (itemId: string | null): itemId is string =>
-    itemId !== null && expressionDoc.items.some((item) => item.id === itemId)
-  const selectedObjectId = frozenSelection
-    ? frozenSelection.itemId
-    : [rowFocusId, rowHoverId, lastManipulatedId].find(isPresentItem) ?? null
-  useEffect(() => {
-    const present = new Set(expressionDoc.items.map((item) => item.id))
-    const clearDeleted = (itemId: string | null) =>
-      itemId !== null && !present.has(itemId) ? null : itemId
-    setRowFocusId(clearDeleted)
-    setRowHoverId(clearDeleted)
-    setLastManipulatedId(clearDeleted)
-    // A focused handle removed with its object fires no blur either.
-    if (!isHandleElement(document.activeElement)) setHandleFocusSelection(null)
-  }, [expressionDoc.items])
-  // Keyboard focus on a handle is drawn as an SVG ring rather than a CSS
-  // outline, which WebKit fails to repaint when focus moves between SVG
-  // elements. The ring follows the input modality at the moment of focus,
-  // so a later key press does not turn pointer focus into a ring either.
-  const [focusRingKey, setFocusRingKey] = useState<string | null>(null)
-  const inputModality = useRef<'pointer' | 'keyboard'>('pointer')
-  useEffect(() => {
-    const pointer = () => { inputModality.current = 'pointer' }
-    const keyboard = () => { inputModality.current = 'keyboard' }
-    window.addEventListener('pointerdown', pointer, true)
-    window.addEventListener('keydown', keyboard, true)
-    return () => {
-      window.removeEventListener('pointerdown', pointer, true)
-      window.removeEventListener('keydown', keyboard, true)
-    }
-  }, [])
-  const focusHandle = (key: string) => {
-    setHoveredManipulation(key)
-    setFocusRingKey(inputModality.current === 'keyboard' ? key : null)
-  }
-  const blurHandle = (key: string) => {
-    setHoveredManipulation((current) => current === key ? null : current)
-    setFocusRingKey((current) => current === key ? null : current)
-  }
-  const handleController: HandleController = {
-    hoveredKey: hoveredManipulation,
-    focusRingKey,
-    hover: (key) => setHoveredManipulation(key),
-    unhover: (key) => setHoveredManipulation((current) => current === key ? null : current),
-    focus: focusHandle,
-    blur: blurHandle,
-    pointerDown: (event, itemId, kind) => beginManipulation(event, itemId, kind),
-    keyDown: (event, itemId, kind, current) => manipulateWithKeyboard(event, itemId, kind, current),
-  }
+  const objectSelection = useObjectSelection(expressionDoc.items)
+  const { selectedObjectId } = objectSelection
+  const handleController = objectSelection.handleController(
+    (event, itemId, kind) => manipulation.beginManipulation(event, itemId, kind),
+    (event, itemId, kind, current) => manipulation.manipulateWithKeyboard(event, itemId, kind, current),
+  )
   const [panelWidth, setPanelWidth] = useState(340)
   const [workspaceWidth, setWorkspaceWidth] = useState(0)
   const maximumPanelWidth = Math.max(
@@ -638,7 +534,6 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
     rowElements: expressionRowRefs,
     announce: setReorderAnnouncement,
   })
-  const [anchorPreview, setAnchorPreview] = useState<AnchorCandidate | null>(null)
   const [viewportLocked, setViewportLocked] = useState(() => embed ? embed.viewportLocked : temporary ? false : restoredViewportLock())
   const [panelCollapsed, setPanelCollapsed] = useState(() => temporary ? false : restoredPanelCollapsed())
   const collapsePanelButtonRef = useRef<HTMLButtonElement | null>(null)
@@ -780,80 +675,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
   const { screenPoint, guardGestureSelection } = navigation
   const beginViewportPan = (event: ReactPointerEvent<SVGSVGElement>) => {
     setAppearanceItemId(null)
-    setSelectedLine(null)
+    manipulation.deselectLine()
     navigation.beginPan(event)
-  }
-  /** Moves an item's handle to `point`; returns where a weighted point is now drawn. */
-  const updateManipulatedItem = (
-    itemId: string,
-    kind: ManipulationKind,
-    point: Readonly<{ x: number; y: number }>,
-  ): Point2d | undefined => {
-    const item = expressionDoc.items.find((candidate) => candidate.id === itemId)
-    const rendered = renderedPrimitives.find((candidate) => candidate.id === itemId)
-    if (!item || !rendered) return
-    const edit = manipulationEdit(manipulationContext, targets, {
-      item, rendered, kind, point, lineDrag: lineDragOrigin.current, selectedLine,
-    })
-    if (edit.selectedLineAnchor) setSelectedLine({ itemId, anchor: edit.selectedLineAnchor })
-    edit.commands.forEach((command) => executeCommand(command))
-    return edit.drawn
-  }
-  /** Where the anchors of a base drag are measured from, in CSS pixels. */
-  const anchorProximity = (draggedId: string, pointer: Point2d): AnchorProximity => {
-    const rectangle = viewportSvgRef.current?.getBoundingClientRect()
-    const cssScaleX = rectangle && rectangle.width > 0 ? rectangle.width / viewport.width : 1
-    const cssScaleY = rectangle && rectangle.height > 0 ? rectangle.height / viewport.height : 1
-    return {
-      draggedId,
-      rendered: renderedPrimitives,
-      viewport,
-      pointer,
-      cssScale: { x: cssScaleX, y: cssScaleY },
-      nameOf: (itemId) => {
-        const targetItem = expressionDoc.items.find((item) => item.id === itemId)
-        return targetItem ? declaredName(targetItem.source) : null
-      },
-    }
-  }
-  const beginManipulation = (
-    event: ReactPointerEvent<SVGElement>,
-    itemId: string,
-    kind: ManipulationKind,
-  ) => {
-    if (event.button !== 0) return
-    event.stopPropagation()
-    // The default pointerdown action is kept: it is what lets the browser
-    // treat the resulting focus as pointer-driven and withhold the focus
-    // ring. Selection is prevented by user-select on the canvas instead.
-    event.currentTarget.setPointerCapture?.(event.pointerId)
-    guardGestureSelection('manipulate')
-    const disarmedAnchors = kind === 'base'
-      ? new Set(nearbyAnchors(anchorProximity(itemId, screenPoint(event.clientX, event.clientY)))
-          .map(anchorKey))
-      : new Set<string>()
-    manipulationDrag.current = {
-      itemId, kind, pointerId: event.pointerId,
-      press: { x: event.clientX, y: event.clientY },
-      disarmedAnchors,
-    }
-    setDragSelection({ itemId: selectedObjectId })
-    setLastManipulatedId(itemId)
-    anchorValidityCache.current.clear()
-    if (kind === 'line') {
-      const line = linePrimitive(renderedPrimitives.find((candidate) => candidate.id === itemId))
-      const point = toMathematical(viewport, screenPoint(event.clientX, event.clientY))
-      if (line) {
-        // A press selects the line and anchors its normal at the pressed
-        // point projected onto the line.
-        const anchor = projectOnLine(line, point)
-        lineDragOrigin.current = { point, anchor, coefficients: lineCoefficients(line) }
-        setSelectedLine({ itemId, anchor })
-      }
-    }
-    dispatchHistory({ type: 'boundary' })
-    dispatchHistory({ type: 'begin-transaction' })
-    setViewportAnnouncement(`${gestureLabel(kind)} drag started.`)
   }
   const itemOf = (id: string) => expressionDoc.items.find((candidate) => candidate.id === id)
   /** What the glyph of a rendered element offers: nothing to an element that is no item, such as a list element. */
@@ -863,229 +686,17 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
     base: (id, entity) => { const item = itemOf(id); return !!item && targets.baseMovable(item, entity) },
     line: (id, entity) => { const item = itemOf(id); return !!item && targets.lineMovable(item, entity) },
   }
-  const manipulateWithKeyboard = (
-    event: KeyboardEvent<SVGElement>,
-    itemId: string,
-    kind: ManipulationKind,
-    current: Readonly<{ x: number; y: number }>,
-  ) => {
-    const keyboardOrigin = { kind: 'viewport', handleKey: `${itemId}:${kind}` } as const
-    if (kind === 'line' && event.key === 'Enter') {
-      event.preventDefault()
-      event.stopPropagation()
-      setSelectedLine((selected) => (selected?.itemId === itemId ? null : { itemId, anchor: current }))
-      setViewportAnnouncement(selectedLine?.itemId === itemId ? 'Line normal hidden.' : 'Line normal shown; move its head to rotate the line.')
-      return
-    }
-    if (kind === 'base' && event.key === 'Enter') {
-      event.preventDefault()
-      event.stopPropagation()
-      const item = expressionDoc.items.find((candidate) => candidate.id === itemId)
-      if (!item) return
-      const currentReference = item.positionSource
-        ? directPositionAnchorReference(item.positionSource)
-        : null
-      const candidates = anchorTargets(renderedPrimitives, expressionDoc.items, itemId)
-      const currentIndex = candidates.findIndex((candidate) =>
-        candidate.name === currentReference?.name &&
-        candidate.property === currentReference.property)
-      const ordered = candidates.length === 0 ? [] : candidates.map((_, offset) =>
-        candidates[(currentIndex + 1 + offset) % candidates.length])
-      const next = ordered.find((candidate) => {
-        const positionSource = `${candidate.name}.${candidate.property}`
-        const proposed = {
-          ...expressionDoc,
-          items: expressionDoc.items.map((entry) => entry.id === itemId
-            ? { ...entry, positionSource }
-            : entry),
-        }
-        return evaluateDocument(proposed, evaluationContext).find(
-          (result) => result.item.id === itemId,
-        )?.positionEvaluation?.status === 'valid'
-      })
-      if (!next) {
-        setViewportAnnouncement('No valid anchor target is available.')
-        return
-      }
-      dispatchHistory({ type: 'boundary' })
-      dispatchHistory({ type: 'begin-transaction' })
-      executeCommand({
-        kind: 'update-position', itemId,
-        positionSource: `${next.name}.${next.property}`,
-      })
-      dispatchHistory({ type: 'commit-transaction', origin: keyboardOrigin })
-      setViewportAnnouncement(`Object base linked to ${next.name} ${next.property}.`)
-      return
-    }
-    if (kind === 'base' && (event.key === 'Delete' || event.key === 'Backspace')) {
-      const item = expressionDoc.items.find((candidate) => candidate.id === itemId)
-      if (!item?.positionSource || !directPositionAnchorReference(item.positionSource)) return
-      event.preventDefault()
-      event.stopPropagation()
-      dispatchHistory({ type: 'boundary' })
-      dispatchHistory({ type: 'begin-transaction' })
-      updateManipulatedItem(itemId, kind, current)
-      dispatchHistory({ type: 'commit-transaction', origin: keyboardOrigin })
-      setViewportAnnouncement('Object base unlinked and kept at its resolved position.')
-      return
-    }
-    const step = keyboardManipulationStep(viewport.pixelsPerUnit, event.shiftKey)
-    const delta = event.key === 'ArrowLeft' ? { x: -step, y: 0 }
-      : event.key === 'ArrowRight' ? { x: step, y: 0 }
-        : event.key === 'ArrowUp' ? { x: 0, y: step }
-          : event.key === 'ArrowDown' ? { x: 0, y: -step }
-            : null
-    if (!delta) return
-    event.preventDefault()
-    event.stopPropagation()
-    dispatchHistory({ type: 'boundary' })
-    dispatchHistory({ type: 'begin-transaction' })
-    if (kind === 'line') {
-      const line = linePrimitive(renderedPrimitives.find((candidate) => candidate.id === itemId))
-      if (line) lineDragOrigin.current = { point: current, anchor: current, coefficients: lineCoefficients(line) }
-    }
-    const target = kind === 'normal'
-      // Nudge the normal handle's head, then the update renormalizes it.
-      ? (() => {
-          const normal = linePrimitive(renderedPrimitives.find((candidate) => candidate.id === itemId))?.normal ?? { x: 1, y: 0 }
-          const length = lineNormalLength(viewport, objectRenderScale)
-          return { x: current.x + normal.x * length + delta.x, y: current.y + normal.y * length + delta.y }
-        })()
-      : { x: current.x + delta.x, y: current.y + delta.y }
-    // A weighted point is drawn where its rounded coordinates put it.
-    const moved = updateManipulatedItem(itemId, kind, target) ?? target
-    dispatchHistory({ type: 'commit-transaction', origin: keyboardOrigin })
-    setViewportAnnouncement(kind === 'normal'
-      ? `${gestureLabel(kind)} rotated.`
-      : `${gestureLabel(kind)} moved to ${
-          formatViewportCoordinate(moved.x, viewport.pixelsPerUnit)}, ${
-          formatViewportCoordinate(moved.y, viewport.pixelsPerUnit)}.`)
-  }
   const moveViewportPan = (event: ReactPointerEvent<SVGSVGElement>) => {
-    const pressed = manipulationDrag.current
-    if (pressed?.pointerId === event.pointerId) {
-      // A press that has not yet moved past the dead zone is a click: it
-      // writes nothing, so it cannot unlink a base or nudge an object.
-      if (pressed.press && Math.hypot(
-        event.clientX - pressed.press.x,
-        event.clientY - pressed.press.y,
-      ) < DRAG_DEAD_ZONE) return
-      const manipulation = pressed.press ? { ...pressed, press: null } : pressed
-      manipulationDrag.current = manipulation
-      const pointer = screenPoint(event.clientX, event.clientY)
-      if (manipulation.kind === 'base') {
-        const proximity = anchorProximity(manipulation.itemId, pointer)
-        const disarmedAnchors = rearmAnchors(manipulation.disarmedAnchors, nearbyAnchors(proximity))
-        if (disarmedAnchors !== manipulation.disarmedAnchors)
-          manipulationDrag.current = { ...manipulation, disarmedAnchors }
-        const candidates = findAnchorCandidates({
-          ...proximity,
-          disarmed: disarmedAnchors,
-          isValid: (candidate) => {
-            const key = `${manipulation.itemId}:${candidate.targetId}:${candidate.property}`
-            const cached = anchorValidityCache.current.get(key)
-            if (cached !== undefined) return cached
-            const positionSource = `${candidate.targetName}.${candidate.property}`
-            const proposed = {
-              ...expressionDoc,
-              items: expressionDoc.items.map((item) => item.id === manipulation.itemId
-                ? { ...item, positionSource }
-                : item),
-            }
-            const valid = evaluateDocument(proposed, evaluationContext).find(
-              (result) => result.item.id === manipulation.itemId,
-            )?.positionEvaluation?.status === 'valid'
-            anchorValidityCache.current.set(key, valid)
-            return valid
-          },
-        })
-        const candidate = selectAnchor(
-          candidates,
-          anchorPreview?.draggedId === manipulation.itemId ? anchorPreview : null,
-        )
-        setAnchorPreview(candidate)
-        updateManipulatedItem(
-          manipulation.itemId,
-          manipulation.kind,
-          candidate?.mathematical ?? toMathematical(viewport, pointer),
-        )
-        return
-      }
-      setAnchorPreview(null)
-      updateManipulatedItem(
-        manipulation.itemId,
-        manipulation.kind,
-        toMathematical(viewport, pointer),
-      )
-      return
-    }
-    navigation.movePan(event)
-  }
-  // A pointer gesture leaves nothing selected: the handle gives focus back
-  // to the canvas so arrow keys pan and hover indicators stay pointer-only.
-  // Keyboard users reach handles with Tab as before.
-  const finishManipulation = (outcome: 'commit' | 'cancel') => {
-    manipulationDrag.current = null
-    setDragSelection(null)
-    anchorValidityCache.current.clear()
-    setAnchorPreview(null)
-    dispatchHistory(outcome === 'commit'
-      ? { type: 'commit-transaction', origin: { kind: 'viewport', handleKey: null } }
-      : { type: 'cancel-transaction' })
-    viewportSvgRef.current?.focus({ preventScroll: true })
+    if (!manipulation.movePointer(event)) navigation.movePan(event)
   }
   const endViewportPan = (event: ReactPointerEvent<SVGSVGElement>) => {
-    const manipulation = manipulationDrag.current
-    if (manipulation?.pointerId === event.pointerId) {
-      const preview = anchorPreview?.draggedId === manipulation.itemId
-        ? anchorPreview
-        : null
-      if (preview) {
-        const positionSource = `${preview.targetName}.${preview.property}`
-        const candidateDocument = {
-          ...expressionDoc,
-          items: expressionDoc.items.map((item) => item.id === manipulation.itemId
-            ? { ...item, positionSource }
-            : item),
-        }
-        const candidate = evaluateDocument(candidateDocument, evaluationContext).find(
-          (result) => result.item.id === manipulation.itemId,
-        )
-        if (candidate?.positionEvaluation?.status === 'valid') {
-          executeCommand({
-            kind: 'update-position', itemId: manipulation.itemId, positionSource,
-          })
-          setViewportAnnouncement(
-            `Object base linked to ${preview.targetName} ${preview.property}.`,
-          )
-        } else {
-          setViewportAnnouncement('Anchor link refused because it would be invalid.')
-          finishManipulation('cancel')
-          return
-        }
-      } else {
-        setViewportAnnouncement('Object manipulation committed.')
-      }
-      finishManipulation('commit')
-      return
-    }
-    navigation.endPan(event)
+    if (!manipulation.endPointer(event)) navigation.endPan(event)
   }
   const cancelViewportPan = (event: ReactPointerEvent<SVGSVGElement>) => {
-    if (manipulationDrag.current?.pointerId === event.pointerId) {
-      finishManipulation('cancel')
-      setViewportAnnouncement('Object manipulation cancelled.')
-      return
-    }
-    navigation.cancelPan(event.pointerId)
+    if (!manipulation.cancelPointer(event)) navigation.cancelPan(event.pointerId)
   }
   const loseViewportCapture = () => {
-    if (manipulationDrag.current) {
-      finishManipulation('cancel')
-      setViewportAnnouncement('Object manipulation cancelled.')
-      return
-    }
-    navigation.cancelPan(null)
+    if (!manipulation.loseCapture()) navigation.cancelPan(null)
   }
 
   const togglePanelCollapsed = () => {
@@ -1128,8 +739,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
       algebraId: expressionDoc.algebra.algebraId, visualizerId, viewport: currentViewport,
     }
     navigation.forgetPan()
-    setSelectedLine(null)
-    setAnchorPreview(null)
+    manipulation.forget()
     setAppearanceItemId(null)
     // A collapsed panel reopens with every loss of the canvas (#234).
     workspaceModeFocus.current = 'show-canvas'
@@ -1271,25 +881,6 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
     reducedMotion,
   })
 
-  useEffect(() => {
-    const cancel = (event: globalThis.KeyboardEvent) => {
-      if (event.key !== 'Escape') return
-      if (!manipulationDrag.current) {
-        // Outside a gesture, Escape drops the line selection and its normal.
-        setSelectedLine((selected) => (selected ? null : selected))
-        return
-      }
-      event.preventDefault()
-      manipulationDrag.current = null
-      anchorValidityCache.current.clear()
-      setAnchorPreview(null)
-      dispatchHistory({ type: 'cancel-transaction' })
-      viewportSvgRef.current?.focus({ preventScroll: true })
-      setViewportAnnouncement('Object manipulation cancelled.')
-    }
-    window.addEventListener('keydown', cancel)
-    return () => window.removeEventListener('keydown', cancel)
-  }, [dispatchHistory])
   const resolvedAppearances = useMemo(
     () => evaluatedItems.map(({ item, evaluation }) => {
       const kind = evaluation?.status === 'valid'
@@ -1386,6 +977,24 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
         evaluatedItems, drawnDocument.appearance, interpretation, declaredName, appearanceSources,
         expressionDoc.view.display.labelsVisible,
       )
+  const manipulation = useManipulation({
+    document: expressionDoc,
+    evaluationContext,
+    rendered: renderedPrimitives,
+    context: manipulationContext,
+    targets,
+    viewport,
+    objectRenderScale,
+    svgRef: viewportSvgRef,
+    screenPoint,
+    guardGestureSelection,
+    beginDrag: objectSelection.beginDrag,
+    endDrag: objectSelection.endDrag,
+    executeCommand,
+    dispatchHistory,
+    announce: setViewportAnnouncement,
+  })
+  const { selectedLine, anchorPreview } = manipulation
   const scene = layoutScene(renderedPrimitives, renderedConnections, viewport, objectRenderScale)
   // Labels are placed together, so that an automatic label can avoid the
   // other labels and the points and handles of other objects (#226).
@@ -2539,10 +2148,10 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
     reorderRowWithKeyboard: folders.reorderRowWithKeyboard,
     convertRowToFolder: folders.convertRowToFolder,
     pasteRows,
-    focusRow: (itemId) => setRowFocusId(itemId),
-    blurRow: (itemId) => setRowFocusId((current) => current === itemId ? null : current),
-    hoverRow: (itemId) => setRowHoverId(itemId),
-    leaveRow: (itemId) => setRowHoverId((current) => current === itemId ? null : current),
+    focusRow: objectSelection.row.focus,
+    blurRow: objectSelection.row.blur,
+    hoverRow: objectSelection.row.hover,
+    leaveRow: objectSelection.row.leave,
     toggleAppearance: (itemId) => setAppearanceItemId((current) => current === itemId ? null : itemId),
     closeAppearance,
     toggleNormalizationChoice: (itemId) => setNormalizationChoiceId((current) => current === itemId ? null : itemId),
@@ -2949,14 +2558,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
               onLostPointerCapture={loseViewportCapture}
               onKeyDown={navigation.navigateWithKeyboard}
               onDoubleClick={embed ? undefined : createVectorFromViewport}
-              onFocus={(event) => {
-                if (isHandleElement(event.target))
-                  setHandleFocusSelection((current) => current ?? { itemId: selectedObjectId })
-              }}
-              onBlur={(event) => {
-                if (isHandleElement(event.target) && !isHandleElement(event.relatedTarget))
-                  setHandleFocusSelection(null)
-              }}
+              onFocus={objectSelection.canvasFocus}
+              onBlur={objectSelection.canvasBlur}
             >
               <desc id="canvas-description">{canvasDescription}</desc>
               <CanvasBackground
