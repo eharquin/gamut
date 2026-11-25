@@ -60,7 +60,6 @@ import {
   clampZoom,
   DEFAULT_PIXELS_PER_UNIT,
   keyboardManipulationStep,
-  panByScreen,
   toMathematical,
   zoomAt,
   type Viewport2d,
@@ -142,6 +141,7 @@ import { directScalarEdit } from './language/directScalarEdit'
 import { CanvasSliders } from './components/CanvasSliders'
 import { directPositionAnchorReference } from './language/directVectorEdit'
 import { useScalarPlayback } from './hooks/useScalarPlayback'
+import { useViewportNavigation } from './hooks/useViewportNavigation'
 import { declaredName } from './language/declaredName'
 import {
   anchorTargets,
@@ -511,15 +511,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
   const expressionRowRefs = useRef(new Map<string, HTMLElement>())
   const appearanceAnchorRef = useRef<HTMLButtonElement | null>(null)
   const viewportSvgRef = useRef<SVGSVGElement>(null)
-  const viewportWheelHandler = useRef<((event: WheelEvent) => void) | null>(null)
   const canvasFrameRef = useRef<HTMLDivElement>(null)
   const workspaceRef = useRef<HTMLElement>(null)
-  const viewportPan = useRef<Readonly<{
-    pointerId: number
-    lastX: number
-    lastY: number
-    start: Viewport2d
-  }> | null>(null)
   const manipulationDrag = useRef<Readonly<{
     itemId: string
     kind: ManipulationKind
@@ -777,86 +770,18 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
       },
     })
   }, [expressionDoc.view, updateView])
-  const screenPoint = (clientX: number, clientY: number) => {
-    const rectangle = viewportSvgRef.current?.getBoundingClientRect()
-    if (!rectangle || rectangle.width <= 0 || rectangle.height <= 0)
-      return { x: viewport.width / 2, y: viewport.height / 2 }
-    return {
-      x: (clientX - rectangle.left) * viewport.width / rectangle.width,
-      y: (clientY - rectangle.top) * viewport.height / rectangle.height,
-    }
-  }
-  const zoomViewport = (factor: number, anchor = { x: viewport.width / 2, y: viewport.height / 2 }) =>
-    updateViewport(zoomAt(viewport, anchor, viewport.pixelsPerUnit * factor))
-  // Recentering keeps the scale; Home, or recentering then typing 100 %,
-  // restores the documented view (VIEW2D-003).
-  const recenterViewport = () => {
-    updateViewport({ ...viewport, centerX: 0, centerY: 0 })
-    setViewportAnnouncement('View recentered on the origin.')
-  }
-  const resetViewport = () => {
-    updateViewport({
-      ...viewport, centerX: 0, centerY: 0, pixelsPerUnit: DEFAULT_PIXELS_PER_UNIT,
-    })
-    setViewportAnnouncement('View reset to the origin at 100%.')
-  }
-  const handleViewportWheel = (event: WheelEvent) => {
-    event.preventDefault()
-    if (viewportLocked) return
-    zoomViewport(Math.exp(-event.deltaY * 0.0015), screenPoint(event.clientX, event.clientY))
-  }
-  viewportWheelHandler.current = handleViewportWheel
-  // React registers wheel listeners as passive, which silently discards
-  // preventDefault and lets the browser page-zoom on Ctrl+wheel or pinch; the
-  // listener is attached natively so it can be non-passive.
-  const attachViewportSvg = useCallback((svg: SVGSVGElement | null) => {
-    viewportSvgRef.current = svg
-    if (!svg) return
-    const onWheel = (event: WheelEvent) =>
-      viewportWheelHandler.current?.(event)
-    svg.addEventListener('wheel', onWheel, { passive: false })
-    return () => svg.removeEventListener('wheel', onWheel)
-  }, [])
-  // Safari extends a selection started on the canvas into any selectable
-  // text the pointer crosses, and form controls ignore an inherited
-  // user-select, so while a button is held the class also removes the
-  // panels from hit-testing and any selection start is cancelled. Released
-  // on pointerup or pointercancel anywhere.
-  // The gesture kind also fixes the cursor: browsers that hit-test under the
-  // pointer during capture would otherwise show the arrow over the panels.
-  const guardGestureSelection = (kind: 'manipulate' | 'pan') =>
-    document.body.classList.add('canvas-gesture', `canvas-gesture-${kind}`)
-  useEffect(() => {
-    const release = () => document.body.classList.remove(
-      'canvas-gesture', 'canvas-gesture-manipulate', 'canvas-gesture-pan',
-    )
-    const cancelSelection = (event: Event) => {
-      if (document.body.classList.contains('canvas-gesture')) event.preventDefault()
-    }
-    window.addEventListener('pointerup', release)
-    window.addEventListener('pointercancel', release)
-    document.addEventListener('selectstart', cancelSelection, true)
-    return () => {
-      window.removeEventListener('pointerup', release)
-      window.removeEventListener('pointercancel', release)
-      document.removeEventListener('selectstart', cancelSelection, true)
-      release()
-    }
-  }, [])
+  const navigation = useViewportNavigation({
+    viewport,
+    locked: viewportLocked,
+    updateViewport,
+    announce: setViewportAnnouncement,
+    svgRef: viewportSvgRef,
+  })
+  const { screenPoint, guardGestureSelection } = navigation
   const beginViewportPan = (event: ReactPointerEvent<SVGSVGElement>) => {
     setAppearanceItemId(null)
     setSelectedLine(null)
-    if (viewportLocked || event.button !== 0 || event.target !== event.currentTarget) return
-    event.currentTarget.focus({ preventScroll: true })
-    guardGestureSelection('pan')
-    viewportPan.current = {
-      pointerId: event.pointerId,
-      lastX: event.clientX,
-      lastY: event.clientY,
-      start: viewport,
-    }
-    event.currentTarget.setPointerCapture?.(event.pointerId)
-    event.preventDefault()
+    navigation.beginPan(event)
   }
   /** Moves an item's handle to `point`; returns where a weighted point is now drawn. */
   const updateManipulatedItem = (
@@ -1094,16 +1019,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
       )
       return
     }
-    const pan = viewportPan.current
-    if (!pan || pan.pointerId !== event.pointerId) return
-    const rectangle = event.currentTarget.getBoundingClientRect()
-    const scaleX = rectangle.width > 0 ? viewport.width / rectangle.width : 1
-    const scaleY = rectangle.height > 0 ? viewport.height / rectangle.height : 1
-    updateViewport(panByScreen(viewport, {
-      x: (event.clientX - pan.lastX) * scaleX,
-      y: (event.clientY - pan.lastY) * scaleY,
-    }))
-    viewportPan.current = { ...pan, lastX: event.clientX, lastY: event.clientY }
+    navigation.movePan(event)
   }
   // A pointer gesture leaves nothing selected: the handle gives focus back
   // to the canvas so arrow keys pan and hover indicators stay pointer-only.
@@ -1153,7 +1069,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
       finishManipulation('commit')
       return
     }
-    if (viewportPan.current?.pointerId === event.pointerId) viewportPan.current = null
+    navigation.endPan(event)
   }
   const cancelViewportPan = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (manipulationDrag.current?.pointerId === event.pointerId) {
@@ -1161,10 +1077,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
       setViewportAnnouncement('Object manipulation cancelled.')
       return
     }
-    const pan = viewportPan.current
-    if (!pan || pan.pointerId !== event.pointerId) return
-    viewportPan.current = null
-    updateViewport(pan.start)
+    navigation.cancelPan(event.pointerId)
   }
   const loseViewportCapture = () => {
     if (manipulationDrag.current) {
@@ -1172,34 +1085,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
       setViewportAnnouncement('Object manipulation cancelled.')
       return
     }
-    const pan = viewportPan.current
-    if (!pan) return
-    viewportPan.current = null
-    updateViewport(pan.start)
-  }
-  const navigateViewportWithKeyboard = (event: KeyboardEvent<SVGSVGElement>) => {
-    const amount = event.shiftKey ? 120 : 40
-    let next: Viewport2d | null = null
-    const navigationKey = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', '+', '=', '-', '0', 'Home']
-      .includes(event.key)
-    if (viewportLocked && navigationKey) {
-      event.preventDefault()
-      return
-    }
-    if (event.key === 'ArrowLeft') next = panByScreen(viewport, { x: amount, y: 0 })
-    else if (event.key === 'ArrowRight') next = panByScreen(viewport, { x: -amount, y: 0 })
-    else if (event.key === 'ArrowUp') next = panByScreen(viewport, { x: 0, y: amount })
-    else if (event.key === 'ArrowDown') next = panByScreen(viewport, { x: 0, y: -amount })
-    else if (event.key === '+' || event.key === '=') next = zoomAt(viewport, { x: viewport.width / 2, y: viewport.height / 2 }, viewport.pixelsPerUnit * 1.25)
-    else if (event.key === '-') next = zoomAt(viewport, { x: viewport.width / 2, y: viewport.height / 2 }, viewport.pixelsPerUnit / 1.25)
-    else if (event.key === '0' || event.key === 'Home') {
-      event.preventDefault()
-      if (event.key === '0') recenterViewport()
-      else resetViewport()
-      return
-    } else return
-    event.preventDefault()
-    updateViewport(next)
+    navigation.cancelPan(null)
   }
 
   const togglePanelCollapsed = () => {
@@ -1241,7 +1127,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
     retainedVisualView.current = {
       algebraId: expressionDoc.algebra.algebraId, visualizerId, viewport: currentViewport,
     }
-    viewportPan.current = null
+    navigation.forgetPan()
     setSelectedLine(null)
     setAnchorPreview(null)
     setAppearanceItemId(null)
@@ -1283,7 +1169,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
 
   const toggleViewportLock = () => {
     const locked = !viewportLocked
-    viewportPan.current = null
+    navigation.forgetPan()
     setViewportLocked(locked)
     setViewportAnnouncement(locked ? 'Viewport locked.' : 'Viewport unlocked.')
     if (!ephemeral) persistViewportLock(locked)
@@ -2994,7 +2880,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
               <button
                 type="button"
                 className="viewport-command"
-                onClick={() => zoomViewport(1.25)}
+                onClick={() => navigation.zoom(1.25)}
                 aria-label="Zoom in"
                 disabled={viewportLocked}
               >
@@ -3006,7 +2892,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
               <button
                 type="button"
                 className="viewport-command"
-                onClick={() => zoomViewport(0.8)}
+                onClick={() => navigation.zoom(0.8)}
                 aria-label="Zoom out"
                 disabled={viewportLocked}
               >
@@ -3017,7 +2903,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
               <button
                 type="button"
                 className="viewport-command"
-                onClick={recenterViewport}
+                onClick={navigation.recenter}
                 aria-label="Recenter view"
                 disabled={viewportLocked}
               >
@@ -3049,7 +2935,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
               </div>
             </div>}
             <svg
-              ref={attachViewportSvg}
+              ref={navigation.attachSvg}
               className={`canvas${viewportLocked ? ' is-viewport-locked' : ''}`}
               viewBox={`0 0 ${viewport.width} ${viewport.height}`}
               role="img"
@@ -3061,7 +2947,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
               onPointerUp={endViewportPan}
               onPointerCancel={cancelViewportPan}
               onLostPointerCapture={loseViewportCapture}
-              onKeyDown={navigateViewportWithKeyboard}
+              onKeyDown={navigation.navigateWithKeyboard}
               onDoubleClick={embed ? undefined : createVectorFromViewport}
               onFocus={(event) => {
                 if (isHandleElement(event.target))
