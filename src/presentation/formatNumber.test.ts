@@ -76,6 +76,15 @@ describe('numeric presentation', () => {
         .toBe('-1000000e02 + e12')
       expect(formatDisplayMultivector(ownedMultivector([0, 0, 0, 0, -44, -88, 8.882e-16, 0], PGA_2D_BASIS), 4, pga2Residue))
         .toBe('-44e01 - 88e02')
+      // The y of a far point is kept: the classification read it.
+      expect(formatDisplayMultivector(ownedMultivector([0, 0, 0, 0, 0.5, -1e6, 1, 0], PGA_2D_BASIS), 4, pga2Residue))
+        .toBe('0.5e01 - 1000000e02 + e12')
+    })
+
+    it('keeps a small coefficient that the VGA(2) kind retains', () => {
+      // A vector (1, 1E-7) is a vector: its y is not residue.
+      expect(formatDisplayMultivector(ownedMultivector([0, 1, 1e-7, 0], VGA_2D_BASIS), 4, vga2Residue))
+        .toBe('e1 + 1.0000E-7e2')
     })
   })
 })

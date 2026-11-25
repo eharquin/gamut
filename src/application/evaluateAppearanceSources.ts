@@ -139,8 +139,8 @@ export function evaluateAppearanceSources(
   document: ExpressionDocument,
   items: readonly EvaluatedDocumentItem[],
   engine: AlgebraEngine,
-  /** The active interpretation, whose residue a hidden-residue display omits from labels. */
-  interpretation: AnyInterpretation | null = null,
+  /** The active interpretation, whose residue a hidden-residue display omits from labels, or `null` for none. */
+  interpretation: AnyInterpretation | null,
 ): ReadonlyMap<string, ItemAppearanceSources> {
   const results = new Map<string, ItemAppearanceSources>()
   if (!document.items.some((item) => hasSource(document.appearance[item.id]))) return results

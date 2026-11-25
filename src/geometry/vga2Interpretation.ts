@@ -12,14 +12,6 @@ import {
 export const STANDARD_VGA2_CLASSIFICATION_POLICY: ClassificationPolicy =
   Object.freeze({ absoluteFloor: 1e-10, relativeTerm: 1e-6 })
 
-/** Which coefficients a VGA(2) classification treats as numerical residue. */
-export function vga2Residue(
-  value: OwnedMultivector,
-  policy: ClassificationPolicy = STANDARD_VGA2_CLASSIFICATION_POLICY,
-): readonly boolean[] {
-  const epsilon = classificationEpsilon(policy, classificationScale(value.coefficients))
-  return value.coefficients.map((v) => v !== 0 && Math.abs(v) <= epsilon)
-}
 
 /** A renderer-independent Euclidean vector in mathematical coordinates. */
 export type Vector2dEntity = Readonly<{
@@ -97,6 +89,26 @@ export function interpretVga2(
   value: OwnedMultivector,
   policy: ClassificationPolicy = STANDARD_VGA2_CLASSIFICATION_POLICY,
 ): StandardVga2Entity {
+  return classifyVga2(value, policy).entity
+}
+
+/**
+ * Which coefficients the VGA(2) classification ignored as residue (#68):
+ * those outside the fields of the kind it chose, nonzero but within the
+ * tolerance. A small coefficient that the kind keeps, such as the `y` of a
+ * vector `(1, 1E-7)`, is not residue.
+ */
+export function vga2Residue(
+  value: OwnedMultivector,
+  policy: ClassificationPolicy = STANDARD_VGA2_CLASSIFICATION_POLICY,
+): readonly boolean[] {
+  return classifyVga2(value, policy).ignored
+}
+
+function classifyVga2(
+  value: OwnedMultivector,
+  policy: ClassificationPolicy,
+): Readonly<{ entity: StandardVga2Entity; ignored: readonly boolean[] }> {
   const [scalar, x, y, bivector] = value.coefficients
   const epsilon = classificationEpsilon(
     policy,
@@ -106,42 +118,47 @@ export function interpretVga2(
   // genuinely nonzero-but-negligible one makes a classification approximate.
   const negligible = (v: number) => v !== 0 && Math.abs(v) <= epsilon
   const zeroLike = (v: number) => v === 0 || negligible(v)
+  /** The kind found, ignoring the negligible coefficients at these indices. */
+  const found = (entity: StandardVga2Entity, outside: readonly number[]) => Object.freeze({
+    entity: Object.freeze(entity),
+    ignored: value.coefficients.map((v, index) => outside.includes(index) && negligible(v)),
+  })
 
   if (zeroLike(x) && zeroLike(y) && zeroLike(bivector)) {
-    return Object.freeze({
+    return found({
       kind: 'scalar' as const,
       value: scalar,
       approximated: negligible(x) || negligible(y) || negligible(bivector),
-    })
+    }, [1, 2, 3])
   }
 
   if (zeroLike(scalar) && zeroLike(bivector)) {
-    return Object.freeze({
+    return found({
       kind: 'vector-2d' as const,
       x,
       y,
       approximated: negligible(scalar) || negligible(bivector),
-    })
+    }, [0, 3])
   }
 
   if (zeroLike(scalar) && zeroLike(x) && zeroLike(y)) {
-    return Object.freeze({
+    return found({
       kind: 'bivector-2d' as const,
       value: bivector,
       approximated: negligible(scalar) || negligible(x) || negligible(y),
-    })
+    }, [0, 1, 2])
   }
 
   if (zeroLike(x) && zeroLike(y)) {
-    return Object.freeze({
+    return found({
       kind: 'rotor-2d' as const,
       scalar,
       bivector,
       approximated: negligible(x) || negligible(y),
-    })
+    }, [1, 2])
   }
 
-  return Object.freeze({ kind: 'mixed-multivector' as const })
+  return found({ kind: 'mixed-multivector' as const }, [])
 }
 
 /**

@@ -137,10 +137,22 @@ describe('PGA(2) classification policy (#68)', () => {
     expect(interpretPga2(meet)).toMatchObject({ kind: 'ideal-point', x: 88, y: -44, approximated: true })
     const quarterTurns = owned([0, 0, 0, 0, -15, -30, 1.7763568394002505e-15, 0])
     expect(interpretPga2(quarterTurns)).toMatchObject({ kind: 'ideal-point', approximated: true })
-    // Lines of weight 1000 leak about 1E-10 into the weight of their meet; it
-    // stays ideal unless the lines are closer than about 1E-4 units.
-    const heavy = owned([0, 0, 0, 0, -1000, -2000, 2e-10, 0])
-    expect(interpretPga2(heavy)).toMatchObject({ kind: 'ideal-point' })
+    // `V = 1000 * line(1, 2, 3)` and its image under the same half turn, as
+    // evaluated: the leak grows as the weight squared, and so does the bulk.
+    const heavy = owned([0, 0, 0, 0, -44000000, -88000000, 4.656612873077393e-10, 0])
+    expect(interpretPga2(heavy)).toMatchObject({ kind: 'ideal-point', approximated: true })
+  })
+
+  it('reads lines closer than about 1E-7 units as meeting far away once the meet is normalized', () => {
+    // `L = line(1, 0, 0)` and its image under a half turn about (d / 2, 0),
+    // the lines d apart: the meet leaks about 1.2E-16 into its weight against
+    // a bulk of d, so normalizing the bulk leaves a weight of 1.2E-16 / d.
+    const apart1E7 = owned([0, 0, 0, 0, -1e-6, 0, -1.2246467991473532e-16, 0])
+    expect(interpretPga2(apart1E7)).toMatchObject({ kind: 'ideal-point' })
+    expect(interpretPga2(owned([0, 0, 0, 0, -1, 0, -1.2246467991473533e-10, 0]))).toMatchObject({ kind: 'ideal-point' })
+    // 1E-8 apart, the normalized meet is a point about 8E+7 units away: the
+    // lines are parallel only within the precision of their construction.
+    expect(interpretPga2(owned([0, 0, 0, 0, -1, 0, -1.2246467991473533e-8, 0]))).toMatchObject({ kind: 'euclidean-point' })
   })
 
   it('keeps complete turns, and turns about a far centre, as before', () => {
@@ -153,6 +165,14 @@ describe('PGA(2) classification policy (#68)', () => {
 
   it('reports as residue exactly the coefficients the classification ignored', () => {
     expect(pga2Residue(owned(point(1e6, 0)))).toEqual([false, false, false, false, false, false, false, false])
+    // A small coefficient the kind keeps is not residue: the y of a far point,
+    // a small x near the origin, the weight of a Euclidean line.
+    expect(pga2Residue(owned(point(1e6, 0.5))).some(Boolean)).toBe(false)
+    expect(pga2Residue(owned(point(1e-7, 0))).some(Boolean)).toBe(false)
+    expect(interpretPga2(owned(line(8e-10, 8e-10, 1)))).toMatchObject({ kind: 'euclidean-line' })
+    expect(pga2Residue(owned(line(8e-10, 8e-10, 1))).some(Boolean)).toBe(false)
+    // Nothing of a mixed multivector is residue.
+    expect(pga2Residue(c({ e: 1, e1: 1, e12: 1e-12 })).some(Boolean)).toBe(false)
     expect(pga2Residue(owned([0, 0, 0, 0, -44, -88, 8.881784197001252e-16, 0])))
       .toEqual([false, false, false, false, false, false, true, false])
     expect(PGA_2D_INTERPRETATION.residue(owned([-1, 0, 0, 0, -1.2246e-16, 1.2246e-16, -1.2246e-16, 0])))

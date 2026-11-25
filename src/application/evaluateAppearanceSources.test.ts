@@ -13,7 +13,7 @@ function sourcesOf(appearance: ExpressionAppearance, extra: readonly string[] = 
     ...extra.map((source, index) => ({ id: `s${index}`, source })),
     { id: 'v', source: 'V = vector(2, 1)' },
   ], { v: appearance })
-  return evaluateAppearanceSources(document, evaluateDocument(document, context), engine).get('v')
+  return evaluateAppearanceSources(document, evaluateDocument(document, context), engine, context.interpretation).get('v')
 }
 
 describe('appearance sources', () => {

@@ -20,7 +20,7 @@ function rendered(items: readonly (readonly [string, string])[], appearance: Rea
   return collectRenderedPrimitives(
     evaluated, document.appearance, PGA_2D_INTERPRETATION,
     (source) => /^\s*([A-Za-z_]\w*)\s*=/.exec(source)?.[1] ?? null,
-    evaluateAppearanceSources(document, evaluated, engine),
+    evaluateAppearanceSources(document, evaluated, engine, PGA_2D_INTERPRETATION),
     labelsVisible,
   )
 }

@@ -72,8 +72,13 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `point(1E+6, 0)` was classified as an ideal point and `line(1, 0, -1E+6)`
   as the line at infinity, because the weight that decides was measured
   against the distance from the origin (#68). The weight now has its own
-  tolerance, and elements are read at infinity only beyond about `1E+9` units;
-  with residue hidden, a far point's `e12` is no longer omitted.
+  tolerance, and elements are read at infinity only beyond about `1E+9` units.
+  The normalized meet of lines closer than about `1E-7` units now reads as a
+  far point rather than an ideal one (PGA conventions).
+- With residue hidden, a value omits only the coefficients its classification
+  ignored (#68): a coefficient the kind keeps stays, however small, such as
+  the `y` of a VGA(2) vector `(1, 1E-7)` or of `point(1E+6, 0.5)`, and a far
+  point's `e12`.
 - A stored graph that GAMUT cannot read, such as one saved by a later
   version, is no longer replaced by the example when the page opens (#275).
   Nothing is saved over it until the graph is edited, it is kept first, and
