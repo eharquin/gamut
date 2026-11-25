@@ -3,6 +3,7 @@ import { useLayoutEffect, useRef, type KeyboardEvent, type PointerEvent as React
 import type { AlgebraEngine } from '../algebra/algebraEngine'
 import type { ItemAppearanceSources } from '../application/evaluateAppearanceSources'
 import type { EvaluatedDocumentItem } from '../application/evaluateDocument'
+import { elementPath } from '../domain/languageValue'
 import { evaluateScalarControl, type ScalarControlEvaluation } from '../application/evaluateScalarControl'
 import { hasIdealNorm, measuredNorm, normalizeItemValue } from '../application/normalization'
 import { DEFAULT_SCALAR_CONTROL, type ScalarPlayback } from '../hooks/useScalarPlayback'
@@ -209,7 +210,9 @@ export function ExpressionRow({
     : ['off', 'natural'] as const)
   const kind = evaluation?.status === 'valid'
     ? evaluation.valueType === 'list'
-      ? `List (${evaluation.value.elements.length})`
+      ? evaluation.value.groups
+        ? `List (${evaluation.value.groups.length} ${evaluation.value.groups.length === 1 ? 'list' : 'lists'}, ${evaluation.value.elements.length} ${evaluation.value.elements.length === 1 ? 'element' : 'elements'})`
+        : `List (${evaluation.value.elements.length})`
       : interpretation.describe(evaluation.entity)
     : 'Object'
   const drawable = evaluation?.status === 'valid' &&
@@ -641,9 +644,9 @@ export function ExpressionRow({
                   <li key={element.id} className="list-inspection-item">
                     <span
                       className="list-element-index"
-                      aria-label={`Element ${elementIndex}`}
+                      aria-label={`Element ${elementPath(evaluation.value, elementIndex).join(', ')}`}
                     >
-                      {elementIndex}
+                      {elementPath(evaluation.value, elementIndex).join(', ')}
                     </span>
                     <span className="list-element-kind">
                       {interpretation.describe(element.entity)}
@@ -820,7 +823,9 @@ export function ExpressionRow({
             pointListVertices(evaluation.elements) !== null}
           pointListFillable={evaluation?.status === 'valid' &&
             evaluation.valueType === 'list' &&
-            (pointListVertices(evaluation.elements)?.length ?? 0) > 2}
+            pointListVertices(evaluation.elements) !== null &&
+            // A list of lists (#360) fills each inner list of three points or more.
+            (evaluation.value.groups ?? [evaluation.elements.length]).some((length) => length > 2)}
           listPrimitives={evaluation?.status === 'valid' && evaluation.valueType === 'list'
             ? listPrimitiveTypes(evaluation.elements)
             : undefined}

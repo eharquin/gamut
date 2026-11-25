@@ -156,6 +156,8 @@ export function functionsSection(examples: Readonly<{ dual: ReferenceExample }>)
       { source: 'sqrt(4)', inspection: '2' }, { source: 'max(1, 2)', inspection: '2' }),
     entry('iterate(f, x0, n)', 'the n + 1 states x0, f(x0), f(f(x0)), … of a declared function',
       'f(x) = x / 2', { source: 'iterate(f, 8, 3)', inspection: '[8, 4, 2, 1]' }),
+    entry('map(f, L1, …, Lk)', 'f(L1[i], …, Lk[i]) for each i, a list of lists if f returns lists',
+      'f(x) = [x, 2 * x]', { source: 'map(f, [1, 3])', inspection: '[[1, 2], [3, 6]]' }),
     entry('if(c, a, b)', 'a when c is not zero, else b, leaving the other branch unevaluated',
       { source: 'if(2 > 1, e1, e2)', inspection: 'e1' }, { source: 'if([1, 0], 3, 4)', inspection: '[3, 4]' }),
     entry('sign(a)', '-1, 0 or 1', { source: 'sign(-3)', inspection: '-1' }),

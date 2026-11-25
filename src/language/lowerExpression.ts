@@ -168,6 +168,16 @@ export function lowerExpression(
           origin: expression.span,
         }
       }
+      if (expression.callee === 'map' && args.length >= 2) {
+        const [reference] = expression.arguments
+        return {
+          kind: 'map',
+          functionName: reference.kind === 'reference' && reference.property === null ? reference.name : null,
+          functionOrigin: reference.span,
+          lists: args.slice(1),
+          origin: expression.span,
+        }
+      }
       if (expression.callee === 'if' && args.length === 3) {
         return { kind: 'conditional', condition: args[0], whenTrue: args[1], whenFalse: args[2], origin: expression.span }
       }

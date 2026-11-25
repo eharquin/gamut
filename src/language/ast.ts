@@ -209,6 +209,17 @@ export type CoreExpressionNode =
       }>)
   | (CoreNodeBase &
       Readonly<{
+        /**
+         * `map(f, L1, …, Lk)` (#360): `f` names a declared function of `k`
+         * parameters, or is null when the first argument is not a name.
+         */
+        kind: 'map'
+        functionName: string | null
+        functionOrigin: SourceSpan
+        lists: readonly CoreExpressionNode[]
+      }>)
+  | (CoreNodeBase &
+      Readonly<{
         /** `if(condition, whenTrue, whenFalse)`: only the selected branch is evaluated. */
         kind: 'conditional'
         condition: CoreExpressionNode

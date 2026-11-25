@@ -14,6 +14,8 @@ export type LanguageFunction = Readonly<{
   name: string
   /** The accepted argument counts, checked when the source is parsed. */
   arities: readonly number[]
+  /** For a function of a variable number of arguments, the least it takes, instead of `arities`. */
+  minArity?: number
   /** Whether the result is a scalar whatever the arguments, for implicit coefficients (section 4). */
   scalarResult: boolean
   /**
@@ -119,6 +121,16 @@ const FUNCTIONS: readonly LanguageFunction[] = [
     // lowered to its own node instead of being applied (#341).
     name: 'iterate',
     arities: [3],
+    scalarResult: false,
+    distribution: 'scalar',
+    available: always,
+  },
+  {
+    // `map(f, L1, …, Lk)` (#360) takes a function name and one list per
+    // parameter of the function, so it is lowered to its own node too.
+    name: 'map',
+    arities: [],
+    minArity: 2,
     scalarResult: false,
     distribution: 'scalar',
     available: always,

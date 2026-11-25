@@ -285,12 +285,27 @@ export function collectRenderedPrimitives(
       // independently; a list holding other entities always draws its points.
       const vertices = pointListVertices(evaluated.evaluation.elements)
       const shownVertices = vertices?.slice(0, elements.length) ?? null
-      const segments = shownVertices ? pointListSegments(shownVertices, pointListDisplay) : []
-      const fill = shownVertices ? pointListFill(shownVertices, pointListFilled) : null
-      if (segments.length > 0 || fill) connections.push({
-        id: evaluated.item.id, color, opacity, segments, fill,
-        fillOpacity: (sources.points.fillOpacity.value ?? DEFAULT_FILL_OPACITY) / 100,
-        strokeStyle: connectionStrokeStyle, strokeWidth: sources.points.strokeWidth.value,
+      // A list of lists (#360) draws each inner list as its own point list:
+      // nothing joins two inner lists, and each has its own border and fill.
+      const listGroups = evaluated.evaluation.value.groups
+      const groups = listGroups ?? [evaluated.evaluation.value.elements.length]
+      let start = 0
+      groups.forEach((length, group) => {
+        // A flat list links its rendered prefix. An inner list cut short by
+        // the rendering limit is not linked: its closing link and fill would
+        // not be those of its shape.
+        const own = shownVertices && (!listGroups || start + length <= shownVertices.length)
+          ? shownVertices.slice(start, start + length)
+          : null
+        start += length
+        const segments = own ? pointListSegments(own, pointListDisplay) : []
+        const fill = own ? pointListFill(own, pointListFilled) : null
+        if (segments.length > 0 || fill) connections.push({
+          id: listGroups ? `${evaluated.item.id}:${group}` : evaluated.item.id,
+          color, opacity, segments, fill,
+          fillOpacity: (sources.points.fillOpacity.value ?? DEFAULT_FILL_OPACITY) / 100,
+          strokeStyle: connectionStrokeStyle, strokeWidth: sources.points.strokeWidth.value,
+        })
       })
       const markerVisible = vertices === null || pointMarkersVisible
       // Hidden lines are skipped in place, so the other elements keep their index.

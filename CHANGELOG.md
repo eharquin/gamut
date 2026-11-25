@@ -26,8 +26,8 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `norm(A + B)`. The shipped examples are written in version 2. A document of
   a later language version is refused.
 - The names `norm`, `normalize`, `inorm`, `inormalize`, `dual`, `inverse`,
-  `reverse`, `involution`, `sum`, `if`, `sign` and `iterate` are reserved in every algebra: an item declared
-  with one of them becomes a diagnostic.
+  `reverse`, `involution`, `sum`, `if`, `sign`, `iterate` and `map` are reserved in every algebra: an item declared
+  with one of them becomes a diagnostic. None of the shipped examples declares one.
 
 ### Added
 
@@ -65,6 +65,15 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `path = iterate(step, O, n)` with a slider on `n`, instead of one row per
   step. The length is checked before the first step, and a failing step
   fails the row with its index.
+- `map(f, L1, …, Lk)` (#360) applies a declared function element by element:
+  `boxes = map(place, Mk)` places one shape per motor in one row, and
+  `balls = map(ball, path, ds)` draws a circle per step of a traced ray with
+  no index arithmetic. When every call returns a list, the result is a list
+  of lists, which only `map` makes: indexing reads it (`L[i]`, `L[i][j]`),
+  the canvas draws each inner list as its own point list, with its own
+  border and fill and nothing joining two of them, and every other
+  operation refuses it (`LANG_NESTED_LIST`). The first-argument diagnostic
+  of `iterate` and `map` is `LANG_FUNCTION_ARGUMENT`.
 
 ### Fixed
 
