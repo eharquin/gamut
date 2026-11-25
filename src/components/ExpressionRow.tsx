@@ -1,3 +1,4 @@
+import { pastedRows, type PastedRows } from '../application/pastedLines'
 import { useLayoutEffect, useRef, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import type { AlgebraEngine } from '../algebra/algebraEngine'
 import type { ItemAppearanceSources } from '../application/evaluateAppearanceSources'
@@ -60,6 +61,8 @@ export type ExpressionRowActions = Readonly<{
   reorderRowWithKeyboard(event: KeyboardEvent<HTMLButtonElement>, itemId: string): void
   /** Makes a folder of the row, named by `name`. */
   convertRowToFolder(itemId: string, name: string): void
+  /** Writes the rows of a pasted block from this row on, in one step (#336). */
+  pasteRows(itemId: string, pasted: PastedRows): void
   /** Focus entering or leaving the row. */
   focusRow(itemId: string): void
   blurRow(itemId: string): void
@@ -150,6 +153,7 @@ export function ExpressionRow({
     beginRowReorder,
     reorderRowWithKeyboard,
     convertRowToFolder,
+    pasteRows,
     focusRow,
     blurRow,
     hoverRow,
@@ -549,7 +553,9 @@ export function ExpressionRow({
                 }
                 // A slash typed or pasted at the start makes a folder of the row,
                 // named by what follows it; no expression starts with a division.
-                if (value.startsWith(FOLDER_TRIGGER)) {
+                // Only a slash typed first: a row that already starts with
+                // one, as a pasted line may, stays an expression when edited.
+                if (value.startsWith(FOLDER_TRIGGER) && !item.source.startsWith(FOLDER_TRIGGER)) {
                   convertRowToFolder(item.id, value.slice(1))
                   return
                 }
@@ -557,6 +563,21 @@ export function ExpressionRow({
                   kind: 'update-source', itemId: item.id,
                   source: value,
                 }, `source:${item.id}`)
+              }}
+              onPaste={(event) => {
+                // A block of several lines makes one row per line, and a paste
+                // never makes a folder (#336).
+                const editor = event.currentTarget
+                const pasted = pastedRows(
+                  item.source,
+                  editor.selectionStart ?? item.source.length,
+                  editor.selectionEnd ?? item.source.length,
+                  event.clipboardData.getData('text/plain'),
+                )
+                if (!pasted) return
+                event.preventDefault()
+                playback.forgetPaused(item.id)
+                pasteRows(item.id, pasted)
               }}
               onBlur={() => dispatchHistory({ type: 'boundary' })}
               onFocus={(event) => rememberEditorFocus(event.currentTarget)}

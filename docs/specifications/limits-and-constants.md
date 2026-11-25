@@ -34,6 +34,9 @@ The encoded fragment limit counts characters after `#`. The decoded limit
 counts UTF-8 bytes before JSON parsing. JSON export remains available when a
 valid document exceeds the sharing limit.
 
+An interactive command that would take a document past its 1,000 items, such
+as pasting a block of lines (#336), is refused without change.
+
 Every item source, position source, control-bound source, and appearance source
 is a separate source property for the source-length limit. The decoded document limit also bounds
 metadata, appearance, parameters, and view state.

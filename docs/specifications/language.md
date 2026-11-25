@@ -120,13 +120,28 @@ The kind of an item is stored and never derived from its source. In the
 interface, a quotation mark `"` typed or pasted as the first character of an
 expression row makes the row an annotation; the quotation mark is a trigger
 and is not stored. `"` has no other meaning in the language. In the same way,
-a slash `/` typed or pasted as the first character of an expression row turns
-the row into a folder (DOC-013), and Backspace at the start of the name of an
+a slash `/` typed as the first character of an expression row that does not
+already start with one turns the row into a folder (DOC-013); a paste never
+does, see below. Backspace at the start of the name of an
 empty folder turns it back into a row; no expression starts with a division. Backspace before
 the first character of an annotation makes it an expression again, with its
 source unchanged. Each conversion is one undoable step. Editing the source of
 an item never changes its kind: an annotation may start with `#`, and an
 expression that starts with `#` is an expression with a syntax diagnostic.
+
+A block of several lines pasted into an expression row makes one row per
+line (#336). `\n`, `\r\n` and `\r` break lines, and blank lines are
+skipped. The text before the selection stays before the first line, which
+replaces the source of the row pasted into, and the text after the selection
+follows the last line; the other lines become new rows right after it, in
+its folder. A line that starts with `"` becomes a note, as when it is typed;
+any other line is an expression, so a line that starts with `/` stays an
+expression with its diagnostic, even when it is edited later, and a paste
+never makes a folder, even of a single line. The paste
+is one undoable step, the caret ends after the last line, and a paste that
+would exceed the 1,000 items of a document is refused without change. A
+single line that does not start the row with `/`, and any paste into a note,
+paste as usual.
 
 #### Annotation text
 

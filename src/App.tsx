@@ -1,3 +1,4 @@
+import type { PastedRows } from './application/pastedLines'
 import {
   useCallback,
   useEffect,
@@ -1910,6 +1911,52 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
   }
 
   /**
+   * Writes the rows of a pasted block (#336): the first replaces the source of
+   * the row pasted into, the others are new rows after it, in its folder. The
+   * whole paste is one step, refused with a message when it would exceed the
+   * item limit; the caret ends after the last line.
+   */
+  const pasteRows = (itemId: string, { rows, caret }: PastedRows) => {
+    const added = rows.length - 1
+    if (expressionDoc.items.length + added > MAX_EXPRESSION_ITEMS) {
+      setCopyNotice({ message: `The paste would make more than ${MAX_EXPRESSION_ITEMS} rows; nothing was changed.`, durationMs: 6000 })
+      return
+    }
+    // A playing slider keeps a transaction open: the paste is its own step.
+    if (playback.anyPlaying) playback.stopAll()
+    const taken = new Set(expressionDoc.items.map((item) => item.id))
+    const ids = rows.slice(1).map(() => {
+      let id = `item-${nextId.current++}`
+      while (taken.has(id)) id = `item-${nextId.current++}`
+      taken.add(id)
+      return id
+    })
+    // Undoing the paste returns to the editor it was made in.
+    const originatingEditor = lastEditorFocus.current ??
+      { id: `expression-source-${itemId}`, start: 0, end: 0, direction: 'none' as const }
+    ids.forEach((id) => removedEditorFallbacks.current.set(`expression-source-${id}`, originatingEditor))
+    const [first, ...rest] = rows
+    dispatchHistory({ type: 'begin-transaction' })
+    executeCommand(first.kind === 'annotation'
+      ? { kind: 'set-item-kind', itemId, itemKind: 'annotation', source: first.source }
+      : { kind: 'update-source', itemId, source: first.source })
+    rest.forEach((row, index) => executeCommand({
+      kind: 'insert-item',
+      item: { id: ids[index], source: row.source, ...(row.kind === 'annotation' ? { kind: 'annotation' as const } : {}) },
+      anchorId: index === 0 ? itemId : ids[index - 1],
+      placement: 'after',
+    }))
+    dispatchHistory({ type: 'commit-transaction' })
+    if (added > 0) setReorderAnnouncement(`Pasted ${rows.length} rows.`)
+    const lastId = ids.at(-1) ?? itemId
+    requestAnimationFrame(() => {
+      const editor = inputRefs.current.get(lastId)
+      editor?.focus()
+      editor?.setSelectionRange(caret, caret)
+    })
+  }
+
+  /**
    * Turns an empty folder back into a row, where the folder shows, written
    * `source`, as Backspace turns a note back into an expression: one step.
    */
@@ -1919,6 +1966,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
     const anchor = before !== undefined && expressionDoc.items.some((item) => item.id === before) ? before : undefined
     let id = `item-${nextId.current++}`
     while (expressionDoc.items.some((item) => item.id === id)) id = `item-${nextId.current++}`
+    // A playing slider keeps a transaction open: this change is its own step.
+    if (playback.anyPlaying) playback.stopAll()
     dispatchHistory({ type: 'begin-transaction' })
     executeCommand({ kind: 'insert-item', item: { id, source }, anchorId: anchor, placement: anchor === undefined ? 'after' : 'before' })
     executeCommand({ kind: 'delete-folder', path })
@@ -2798,6 +2847,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedSession = false, embed 
     beginRowReorder: folders.beginRowReorder,
     reorderRowWithKeyboard: folders.reorderRowWithKeyboard,
     convertRowToFolder: folders.convertRowToFolder,
+    pasteRows,
     focusRow: (itemId) => setRowFocusId(itemId),
     blurRow: (itemId) => setRowFocusId((current) => current === itemId ? null : current),
     hoverRow: (itemId) => setRowHoverId(itemId),
