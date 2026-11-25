@@ -1,10 +1,11 @@
 import type { LanguageValue } from '../domain/languageValue'
 import { type OwnedMultivector } from '../domain/multivector'
-import {
-  classificationEpsilon,
-  classificationScale,
-  STANDARD_VGA2_CLASSIFICATION_POLICY,
-} from '../geometry/vga2ClassificationPolicy'
+
+/**
+ * Which coefficients of a value are numerical residue, as the active
+ * interpretation classifies it (#68), or `null` to show every coefficient.
+ */
+export type ResidueTest = ((value: OwnedMultivector) => readonly boolean[]) | null
 
 export const MIN_DECIMAL_PLACES = 0
 export const MAX_DECIMAL_PLACES = 15
@@ -31,28 +32,23 @@ export function formatDisplayNumber(value: number, decimalPlaces: number): strin
 }
 
 /**
- * Formats a VGA(2) value without changing its coefficients or semantic kind.
+ * Formats a multivector without changing its coefficients or semantic kind.
  *
- * When `showApproximatedResidue` is false, a coefficient within the same
- * classification tolerance used by `interpretVga2` (VGA-INT-005) is omitted
- * from the printed terms, exactly mirroring which coefficients made that
- * value's classification `approximated`. This only changes which terms are
- * printed — the returned string is never used as a computational value.
+ * With a `residue` test, a coefficient the active interpretation treats as
+ * numerical residue is omitted from the printed terms, exactly mirroring
+ * which coefficients made that value's classification `approximated`. This
+ * only changes which terms are printed: the returned string is never used as
+ * a computational value.
  */
 export function formatDisplayMultivector(
   value: OwnedMultivector,
   decimalPlaces: number,
-  showApproximatedResidue = true,
+  residue: ResidueTest = null,
 ): string {
-  const epsilon = showApproximatedResidue
-    ? 0
-    : classificationEpsilon(
-        STANDARD_VGA2_CLASSIFICATION_POLICY,
-        classificationScale(value.coefficients),
-      )
+  const omitted = residue ? residue(value) : null
   const terms: string[] = []
   value.coefficients.forEach((coefficient, index) => {
-    if (coefficient === 0 || Math.abs(coefficient) <= epsilon) return
+    if (coefficient === 0 || omitted?.[index]) return
     const magnitude = Math.abs(coefficient)
     const formatted = formatDisplayNumber(magnitude, decimalPlaces)
     const blade = value.basis.blades[index].name
@@ -70,11 +66,11 @@ export function formatDisplayMultivector(
 export function formatDisplayValue(
   value: LanguageValue,
   decimalPlaces: number,
-  showApproximatedResidue = true,
+  residue: ResidueTest = null,
 ): string {
   if (value.kind === 'multivector') {
-    return formatDisplayMultivector(value, decimalPlaces, showApproximatedResidue)
+    return formatDisplayMultivector(value, decimalPlaces, residue)
   }
   return `[${value.elements.map(({ value: element }) =>
-    formatDisplayMultivector(element, decimalPlaces, showApproximatedResidue)).join(', ')}]`
+    formatDisplayMultivector(element, decimalPlaces, residue)).join(', ')}]`
 }

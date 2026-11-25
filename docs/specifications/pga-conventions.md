@@ -304,15 +304,47 @@ P1 & P2 = the line through P1 and P2, oriented from P1 to P2
 ```
 
 Classification uses the tolerance policy of PGA-INT-005 with the Euclidean and
-ideal norms of section 7:
+ideal norms of section 7. A coefficient is within the tolerance of zero when its
+magnitude is at most
+
+```text
+epsilon_bulk   = 1E-10 + 1E-6 * scale    for the blades with e0: e0, e01, e02, e012
+epsilon_weight = 1E-10 + 1E-9 * scale    for the others: 1, e1, e2, e12
+```
+
+where `scale` is the largest magnitude among the value's coefficients. The
+bulk terms are those of VGA-INT-005. The weight, which decides between a
+Euclidean and an ideal element, has its own relative term (#68): the bulk of a
+point or a line grows with its distance from the origin, and measured against
+`1E-6` of it, `point(1E+6, 0)` was read as an ideal point and
+`line(1, 0, -1E+6)` as the line at infinity. With `1E-9`, an element is read at
+infinity only beyond about `1E+9` units from the origin (relative to its
+weight), far past the viewport's reach, while the weight leaked into a computed
+ideal point, about `1E-15` for the meet of unit lines made parallel by a motor,
+stays below the absolute floor. The meet of two lines of weight `w` that are
+`d` apart has a bulk of about `w^2 * d` and leaks about `1.2E-16 * w^2` into its
+weight: unnormalized, it reads as ideal whenever `w` is below about 700, the
+leak then being under the floor, and otherwise while `d` exceeds about `1E-7`
+units. Normalized by `inormalize`, its weight is about `1.2E-16 / d`, so lines
+closer than about `1E-7` units meet at a Euclidean point about `1E+8` units
+away: they are parallel only within the precision of their construction, and
+under the VGA(2) terms, before #68, they read as parallel down to about
+`1E-10` units.
+
+A coefficient that the chosen kind keeps is never residue, however small: the
+`y` of `point(1E+6, 0.5)`, or the `x` of `point(1E-7, 0)`. The residue of a
+value, which the display omits when residue is hidden, is the coefficients
+outside the kind's grades within their tolerance, and the part that decided
+the kind: the weight of an ideal point or of the line at infinity, the `e01`
+and `e02` of a rotor, the `e12` of a translator. A multivector has none.
 
 - the all-zero value is *scalar zero*, as in VGA;
-- a grade-2 value is a *Euclidean point* when `norm > epsilon`, otherwise an
-  *ideal point* when `inorm > epsilon`;
-- a grade-1 value is a *Euclidean line* when `norm > epsilon`, otherwise the
-  *line at infinity* when `inorm > epsilon`;
-- an even value `V` with `V * ~V` equal to `1` or `-1` under the tolerance is
-  a *motor* (a *rotor* when its `e01` and `e02` coefficients are within the
+- a grade-2 value is a *Euclidean point* when `norm > epsilon_weight`,
+  otherwise an *ideal point* when `inorm > epsilon_bulk`;
+- a grade-1 value is a *Euclidean line* when `norm > epsilon_weight`,
+  otherwise the *line at infinity* when `inorm > epsilon_bulk`;
+- an even value `V` with `V * ~V` equal to `1` or `-1`, within
+  `1E-10 + 1E-6`, is a *motor* (a *rotor* when its `e01` and `e02` coefficients are within the
   tolerance of zero, a *translator* when its `e12` coefficient is); an odd
   value with the same property is a *reflection*; any other value is a
   *multivector*.

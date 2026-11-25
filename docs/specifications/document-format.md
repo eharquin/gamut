@@ -458,7 +458,8 @@ shown in scientific notation. `objectScale` is finite and positive, the
 visibility fields are booleans, and `theme` is `light`, `dark`, or `system`.
 `showApproximatedResidue` is a boolean, `false` for new documents: when it is
 `false`, a printed value omits the coefficients that the classification
-tolerance treats as residue; it never changes a computed value.
+tolerance of the document's interpretation treats as residue (VGA-INT-005,
+PGA-INT-005); it never changes a computed value.
 `valuesVisible` is a boolean, `true` for new documents: when it is `false`,
 the multivector value under each expression, and under each element of an
 expanded list, is hidden as specified by DOC-014

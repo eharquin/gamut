@@ -58,6 +58,12 @@ export type Interpretation<E extends InterpretedEntity = InterpretedEntity> = Re
   /** Geometric model, when the algebra admits several readings (for example plane-based PGA). */
   model?: string
   interpret(value: OwnedMultivector): E
+  /**
+   * Which coefficients the classification treats as numerical residue:
+   * nonzero, but within the interpretation's tolerance (#68). The display
+   * omits them when asked to, so it shows what the kind was read from.
+   */
+  residue(value: OwnedMultivector): readonly boolean[]
   describe(entity: E): string
   /** A short projective or numeric reading shown next to the kind, or `null`. */
   detail(entity: E): string | null
@@ -97,6 +103,7 @@ export const OPAQUE_INTERPRETATION: AnyInterpretation = Object.freeze<AnyInterpr
   interpretationId: 'org.multivector.opaque',
   interpretationVersion: 1,
   interpret: () => Object.freeze({ kind: 'uninterpreted' }),
+  residue: (value) => value.coefficients.map(() => false),
   describe: () => 'Uninterpreted value',
   detail: () => null,
   supportsPosition: () => false,

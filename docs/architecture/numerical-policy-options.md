@@ -1,6 +1,6 @@
 # Numerical Policy Options
 
-**Status:** Stage 1 accepted and implemented; Stage 2 still proposed for review  
+**Status:** Stage 1 accepted and implemented for VGA(2) and PGA(2); Stage 2 still proposed for review ([#361](https://github.com/eharquin/gamut/issues/361))  
 **Issue:** #68  
 **Date:** 2026-08-04  
 **Decision owner:** Algebra-definition and interpretation architecture
@@ -187,10 +187,26 @@ computational baseline.
 Stage 1 can improve classification, but it must not claim that a displayed zero
 is an exact algebraic zero.
 
-Implemented in `src/geometry/vga2ClassificationPolicy.ts` and
+Implemented in `src/geometry/classificationPolicy.ts` and
 `src/geometry/vga2Interpretation.ts` as VGA-INT-005, with `absoluteFloor =
 1E-10` and `relativeTerm = 1E-6` as the standard VGA(2) policy constants,
 confirmed by the fixtures in `src/geometry/vga2Interpretation.test.ts`.
+
+Each interpretation owns its policy and reports which coefficients its
+classification treats as residue (`Interpretation.residue`), which the value
+display omits when residue is hidden; `src/presentation` imports no algebra's
+policy (#68).
+
+Experiment 7 (PGA(2) null entities and motors) was run for #68. The VGA(2)
+policy, measuring the weight of a point or a line against its bulk, read
+exactly written far elements as ideal: `point(1E+6, 0)` as an ideal point,
+`line(1, 0, -1E+6)` and the join of two points at `x = 1E+6` as the line at
+infinity. Complete turns, turns about a far centre, and the meet of parallel
+lines computed by motors classified as intended. PGA-INT-005 therefore gives
+the weight coefficients their own relative term, `1E-9`, keeping the VGA(2)
+terms for the bulk; the fixtures are in
+`src/geometry/pga2Interpretation.test.ts` and the formula in the
+[PGA conventions](../specifications/pga-conventions.md).
 
 ### Stage 2 — Evaluated uncertainty
 

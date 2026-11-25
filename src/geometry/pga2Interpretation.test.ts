@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { createPga2Engine, PGA_2D_BASIS } from '../algebra/pgaEngine'
 import { line, point, scale, type Pga2Coefficients } from '../algebra/pga2ReferenceFixtures'
 import { ownedMultivector } from '../domain/multivector'
-import { detailPga2Entity, interpretPga2, PGA_2D_INTERPRETATION } from './pga2Interpretation'
+import {
+  detailPga2Entity,
+  interpretPga2,
+  pga2Residue,
+  PGA_2D_INTERPRETATION,
+  STANDARD_PGA2_CLASSIFICATION_POLICY,
+} from './pga2Interpretation'
 
 const owned = (coefficients: Pga2Coefficients) => ownedMultivector(coefficients, PGA_2D_BASIS)
 const engine = createPga2Engine()
@@ -97,5 +103,79 @@ describe('standard PGA(2) interpretation', () => {
     expect(interpretation.defaultName(d, 1)).toBe('Direction 2')
     expect(interpretation.creation).toEqual({ constructor: 'point', objectName: 'Point' })
     expect(interpretation.model).toBe('plane-based')
+  })
+})
+
+/*
+ * The audit of #68: the VGA(2) tolerance measured the weight, which decides
+ * Euclidean or ideal, against the bulk, which grows with the distance from
+ * the origin. Each fixture records the classification of a value written or
+ * computed in a real document.
+ */
+describe('PGA(2) classification policy (#68)', () => {
+  it('has its own constants: the VGA ones for the bulk, a finer relative term for the weight', () => {
+    expect(STANDARD_PGA2_CLASSIFICATION_POLICY).toEqual({ absoluteFloor: 1e-10, relativeTerm: 1e-6, weightRelativeTerm: 1e-9 })
+  })
+
+  it('keeps far Euclidean points and lines Euclidean, up to the horizon of about 1E+9 units', () => {
+    expect(interpretPga2(owned(point(1e6, 0)))).toMatchObject({ kind: 'euclidean-point', approximated: false })
+    expect(interpretPga2(owned(point(1e8, -3e8)))).toMatchObject({ kind: 'euclidean-point', approximated: false })
+    expect(interpretPga2(owned(line(1, 0, -1e6)))).toMatchObject({ kind: 'euclidean-line', approximated: false })
+    // The join of two far points is a far line, not the line at infinity.
+    expect(interpretPga2(engine.regressive(owned(point(1e6, 0)), owned(point(1e6, 1)))))
+      .toMatchObject({ kind: 'euclidean-line' })
+    // A point with an authored small weight is a far point.
+    expect(interpretPga2(owned(point(1, 1, 1e-7)))).toMatchObject({ kind: 'euclidean-point', weight: 1e-7 })
+    // Beyond the horizon, the weight is residue: the point reads as ideal, approximated.
+    expect(interpretPga2(owned(point(1e10, 0)))).toMatchObject({ kind: 'ideal-point', approximated: true })
+    expect(interpretPga2(owned(line(1, 0, -1e10)))).toMatchObject({ kind: 'line-at-infinity', approximated: true })
+  })
+
+  it('still reads the meet of parallel lines computed by a motor as an ideal point', () => {
+    // line(1, 2, 3) and its image under a half turn about (5, 7), as evaluated.
+    const meet = owned([0, 0, 0, 0, -44, -88, 8.881784197001252e-16, 0])
+    expect(interpretPga2(meet)).toMatchObject({ kind: 'ideal-point', x: 88, y: -44, approximated: true })
+    const quarterTurns = owned([0, 0, 0, 0, -15, -30, 1.7763568394002505e-15, 0])
+    expect(interpretPga2(quarterTurns)).toMatchObject({ kind: 'ideal-point', approximated: true })
+    // `V = 1000 * line(1, 2, 3)` and its image under the same half turn, as
+    // evaluated: the leak grows as the weight squared, and so does the bulk.
+    const heavy = owned([0, 0, 0, 0, -44000000, -88000000, 4.656612873077393e-10, 0])
+    expect(interpretPga2(heavy)).toMatchObject({ kind: 'ideal-point', approximated: true })
+  })
+
+  it('reads lines closer than about 1E-7 units as meeting far away once the meet is normalized', () => {
+    // `L = line(1, 0, 0)` and its image under a half turn about (d / 2, 0),
+    // the lines d apart: the meet leaks about 1.2E-16 into its weight against
+    // a bulk of d, so normalizing the bulk leaves a weight of 1.2E-16 / d.
+    const apart1E7 = owned([0, 0, 0, 0, -1e-6, 0, -1.2246467991473532e-16, 0])
+    expect(interpretPga2(apart1E7)).toMatchObject({ kind: 'ideal-point' })
+    expect(interpretPga2(owned([0, 0, 0, 0, -1, 0, -1.2246467991473533e-10, 0]))).toMatchObject({ kind: 'ideal-point' })
+    // 1E-8 apart, the normalized meet is a point about 8E+7 units away: the
+    // lines are parallel only within the precision of their construction.
+    expect(interpretPga2(owned([0, 0, 0, 0, -1, 0, -1.2246467991473533e-8, 0]))).toMatchObject({ kind: 'euclidean-point' })
+  })
+
+  it('keeps complete turns, and turns about a far centre, as before', () => {
+    const turn = owned([-1, 0, 0, 0, -1.2246e-16, 1.2246e-16, -1.2246e-16, 0])
+    expect(interpretPga2(turn)).toMatchObject({ kind: 'scalar', value: -1, approximated: true })
+    const farTurn = owned([-1, 0, 0, 0, -1.2246e-12, 1.2246e-12, -1.2246e-16, 0])
+    expect(interpretPga2(farTurn)).toMatchObject({ kind: 'scalar', value: -1, approximated: true })
+    expect(interpretPga2(owned([0, 0, 0, 0, 2, -1, 1, 0]))).toMatchObject({ kind: 'euclidean-point', approximated: false })
+  })
+
+  it('reports as residue exactly the coefficients the classification ignored', () => {
+    expect(pga2Residue(owned(point(1e6, 0)))).toEqual([false, false, false, false, false, false, false, false])
+    // A small coefficient the kind keeps is not residue: the y of a far point,
+    // a small x near the origin, the weight of a Euclidean line.
+    expect(pga2Residue(owned(point(1e6, 0.5))).some(Boolean)).toBe(false)
+    expect(pga2Residue(owned(point(1e-7, 0))).some(Boolean)).toBe(false)
+    expect(interpretPga2(owned(line(8e-10, 8e-10, 1)))).toMatchObject({ kind: 'euclidean-line' })
+    expect(pga2Residue(owned(line(8e-10, 8e-10, 1))).some(Boolean)).toBe(false)
+    // Nothing of a mixed multivector is residue.
+    expect(pga2Residue(c({ e: 1, e1: 1, e12: 1e-12 })).some(Boolean)).toBe(false)
+    expect(pga2Residue(owned([0, 0, 0, 0, -44, -88, 8.881784197001252e-16, 0])))
+      .toEqual([false, false, false, false, false, false, true, false])
+    expect(PGA_2D_INTERPRETATION.residue(owned([-1, 0, 0, 0, -1.2246e-16, 1.2246e-16, -1.2246e-16, 0])))
+      .toEqual([false, false, false, false, true, true, true, false])
   })
 })

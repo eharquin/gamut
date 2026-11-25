@@ -5,9 +5,13 @@ import { type Interpretation } from './interpretation'
 import {
   classificationEpsilon,
   classificationScale,
-  STANDARD_VGA2_CLASSIFICATION_POLICY,
-  type Vga2ClassificationPolicy,
-} from './vga2ClassificationPolicy'
+  type ClassificationPolicy,
+} from './classificationPolicy'
+
+/** The standard VGA(2) tolerance (VGA-INT-005), the constants of MultiVector Studio. */
+export const STANDARD_VGA2_CLASSIFICATION_POLICY: ClassificationPolicy =
+  Object.freeze({ absoluteFloor: 1e-10, relativeTerm: 1e-6 })
+
 
 /** A renderer-independent Euclidean vector in mathematical coordinates. */
 export type Vector2dEntity = Readonly<{
@@ -83,8 +87,28 @@ export function supportsVga2Position(entity: StandardVga2Entity): boolean {
  */
 export function interpretVga2(
   value: OwnedMultivector,
-  policy: Vga2ClassificationPolicy = STANDARD_VGA2_CLASSIFICATION_POLICY,
+  policy: ClassificationPolicy = STANDARD_VGA2_CLASSIFICATION_POLICY,
 ): StandardVga2Entity {
+  return classifyVga2(value, policy).entity
+}
+
+/**
+ * Which coefficients the VGA(2) classification ignored as residue (#68):
+ * those outside the fields of the kind it chose, nonzero but within the
+ * tolerance. A small coefficient that the kind keeps, such as the `y` of a
+ * vector `(1, 1E-7)`, is not residue.
+ */
+export function vga2Residue(
+  value: OwnedMultivector,
+  policy: ClassificationPolicy = STANDARD_VGA2_CLASSIFICATION_POLICY,
+): readonly boolean[] {
+  return classifyVga2(value, policy).ignored
+}
+
+function classifyVga2(
+  value: OwnedMultivector,
+  policy: ClassificationPolicy,
+): Readonly<{ entity: StandardVga2Entity; ignored: readonly boolean[] }> {
   const [scalar, x, y, bivector] = value.coefficients
   const epsilon = classificationEpsilon(
     policy,
@@ -94,42 +118,47 @@ export function interpretVga2(
   // genuinely nonzero-but-negligible one makes a classification approximate.
   const negligible = (v: number) => v !== 0 && Math.abs(v) <= epsilon
   const zeroLike = (v: number) => v === 0 || negligible(v)
+  /** The kind found, ignoring the negligible coefficients at these indices. */
+  const found = (entity: StandardVga2Entity, outside: readonly number[]) => Object.freeze({
+    entity: Object.freeze(entity),
+    ignored: value.coefficients.map((v, index) => outside.includes(index) && negligible(v)),
+  })
 
   if (zeroLike(x) && zeroLike(y) && zeroLike(bivector)) {
-    return Object.freeze({
+    return found({
       kind: 'scalar' as const,
       value: scalar,
       approximated: negligible(x) || negligible(y) || negligible(bivector),
-    })
+    }, [1, 2, 3])
   }
 
   if (zeroLike(scalar) && zeroLike(bivector)) {
-    return Object.freeze({
+    return found({
       kind: 'vector-2d' as const,
       x,
       y,
       approximated: negligible(scalar) || negligible(bivector),
-    })
+    }, [0, 3])
   }
 
   if (zeroLike(scalar) && zeroLike(x) && zeroLike(y)) {
-    return Object.freeze({
+    return found({
       kind: 'bivector-2d' as const,
       value: bivector,
       approximated: negligible(scalar) || negligible(x) || negligible(y),
-    })
+    }, [0, 1, 2])
   }
 
   if (zeroLike(x) && zeroLike(y)) {
-    return Object.freeze({
+    return found({
       kind: 'rotor-2d' as const,
       scalar,
       bivector,
       approximated: negligible(x) || negligible(y),
-    })
+    }, [1, 2])
   }
 
-  return Object.freeze({ kind: 'mixed-multivector' as const })
+  return found({ kind: 'mixed-multivector' as const }, [])
 }
 
 /**
@@ -140,6 +169,7 @@ export const VGA_2D_INTERPRETATION: Interpretation<StandardVga2Entity> = Object.
   interpretationId: 'org.multivector.vga-2d',
   interpretationVersion: 1,
   interpret: (value) => interpretVga2(value),
+  residue: (value) => vga2Residue(value),
   describe: describeVga2Entity,
   detail: () => null,
   supportsPosition: supportsVga2Position,

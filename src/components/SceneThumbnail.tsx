@@ -43,7 +43,7 @@ function draw(document: CanonicalDocument, registry: AlgebraRegistry): Drawing {
   if (resolution.status !== 'resolved' || interpretation.status !== 'resolved') return null
   const evaluated = evaluateDocument(restored, { engine: resolution.engine, interpretation: interpretation.interpretation })
   const drawn = { ...restored, appearance: drawnAppearances(restored) }
-  const sources = evaluateAppearanceSources(drawn, evaluated, resolution.engine)
+  const sources = evaluateAppearanceSources(drawn, evaluated, resolution.engine, interpretation.interpretation)
   const rendered = collectRenderedPrimitives(evaluated, drawn.appearance, interpretation.interpretation, declaredName, sources, restored.view.display.labelsVisible)
   const { centerX, centerY, zoom } = document.view.viewport
   const stored: Viewport2d = {
