@@ -73,4 +73,18 @@ describe('scene layout (#173)', () => {
     expect(order(markup(null))[0]).toBe('a')
     expect(order(markup('a')).at(-1)).toBe('a')
   })
+
+  it('offers no handle to a list element, which is no item', () => {
+    const { rendered, connections } = primitives([['a', 'A = point(0, 0)'], ['s', 'S = [point(1, 0), point(2, 0)]']])
+    const layout = layoutScene(rendered, connections, viewport, 1.5)
+    const movability: GlyphMovability = {
+      present: (id) => id === ownerOf(id), head: () => true, base: () => true, line: () => true,
+    }
+    const html = renderToStaticMarkup(<svg><SceneGlyphs
+      scene={layout} viewport={viewport} scale={1.5} placedLabel={() => null} movability={movability}
+      controller={{ hoveredKey: null, focusRingKey: null } as unknown as HandleController}
+      selectedObjectId={null} selectedLine={null}
+    /></svg>)
+    expect([...html.matchAll(/data-handle-key="([^":]+):/g)].map((match) => match[1])).toEqual(['a'])
+  })
 })

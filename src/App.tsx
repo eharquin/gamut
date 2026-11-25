@@ -1136,12 +1136,12 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
   const objectBaseMovable = (item: ExpressionItem, entity: InterpretedEntity) =>
     !heldInPlace(item) && objectBaseMovableByConstruction(item, entity)
   const itemOf = (id: string) => expressionDoc.items.find((candidate) => candidate.id === id)
-  /** What the glyph of a rendered element offers; asked only of a present item. */
+  /** What the glyph of a rendered element offers: nothing to an element that is no item, such as a list element. */
   const glyphMovability: GlyphMovability = {
     present: (id) => !!itemOf(id),
-    head: (id, entity) => headMovable(itemOf(id)!, entity),
-    base: (id, entity) => objectBaseMovable(itemOf(id)!, entity),
-    line: (id, entity) => lineMovable(itemOf(id)!, entity),
+    head: (id, entity) => { const item = itemOf(id); return !!item && headMovable(item, entity) },
+    base: (id, entity) => { const item = itemOf(id); return !!item && objectBaseMovable(item, entity) },
+    line: (id, entity) => { const item = itemOf(id); return !!item && lineMovable(item, entity) },
   }
   /** Whether a drag could move the object at all, held in place or not. */
   const draggableByConstruction = (item: ExpressionItem, entity: InterpretedEntity) =>

@@ -243,12 +243,12 @@ enter interpretation or rendering state.
 | `src/App.tsx`, `src/components`, and styles | User input, accessible presentation, reference dialogs, and SVG composition from application state | Language rules, algebra semantics, or backend value inspection |
 | `src/types` | Narrow declarations for untyped external packages | Domain models or feature behavior |
 
-`App.tsx` is a composition shell
-([#173](https://github.com/eharquin/gamut/issues/173)): it wires state, hooks
-and components together and holds no logic of its own. A new feature lands in
-the layer that owns it, in a component or a hook, never in `App.tsx`; in
-particular `App.tsx` names no primitive kind, which the visualization layer
-lays out and draws.
+`App.tsx` is being reduced to a composition shell that wires state, hooks and
+components together ([#173](https://github.com/eharquin/gamut/issues/173)). A
+new feature lands in the layer that owns it, in a component or a hook, and
+adds no logic to `App.tsx`. Its rendering already names no primitive kind:
+the visualization layer lays the scene out and draws it; the gesture code
+still does, until it moves to hooks.
 
 Tests are colocated with the layer whose behavior they establish. Integration
 tests at the UI boundary verify that the composed workflow exposes values,

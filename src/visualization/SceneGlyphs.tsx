@@ -16,8 +16,9 @@ import { ownerOf, type SceneLayout } from './sceneLayout'
 import type { Viewport2d } from './viewport'
 
 /**
- * What the reader may do with the object a rendered element draws, asked
- * only of an element that still belongs to an item of the document.
+ * What the reader may do with the object a rendered element draws. Each
+ * answer is false for an element that is no item of the document; the glyphs
+ * ask `present` first, so the others run only when they did before.
  */
 export type GlyphMovability = Readonly<{
   present(id: string): boolean
