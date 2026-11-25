@@ -32,7 +32,7 @@ import { PerformanceMonitor } from './components/PerformanceMonitor'
 import { createPerformanceProbe } from './presentation/performanceProbe'
 import { ClearExpressionsButton } from './components/ClearExpressionsButton'
 import { ExpressionRow, type ExpressionRowActions, type ExpressionRowRefs } from './components/ExpressionRow'
-import { isSourceEditor, type SourceEditor } from './components/sourceEditor'
+import type { SourceEditor } from './components/sourceEditor'
 import { ExpressionTree } from './components/ExpressionTree'
 import { useExpressionFolders } from './hooks/useExpressionFolders'
 import { documentFolders, drawnAppearances, expressionRows, isFolderCollapsed, itemFolder, overwritingFolder, rowAppearance } from './document/expressionFolders'
@@ -77,11 +77,10 @@ import {
   resolveCanonicalImport,
   type DocumentMigration,
   toCanonicalDocument,
-  type CanonicalDocument,
   type ThemeMode,
 } from './document/canonicalDocument'
 import { documentFileDiagnostic, downloadDocumentFile, readDocumentFile } from './document/documentFile'
-import { browserDocumentStorage, keepUnreadableDocument } from './document/documentStorage'
+import { browserDocumentStorage } from './document/documentStorage'
 import { LibraryPanel } from './components/LibraryPanel'
 import { SceneThumbnail } from './components/SceneThumbnail'
 import { showcaseExample } from './examples'
@@ -102,6 +101,9 @@ import { useViewportNavigation } from './hooks/useViewportNavigation'
 import { useObjectSelection } from './hooks/useObjectSelection'
 import { useManipulation } from './hooks/useManipulation'
 import { useLibrarySession } from './hooks/useLibrarySession'
+import { useHistoryFocus } from './hooks/useHistoryFocus'
+import { useAutosave } from './hooks/useAutosave'
+import { restoreActiveDocument } from './application/restoreActiveDocument'
 import { declaredName } from './language/declaredName'
 import { dragTargets, type ManipulationContext } from './application/viewportManipulation'
 import './App.css'
@@ -144,12 +146,6 @@ const MIN_PANEL_WIDTH = 240
 const PANEL_RESIZE_WIDTH = 6
 
 
-type EditorFocus = Readonly<{
-  id: string
-  start: number
-  end: number
-  direction: 'forward' | 'backward' | 'none'
-}>
 
 
 const defaultViewport: Viewport2d = {
@@ -271,8 +267,6 @@ function persistReferenceHeight(height: number): void {
 
 /** How long the notice of a migrated graph stays (#343). */
 /** The status after a failed restore (#275). */
-const HELD_STORED_DOCUMENT = 'Nothing is saved over it until you edit this graph, and it is then kept for a version of GAMUT that can read it.'
-const UNKEPT_STORED_DOCUMENT = 'STORE_NOT_KEPT: The stored graph that could not be restored cannot be kept, so this graph is not saved automatically; save it in My library.'
 
 type SharedDocument = ReturnType<typeof fromCanonicalDocument>
 
@@ -350,13 +344,6 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
    */
   const temporary = sharedSession || embed !== null
   const [ephemeral, setEphemeral] = useState(temporary)
-  const persistence = useMemo(
-    () => ({
-      load: () => browserDocumentStorage(window.localStorage).load(),
-      save: (document: CanonicalDocument) => browserDocumentStorage(window.localStorage).save(document),
-    }),
-    [],
-  )
   const [initial] = useState(() => {
     if (sharedDocument) return { ...sharedDocument, diagnostic: sharedDocument.recoveryDiagnostic }
     const fallback = {
@@ -367,28 +354,19 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
       diagnostic: (sceneDiagnostic ?? null) as string | null,
     }
     if (import.meta.env.MODE === 'test' || embed !== null) return fallback
-    try {
-      const stored = persistence.load()
-      if (stored === null) return fallback
-      const restored = fromCanonicalDocument(stored, restoreOptions)
-      requireAvailableAlgebra(algebraRegistry, restored.document.algebra)
-      return {
-        ...restored, diagnostic: sceneDiagnostic ?? restored.recoveryDiagnostic, restored: true,
-        // The working copy an earlier version autosaved says so too (#343).
-        migrationNotice: migrationNotice(documentMigration(stored)),
-      }
-    } catch (error) {
-      const failure = error instanceof DocumentFormatError
-        ? error.code + ': ' + error.message
-        : 'STORE_READ_FAILED: The saved document could not be restored.'
-      // The stored document, perhaps written by a later version, is not
-      // saved over before an edit, and is kept first (#275).
-      const restore = failure + ' ' + HELD_STORED_DOCUMENT
-      return {
-        ...fallback,
-        diagnostic: sceneDiagnostic ? sceneDiagnostic + ' ' + restore : restore,
-        holdStored: 'until-edit' as const,
-      }
+    const stored = restoreActiveDocument(
+      () => browserDocumentStorage(window.localStorage).load(), algebraRegistry, restoreOptions,
+    )
+    if (stored.status === 'none') return fallback
+    if (stored.status === 'held') return {
+      ...fallback,
+      diagnostic: sceneDiagnostic ? sceneDiagnostic + ' ' + stored.diagnostic : stored.diagnostic,
+      holdStored: 'until-edit' as const,
+    }
+    return {
+      ...stored.restored, diagnostic: sceneDiagnostic ?? stored.restored.recoveryDiagnostic, restored: true,
+      // The working copy an earlier version autosaved says so too (#343).
+      migrationNotice: stored.migrationNotice,
     }
   })
   const [history, dispatchDocumentHistory] = useReducer(
@@ -438,12 +416,6 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
   ) => dispatchHistory({ type: 'execute', command, coalesceKey }), [dispatchHistory])
   const nextId = useRef(2)
   const inputRefs = useRef(new Map<string, SourceEditor>())
-  const pendingFocus = useRef<string | null>(null)
-  const lastEditorFocus = useRef<EditorFocus | null>(null)
-  const pendingHistoryFocus = useRef(lastEditorFocus.current)
-  /** Set by an undo or redo that traverses a step, read once the document renders. */
-  const pendingTraversal = useRef(false)
-  const removedEditorFallbacks = useRef(new Map<string, EditorFocus>())
   const viewportCreatedItemIds = useRef(new Set<string>())
   const addButtonRef = useRef<HTMLButtonElement>(null)
   const algebraInfoButtonRef = useRef<HTMLButtonElement>(null)
@@ -566,20 +538,6 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
     setAppearanceItemId(null)
     dispatchHistory({ type: 'boundary' })
   }, [dispatchHistory])
-  const rememberEditorFocus = (element: SourceEditor) => {
-    lastEditorFocus.current = {
-      id: element.id,
-      start: element.selectionStart ?? 0,
-      end: element.selectionEnd ?? element.selectionStart ?? 0,
-      direction: element.selectionDirection ?? 'none',
-    }
-  }
-  const dispatchHistoryWithFocus = useCallback((type: 'undo' | 'redo') => {
-    pendingHistoryFocus.current = lastEditorFocus.current
-    pendingTraversal.current = !history.transaction &&
-      (type === 'undo' ? history.past.length > 0 : history.future.length > 0)
-    dispatchHistory({ type })
-  }, [history.past.length, history.future.length, history.transaction, dispatchHistory])
 
   const viewport: Viewport2d = expressionDoc.view.viewport.kind === 'two-dimensional'
     ? {
@@ -877,55 +835,22 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
   }, [theme])
 
   useEffect(() => {
-    const handleHistoryShortcut = (event: globalThis.KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || event.altKey) return
-      const key = event.key.toLowerCase()
-      const action = key === 'z'
-        ? event.shiftKey ? 'redo' : 'undo'
-        : key === 'y' && !event.shiftKey ? 'redo' : null
-      if (!action) return
-      event.preventDefault()
-      dispatchHistoryWithFocus(action)
-    }
-    window.addEventListener('keydown', handleHistoryShortcut)
-    return () => window.removeEventListener('keydown', handleHistoryShortcut)
-  }, [dispatchHistoryWithFocus])
-
-  useEffect(() => {
     const result = history.lastResult
     if (result && result.status !== 'applied') {
       setDocumentDiagnostic(`COMMAND_${result.status.toUpperCase()}: ${result.reason}`)
     }
   }, [history.lastResult])
 
-  /**
-   * After a failed restore the stored document is not saved over until the
-   * graph is edited, then kept first; when it cannot be kept, it is never
-   * saved over, and the status says so whenever it is free (#275).
-   */
-  const holdStored = useRef<'until-edit' | 'always' | null>('holdStored' in initial ? initial.holdStored : null)
-  useEffect(() => {
-    if (ephemeral || import.meta.env.MODE === 'test') return
-    if (holdStored.current === 'until-edit') {
-      if (expressionDoc === initial.document) return
-      if (!keepUnreadableDocument(window.localStorage)) {
-        holdStored.current = 'always'
-        setDocumentDiagnostic(UNKEPT_STORED_DOCUMENT)
-        return
-      }
-      holdStored.current = null
-    }
-    if (holdStored.current === 'always') {
-      setDocumentDiagnostic((current) => current ?? UNKEPT_STORED_DOCUMENT)
-      return
-    }
-    try {
-      persistence.save(toCanonicalDocument(expressionDoc, theme, resolvedStyles, resolvedOrientation))
-      setDocumentDiagnostic((current) => current?.startsWith('DOCUMENT_VIEW_UNSUPPORTED') ? current : null)
-    } catch {
-      setDocumentDiagnostic('STORE_WRITE_FAILED: Changes remain open, but the last saved revision was retained.')
-    }
-  }, [expressionDoc, persistence, resolvedStyles, resolvedOrientation, theme, ephemeral, initial.document])
+  useAutosave({
+    document: expressionDoc,
+    initialDocument: initial.document,
+    holdStored: 'holdStored' in initial ? initial.holdStored : null,
+    ephemeral,
+    theme,
+    resolvedStyles,
+    resolvedOrientation,
+    setDocumentDiagnostic,
+  })
 
   // The Studio-sized glyphs are the 1× baseline exposed to users. The
   // historical renderer used 1.5 as that baseline, so keep the visual size
@@ -973,55 +898,18 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
     expressionDoc.view.display.objectScale,
   )
 
-  useEffect(() => {
-    const id = pendingFocus.current
-    if (id) {
-      inputRefs.current.get(id)?.focus()
-      pendingFocus.current = null
-      return
-    }
-    // Undoing or redoing a viewport gesture keeps focus in the viewport: on
-    // the handle a keyboard gesture moved, when it still exists, otherwise on
-    // the canvas, as after the gesture itself (#115).
-    const traversal = pendingTraversal.current ? history.lastTraversal : null
-    pendingTraversal.current = false
-    if (traversal?.kind === 'viewport') {
-      pendingHistoryFocus.current = null
-      const handle = traversal.handleKey === null
-        ? undefined
-        : [...viewportSvgRef.current?.querySelectorAll('[data-handle-key]') ?? []]
-          .find((element) => element.getAttribute('data-handle-key') === traversal.handleKey)
-      if (handle instanceof SVGElement) handle.focus({ preventScroll: true })
-      else viewportSvgRef.current?.focus({ preventScroll: true })
-      return
-    }
-    const selection = pendingHistoryFocus.current
-    if (!selection) return
-    pendingHistoryFocus.current = null
-    let restoredSelection = selection
-    let input = document.getElementById(restoredSelection.id)
-    if (!(isSourceEditor(input))) {
-      const fallback = removedEditorFallbacks.current.get(selection.id)
-      if (fallback) {
-        restoredSelection = fallback
-        input = document.getElementById(fallback.id)
-      }
-    }
-    if (!(isSourceEditor(input)) &&
-        viewportCreatedItemIds.current.has(selection.id.replace('expression-source-', ''))) {
-      viewportSvgRef.current?.focus({ preventScroll: true })
-      return
-    }
-    if (!(isSourceEditor(input))) return
-    input.focus()
-    const maximum = input.value.length
-    input.setSelectionRange(
-      Math.min(restoredSelection.start, maximum),
-      Math.min(restoredSelection.end, maximum),
-      restoredSelection.direction,
-    )
-    rememberEditorFocus(input)
-  }, [expressionDoc, history.lastTraversal])
+  const historyFocus = useHistoryFocus({
+    history,
+    document: expressionDoc,
+    dispatchHistory,
+    inputRefs,
+    viewportSvgRef,
+    viewportCreatedItemIds,
+  })
+  const {
+    pendingFocus, lastEditorFocus, pendingHistoryFocus, removedEditorFallbacks,
+    rememberEditorFocus, dispatchHistoryWithFocus,
+  } = historyFocus
 
   useEffect(() => {
     const resize = (clientX: number) => {
