@@ -11,7 +11,6 @@ import {
   type KeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
-  type ReactElement,
 } from 'react'
 import { createBuiltinAlgebraRegistry, DEFAULT_ALGEBRA_ID } from './algebra/builtinAlgebras'
 import type { AlgebraDefinition } from './algebra/algebraDefinition'
@@ -64,7 +63,6 @@ import {
   keyboardManipulationStep,
   panByScreen,
   toMathematical,
-  toScreen,
   zoomAt,
   type Viewport2d,
 } from './visualization/viewport'
@@ -76,7 +74,7 @@ import {
   nextObjectName,
 } from './visualization/viewportCreation'
 import { describeViewport } from './visualization/viewportDescription'
-import { DirectionMarkerGlyph, LineAtInfinityGlyph, OrientedAreaGlyph, OrientedSegmentGlyph, PointListConnectionGlyph, PointMarkerGlyph, UnboundedLineGlyph, type HandleController } from './visualization/glyphs'
+import type { HandleController } from './visualization/glyphs'
 import {
   findAnchorCandidates,
   nearbyAnchors,
@@ -86,7 +84,7 @@ import {
   type AnchorCandidate,
   type AnchorProximity,
 } from './visualization/anchoring'
-import { collectRenderedPrimitives, layoutIdealArrow, layoutIdealMarker, layoutLineAtInfinity, layoutLineSelection, layoutOrientedArea, layoutOrientedSegment, layoutPointListConnection, layoutPointListFill, layoutUnboundedLine, lineNormalLength, lineOrientationTicks } from './visualization/layout'
+import { collectRenderedPrimitives, lineNormalLength } from './visualization/layout'
 import { requireAvailableAlgebra } from './application/algebraAvailability'
 import {
   DocumentFormatError,
@@ -139,8 +137,10 @@ import { createSceneLink, decodeSceneFragment, hasSceneFragment, SHARE_URL_WARNI
 import { formatDisplayNumber } from './presentation/formatNumber'
 import { evaluateScalarControl } from './application/evaluateScalarControl'
 import { DEFAULT_APPEARANCE_SOURCES, evaluateAppearanceSources } from './application/evaluateAppearanceSources'
-import { placeLabels, type LabelObstacle } from './visualization/labels'
-import { DEFAULT_POINT_SIZE, POINT_OUTER_SCALE, segmentSizeFactor } from './visualization/stroke'
+import { CanvasBackground } from './visualization/CanvasBackground'
+import { SceneGlyphs, type GlyphMovability } from './visualization/SceneGlyphs'
+import { labelPlacementInputs, layoutScene } from './visualization/sceneLayout'
+import { useLabelPlacement } from './hooks/useLabelPlacement'
 import { directScalarEdit } from './language/directScalarEdit'
 import { CanvasSliders } from './components/CanvasSliders'
 import {
@@ -495,7 +495,6 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
     coalesceKey?: string,
   ) => dispatchHistory({ type: 'execute', command, coalesceKey }), [dispatchHistory])
   const nextId = useRef(2)
-  const labelPlacementCache = useRef<{ key: string; placed: ReturnType<typeof placeLabels> } | null>(null)
   const inputRefs = useRef(new Map<string, SourceEditor>())
   const pendingFocus = useRef<string | null>(null)
   const lastEditorFocus = useRef<EditorFocus | null>(null)
@@ -1136,6 +1135,14 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
     !heldInPlace(item) && headMovableByConstruction(item, entity)
   const objectBaseMovable = (item: ExpressionItem, entity: InterpretedEntity) =>
     !heldInPlace(item) && objectBaseMovableByConstruction(item, entity)
+  const itemOf = (id: string) => expressionDoc.items.find((candidate) => candidate.id === id)
+  /** What the glyph of a rendered element offers; asked only of a present item. */
+  const glyphMovability: GlyphMovability = {
+    present: (id) => !!itemOf(id),
+    head: (id, entity) => headMovable(itemOf(id)!, entity),
+    base: (id, entity) => objectBaseMovable(itemOf(id)!, entity),
+    line: (id, entity) => lineMovable(itemOf(id)!, entity),
+  }
   /** Whether a drag could move the object at all, held in place or not. */
   const draggableByConstruction = (item: ExpressionItem, entity: InterpretedEntity) =>
     lineMovableByConstruction(item, entity) || headMovableByConstruction(item, entity) ||
@@ -1705,9 +1712,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
     } catch {
       setDocumentDiagnostic('STORE_WRITE_FAILED: Changes remain open, but the last saved revision was retained.')
     }
-  }, [expressionDoc, persistence, resolvedStyles, resolvedOrientation, theme, ephemeral])
+  }, [expressionDoc, persistence, resolvedStyles, resolvedOrientation, theme, ephemeral, initial.document])
 
-  const origin = toScreen(viewport, { x: 0, y: 0 })
   // The Studio-sized glyphs are the 1× baseline exposed to users. The
   // historical renderer used 1.5 as that baseline, so keep the visual size
   // while restoring a meaningful multiplicative setting.
@@ -1719,97 +1725,13 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
         evaluatedItems, drawnDocument.appearance, interpretation, declaredName, appearanceSources,
         expressionDoc.view.display.labelsVisible,
       )
-  const renderedVectors = renderedPrimitives.flatMap((entry) =>
-    entry.primitive.kind === 'oriented-segment'
-      ? [{ ...entry, primitive: entry.primitive, layout: layoutOrientedSegment(entry.primitive, viewport, objectRenderScale * segmentSizeFactor(entry.pointSize, entry.strokeWidth)) }]
-      : [])
-  const renderedAreas = renderedPrimitives.flatMap((entry) =>
-    entry.primitive.kind === 'oriented-area'
-      ? [{ ...entry, primitive: entry.primitive, layout: layoutOrientedArea(entry.primitive, viewport, entry.bivectorShape) }]
-      : [])
-  const renderedPoints = renderedPrimitives.flatMap((entry) =>
-    entry.primitive.kind === 'point-marker'
-      ? [{ ...entry, primitive: entry.primitive, point: toScreen(viewport, entry.primitive.point) }]
-      : [])
-  const renderedLines = renderedPrimitives.flatMap((entry) => {
-    if (entry.primitive.kind !== 'unbounded-line') return []
-    const layout = layoutUnboundedLine(entry.primitive, viewport)
-    return layout ? [{ ...entry, primitive: entry.primitive, layout }] : []
-  })
-  // A connected list showing its links alone hides its ideal points as well.
-  const renderedIdealPoints = renderedPrimitives.flatMap((entry) =>
-    entry.primitive.kind === 'ideal-point' && entry.markerVisible
-      ? [{
-          ...entry,
-          primitive: entry.primitive,
-          arrow: entry.idealPointDisplay === 'ideal' ? null : layoutIdealArrow(entry.primitive, viewport, objectRenderScale * segmentSizeFactor(entry.pointSize, entry.strokeWidth)),
-          marker: entry.idealPointDisplay === 'vector' ? null : layoutIdealMarker(entry.primitive.direction, viewport, objectRenderScale),
-        }]
-      : [])
-  const renderedInfinity = renderedPrimitives.flatMap((entry) =>
-    entry.primitive.kind === 'line-at-infinity'
-      ? [{ ...entry, primitive: entry.primitive, layout: layoutLineAtInfinity(viewport, objectRenderScale) }]
-      : [])
-
+  const scene = layoutScene(renderedPrimitives, renderedConnections, viewport, objectRenderScale)
   // Labels are placed together, so that an automatic label can avoid the
   // other labels and the points and handles of other objects (#226).
-  const labelAnchors = new Map<string, Point2d>()
-  const labelObstacles: LabelObstacle[] = []
-  const ownerOf = (id: string) => id.split(':')[0]
-  const handleRadius = 10 * objectRenderScale
-  const addSegmentObstacles = (id: string, layout: Readonly<{ start: Point2d; end: Point2d }>) => {
-    if (ownerOf(id) !== id) return
-    labelObstacles.push({ ownerId: id, center: layout.start, radius: handleRadius })
-    labelObstacles.push({ ownerId: id, center: layout.end, radius: 12 })
-  }
-  renderedVectors.forEach(({ id, layout }) => {
-    labelAnchors.set(id, layout.end)
-    addSegmentObstacles(id, layout)
-  })
-  renderedAreas.forEach(({ id, layout }) => {
-    labelAnchors.set(id, layout.labelPoint)
-    if (ownerOf(id) === id) labelObstacles.push({ ownerId: id, center: layout.base, radius: handleRadius })
-  })
-  renderedPoints.forEach(({ id, point, pointSize, markerVisible }) => {
-    labelAnchors.set(id, point)
-    // A hidden marker is not drawn, so it does not push labels away.
-    if (markerVisible === false) return
-    const core = (pointSize ?? DEFAULT_POINT_SIZE) * objectRenderScale
-    labelObstacles.push({ ownerId: ownerOf(id), center: point, radius: ownerOf(id) === id ? core * POINT_OUTER_SCALE : core })
-  })
-  renderedLines.forEach(({ id, layout }) => labelAnchors.set(id, layout.labelPoint))
-  renderedInfinity.forEach(({ id, layout }) => labelAnchors.set(id, {
-    x: layout.center.x + layout.radiusX * Math.SQRT1_2,
-    y: layout.center.y - layout.radiusY * Math.SQRT1_2,
-  }))
-  renderedIdealPoints.forEach(({ id, arrow, marker }) => {
-    if (arrow) {
-      labelAnchors.set(id, arrow.end)
-      addSegmentObstacles(id, arrow)
-    } else if (marker) labelAnchors.set(id, marker.tail)
-  })
-  // Automatic labels keep out of filled point lists when they can.
-  const labelAreas = renderedConnections.flatMap(({ fill }) =>
-    fill ? [fill.map((point) => toScreen(viewport, point))] : [])
-  const labelRequests = renderedPrimitives.flatMap(({ id, label, labelSettings }) => {
-    const at = labelAnchors.get(id)
-    return label && at ? [{ key: id, ownerId: ownerOf(id), text: label, at, settings: labelSettings }] : []
-  })
-  // Placement compares every label with every obstacle, so it is redone only
-  // when its inputs change, not on every frame of an unrelated animation.
-  const labelPlacementKey = labelRequests.length === 0
-    ? ''
-    : JSON.stringify([labelRequests, labelObstacles, labelAreas, expressionDoc.view.display.objectScale])
-  if (labelPlacementCache.current?.key !== labelPlacementKey) {
-    labelPlacementCache.current = {
-      key: labelPlacementKey,
-      placed: labelRequests.length === 0
-        ? new Map()
-        : placeLabels(labelRequests, labelObstacles, expressionDoc.view.display.objectScale, labelAreas),
-    }
-  }
-  const placedLabels = labelPlacementCache.current.placed
-  const placedLabel = (id: string) => placedLabels.get(id) ?? null
+  const placedLabel = useLabelPlacement(
+    labelPlacementInputs(scene, renderedPrimitives, viewport, objectRenderScale),
+    expressionDoc.view.display.objectScale,
+  )
 
   useEffect(() => {
     const id = pendingFocus.current
@@ -2845,15 +2767,6 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
     formatNumber: displayedNumber,
   })
 
-  // The glyphs of the selected object are drawn after all others, so that its
-  // handles are on top where handles coincide (#100). Keys are item ids, list
-  // element ids `id:index`, or `connection-id` for a list's links.
-  const raiseSelectedGlyphs = (glyphs: readonly ReactElement[]): readonly ReactElement[] => {
-    if (selectedObjectId === null) return glyphs
-    const owned = (glyph: ReactElement) =>
-      ownerOf(String(glyph.key).replace(/^connection-/, '')) === selectedObjectId
-    return [...glyphs.filter((glyph) => !owned(glyph)), ...glyphs.filter(owned)]
-  }
   const expressionRowElementRefs: ExpressionRowRefs = {
     expressionRowRefs,
     inputRefs,
@@ -3385,183 +3298,23 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
               }}
             >
               <desc id="canvas-description">{canvasDescription}</desc>
-              {expressionDoc.view.display.gridVisible && <g aria-hidden="true">
-                {grid.vertical.map((line) => <line
-                  key={`grid-x-${line.coordinate}`}
-                  className={line.major ? 'grid-line is-major' : 'grid-line'}
-                  x1={line.screen} y1="0" x2={line.screen} y2={viewport.height}
-                />)}
-                {grid.horizontal.map((line) => <line
-                  key={`grid-y-${line.coordinate}`}
-                  className={line.major ? 'grid-line is-major' : 'grid-line'}
-                  x1="0" y1={line.screen} x2={viewport.width} y2={line.screen}
-                />)}
-              </g>}
-
-              {expressionDoc.view.display.axisLabelsVisible && <g aria-hidden="true">
-                <line className="axis" x1="0" y1={origin.y} x2={viewport.width} y2={origin.y} />
-                <line className="axis" x1={origin.x} y1="0" x2={origin.x} y2={viewport.height} />
-                <circle className="origin" cx={origin.x} cy={origin.y} r={3 * objectRenderScale} />
-                <text className="axis-name" x={viewport.width - 14} y={Math.max(16, Math.min(viewport.height - 8, origin.y - 8))}>x</text>
-                <text className="axis-name" x={Math.max(8, Math.min(viewport.width - 18, origin.x + 8))} y="16">y</text>
-              </g>}
-
-              {expressionDoc.view.display.graduationsVisible && <g aria-hidden="true">
-                {grid.vertical.filter((line) => line.major && line.coordinate !== 0).map((line) => {
-                  const axisY = Math.max(16, Math.min(viewport.height - 18, origin.y))
-                  return <g key={`graduation-x-${line.coordinate}`}>
-                    <line className="graduation" x1={line.screen} y1={axisY - 4} x2={line.screen} y2={axisY + 4} />
-                    <text className="graduation-label" x={line.screen} y={axisY + 16}>{displayedNumber(line.coordinate)}</text>
-                  </g>
-                })}
-                {grid.horizontal.filter((line) => line.major && line.coordinate !== 0).map((line) => {
-                  const axisX = Math.max(28, Math.min(viewport.width - 28, origin.x))
-                  return <g key={`graduation-y-${line.coordinate}`}>
-                    <line className="graduation" x1={axisX - 4} y1={line.screen} x2={axisX + 4} y2={line.screen} />
-                    <text className="graduation-label is-y" x={axisX - 8} y={line.screen + 4}>{displayedNumber(line.coordinate)}</text>
-                  </g>
-                })}
-              </g>}
-
-              {raiseSelectedGlyphs([
-                ...renderedVectors.map(({ id, primitive, entity, layout, color, strokeStyle, strokeWidth, pointSize, opacity, labelOpacity }) => {
-                  const item = expressionDoc.items.find((candidate) => candidate.id === id)
-                  return <OrientedSegmentGlyph
-                    key={id}
-                    id={id}
-                    primitive={primitive}
-                    layout={layout}
-                    color={color}
-                    label={placedLabel(id)}
-                    scale={objectRenderScale}
-                    itemPresent={!!item}
-                    headMovable={!!item && headMovable(item, entity)}
-                    baseMovable={!!item && objectBaseMovable(item, entity)}
-                    controller={handleController}
-                    strokeStyle={strokeStyle}
-                    strokeWidth={strokeWidth}
-                    pointSize={pointSize}
-                    opacity={opacity}
-                    labelOpacity={labelOpacity}
-                  />
-                }),
-                ...renderedAreas.map(({ id, primitive, entity, layout, color, borderVisible, orientationVisible, strokeStyle, strokeWidth, opacity, labelOpacity }) => {
-                  const item = expressionDoc.items.find((candidate) => candidate.id === id)
-                  return <OrientedAreaGlyph
-                    key={id}
-                    id={id}
-                    primitive={primitive}
-                    layout={layout}
-                    color={color}
-                    label={placedLabel(id)}
-                    scale={objectRenderScale}
-                    borderVisible={borderVisible}
-                    orientationVisible={orientationVisible}
-                    itemPresent={!!item}
-                    baseMovable={!!item && objectBaseMovable(item, entity)}
-                    controller={handleController}
-                    strokeStyle={strokeStyle}
-                    strokeWidth={strokeWidth}
-                    opacity={opacity}
-                    labelOpacity={labelOpacity}
-                  />
-                }),
-                ...renderedLines.map(({ id, primitive, entity, layout, color, orientationVisible, strokeStyle, strokeWidth, opacity, labelOpacity }) => {
-                  const item = expressionDoc.items.find((candidate) => candidate.id === id)
-                  const selection = selectedLine?.itemId === id
-                    ? layoutLineSelection(primitive, selectedLine.anchor, viewport, objectRenderScale)
-                    : null
-                  return <UnboundedLineGlyph
-                    key={id}
-                    id={id}
-                    primitive={primitive}
-                    layout={layout}
-                    color={color}
-                    label={placedLabel(id)}
-                    scale={objectRenderScale}
-                    itemPresent={!!item}
-                    movable={!!item && lineMovable(item, entity)}
-                    orientationVisible={orientationVisible}
-                    orientationTicks={lineOrientationTicks(primitive, layout, objectRenderScale)}
-                    selection={selection}
-                    controller={handleController}
-                    strokeStyle={strokeStyle}
-                    strokeWidth={strokeWidth}
-                    opacity={opacity}
-                    labelOpacity={labelOpacity}
-                  />
-                }),
-                ...renderedInfinity.map(({ id, primitive, layout, color, opacity, labelOpacity }) => (
-                  <LineAtInfinityGlyph key={id} accessibleName={primitive.accessibleName} layout={layout} color={color} label={placedLabel(id)} scale={objectRenderScale} opacity={opacity} labelOpacity={labelOpacity} />
-                )),
-                ...renderedIdealPoints.map(({ id, primitive, entity, arrow, marker, color, strokeStyle, strokeWidth, pointSize, opacity, labelOpacity }) => {
-                  const item = expressionDoc.items.find((candidate) => candidate.id === id)
-                  return <g key={id}>
-                    {marker && <DirectionMarkerGlyph
-                      accessibleName={primitive.accessibleName}
-                      layout={marker}
-                      color={color}
-                      label={arrow ? null : placedLabel(id)}
-                      scale={objectRenderScale}
-                      opacity={opacity}
-                      labelOpacity={labelOpacity}
-                    />}
-                    {arrow && <OrientedSegmentGlyph
-                      id={id}
-                      primitive={{ kind: 'oriented-segment', start: primitive.position, end: {
-                        x: primitive.position.x + primitive.direction.x * primitive.magnitude,
-                        y: primitive.position.y + primitive.direction.y * primitive.magnitude,
-                      }, accessibleName: primitive.accessibleName }}
-                      layout={arrow}
-                      color={color}
-                      label={placedLabel(id)}
-                      scale={objectRenderScale}
-                      itemPresent={!!item}
-                      headMovable={!!item && headMovable(item, entity)}
-                      baseMovable={!!item && objectBaseMovable(item, entity)}
-                      controller={handleController}
-                      strokeStyle={strokeStyle}
-                      strokeWidth={strokeWidth}
-                      pointSize={pointSize}
-                      opacity={opacity}
-                      labelOpacity={labelOpacity}
-                    />}
-                  </g>
-                }),
-                ...renderedConnections.map(({ id, segments, fill, fillOpacity, color, opacity, strokeStyle, strokeWidth }) => (
-                  <PointListConnectionGlyph
-                    key={`connection-${id}`}
-                    path={layoutPointListConnection(segments, viewport)}
-                    fillPath={fill ? layoutPointListFill(fill, viewport) : null}
-                    fillOpacity={fillOpacity}
-                    color={color}
-                    scale={objectRenderScale}
-                    opacity={opacity}
-                    strokeStyle={strokeStyle}
-                    strokeWidth={strokeWidth}
-                  />
-                )),
-                ...renderedPoints.map(({ id, primitive, entity, point, color, markerVisible, opacity, labelOpacity, pointStyle, pointSize }) => {
-                  const item = expressionDoc.items.find((candidate) => candidate.id === id)
-                  return <PointMarkerGlyph
-                    key={id}
-                    id={id}
-                    primitive={primitive}
-                    point={point}
-                    color={color}
-                    label={placedLabel(id)}
-                    scale={objectRenderScale}
-                    itemPresent={!!item}
-                    movable={!!item && objectBaseMovable(item, entity)}
-                    markerVisible={markerVisible}
-                    controller={handleController}
-                    opacity={opacity}
-                    labelOpacity={labelOpacity}
-                    pointStyle={pointStyle}
-                    pointSize={pointSize}
-                  />
-                }),
-              ])}
+              <CanvasBackground
+                viewport={viewport}
+                grid={grid}
+                display={expressionDoc.view.display}
+                scale={objectRenderScale}
+                formatNumber={displayedNumber}
+              />
+              <SceneGlyphs
+                scene={scene}
+                viewport={viewport}
+                scale={objectRenderScale}
+                placedLabel={placedLabel}
+                movability={glyphMovability}
+                controller={handleController}
+                selectedObjectId={selectedObjectId}
+                selectedLine={selectedLine}
+              />
               {anchorPreview && <g className="anchor-preview" aria-hidden="true">
                 <circle cx={anchorPreview.point.x} cy={anchorPreview.point.y} r="12" />
                 <circle cx={anchorPreview.point.x} cy={anchorPreview.point.y} r="3" />
