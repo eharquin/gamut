@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FocusEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FocusEvent } from 'react'
 import type { ExpressionItem } from '../document/expressionDocument'
 import type { HandleController } from '../visualization/glyphs'
 
@@ -26,6 +26,8 @@ export function useObjectSelection(items: readonly ExpressionItem[]) {
   const [handleFocusSelection, setHandleFocusSelection] =
     useState<Readonly<{ itemId: string | null }> | null>(null)
   const frozenSelection = dragSelection ?? handleFocusSelection
+  /** Stable, so that listeners that end a drag are not registered again. */
+  const endDrag = useCallback(() => setDragSelection(null), [])
   // A deleted object's row fires neither blur nor pointer leave, so its id is
   // ignored here and cleared once the document has changed.
   const isPresentItem = (itemId: string | null): itemId is string =>
@@ -98,7 +100,7 @@ export function useObjectSelection(items: readonly ExpressionItem[]) {
       setDragSelection({ itemId: selectedObjectId })
       setLastManipulatedId(itemId)
     },
-    endDrag: () => setDragSelection(null),
+    endDrag,
     /** Focus on a handle keeps the drawing order until it leaves the handles. */
     canvasFocus: (event: FocusEvent<SVGSVGElement>) => {
       if (isHandleElement(event.target))

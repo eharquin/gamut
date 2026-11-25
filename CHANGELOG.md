@@ -67,6 +67,9 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   version, is no longer replaced by the example when the page opens (#275).
   Nothing is saved over it until the graph is edited, it is kept first, and
   a version that reads it adds it to My library and says so.
+- Escape during a drag on the canvas releases the drawing order the drag
+  froze, so hovering or focusing a row again brings its object's handles on
+  top.
 
 ## 0.3.0 - 2026-11-20
 

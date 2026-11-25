@@ -80,6 +80,14 @@ describe('object selection (#173)', () => {
     expect(controller().focusRingKey).toBeNull()
   })
 
+  it('keeps endDrag stable across renders', () => {
+    const { result, rerender } = setup(items('a'))
+    const first = result.current.endDrag
+    act(() => result.current.row.hover('a'))
+    rerender({ list: items('a', 'b') })
+    expect(result.current.endDrag).toBe(first)
+  })
+
   it('recognises a handle by its handle key', () => {
     expect(isHandleElement(handle())).toBe(true)
     expect(isHandleElement(document.createElementNS('http://www.w3.org/2000/svg', 'svg'))).toBe(false)
