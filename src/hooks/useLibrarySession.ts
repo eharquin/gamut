@@ -64,8 +64,10 @@ export type LibrarySessionOptions = Readonly<{
   temporary: boolean
   ephemeral: boolean
   endTemporarySession: () => void
-  /** How the editor opened: a restored active document has a `restored` field. */
-  initial: Readonly<{ document: ExpressionDocument }>
+  /** The document the editor opened with. */
+  initialDocument: ExpressionDocument
+  /** Whether that document is the stored active document, restored. */
+  restored: boolean
   document: ExpressionDocument
   theme: ThemeMode
   resolvedStyles: Parameters<typeof toCanonicalDocument>[2]
@@ -92,7 +94,8 @@ export function useLibrarySession(options: LibrarySessionOptions) {
     restoreOptions,
     temporary,
     ephemeral,
-    initial,
+    initialDocument,
+    restored,
     document: expressionDoc,
     theme,
     resolvedStyles,
@@ -104,6 +107,7 @@ export function useLibrarySession(options: LibrarySessionOptions) {
     setCopyNotice,
     showMigrationNotice,
     importDroppedArchive,
+    endTemporarySession,
   } = options
   // The local library of named graphs (#212). Reading the library never
   // writes; a write reads the index again first, and only then migrates the
@@ -130,8 +134,8 @@ export function useLibrarySession(options: LibrarySessionOptions) {
     // active document and that document was recorded as this graph, or is
     // the former active document awaiting migration. A default, recovery, or
     // imported document with a library identity is not that graph.
-    const id = initial.document.id
-    const bound = 'restored' in initial && library.entries.some((entry) => entry.id === id) &&
+    const id = initialDocument.id
+    const bound = restored && library.entries.some((entry) => entry.id === id) &&
       (openKey === id || indexMissing)
     let saved: CanonicalDocument | null = null
     if (bound) {
@@ -156,7 +160,7 @@ export function useLibrarySession(options: LibrarySessionOptions) {
       requireAvailableAlgebra(algebraRegistry, fromCanonicalDocument(document, restoreOptions).document.algebra)
     })
     // Still the stored document, restored here: nothing was saved over it.
-    if (kept.status === 'unchanged' && 'restored' in initial) discardKeptDocument(storage)
+    if (kept.status === 'unchanged' && restored) discardKeptDocument(storage)
     if (kept.status !== 'readable') return
     try {
       // Already in My library as it is, as when the version that wrote it
@@ -434,7 +438,7 @@ export function useLibrarySession(options: LibrarySessionOptions) {
     setSavedRevision(toCanonicalDocument({ ...expressionDoc, id, title: name }, theme, resolvedStyles, resolvedOrientation))
     if (ephemeral) {
       // Reloading must reopen the saved copy, not the original shared scene.
-      options.endTemporarySession()
+      endTemporarySession()
       setDocumentDiagnostic(null)
     }
     setLibraryNaming(null)
@@ -465,7 +469,7 @@ export function useLibrarySession(options: LibrarySessionOptions) {
     setExampleRevision(null)
     setSavedRevision(null)
     markSavedOnRender.current = libraryId !== null
-    if (ephemeral) options.endTemporarySession()
+    if (ephemeral) endTemporarySession()
     closeLibrary()
   }
   const openLibraryEntry = (entry: LibraryEntry) => {
@@ -577,7 +581,6 @@ export function useLibrarySession(options: LibrarySessionOptions) {
       reportLibraryFailure(error, `LIBRARY_WRITE_FAILED: “${example.name}” could not be added to the library.`)
     }
   }
-
 
   return {
     library,

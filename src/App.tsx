@@ -86,7 +86,7 @@ import { LibraryPanel } from './components/LibraryPanel'
 import { SceneThumbnail } from './components/SceneThumbnail'
 import { showcaseExample } from './examples'
 import { selectDroppedDocument } from './document/droppedDocument'
-import { migrationNotice } from './document/migrationNotice'
+import { MIGRATION_NOTICE_MS, migrationNotice } from './document/migrationNotice'
 import { createSceneLink, decodeSceneFragment, hasSceneFragment, SHARE_URL_WARNING_LENGTH } from './document/sceneLink'
 import { formatDisplayNumber } from './presentation/formatNumber'
 import { evaluateScalarControl } from './application/evaluateScalarControl'
@@ -102,7 +102,6 @@ import { useViewportNavigation } from './hooks/useViewportNavigation'
 import { useObjectSelection } from './hooks/useObjectSelection'
 import { useManipulation } from './hooks/useManipulation'
 import { useLibrarySession } from './hooks/useLibrarySession'
-import { MIGRATION_NOTICE_MS } from './document/migrationNotice'
 import { declaredName } from './language/declaredName'
 import { dragTargets, type ManipulationContext } from './application/viewportManipulation'
 import './App.css'
@@ -1396,7 +1395,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
       window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search)
       setEphemeral(false)
     },
-    initial,
+    initialDocument: initial.document,
+    restored: 'restored' in initial,
     document: expressionDoc,
     theme,
     resolvedStyles,
