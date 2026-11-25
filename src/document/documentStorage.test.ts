@@ -65,9 +65,20 @@ describe('keeping a stored document this version cannot read (#275)', () => {
   })
 
   it('never replaces a different kept copy, and says the stored one is not kept', () => {
-    const storage = memory({ [ACTIVE_DOCUMENT_KEY]: newer, [KEPT_DOCUMENT_KEY]: 'earlier' })
+    const earlier = JSON.stringify({ ...document, formatVersion: 98 })
+    const storage = memory({ [ACTIVE_DOCUMENT_KEY]: newer, [KEPT_DOCUMENT_KEY]: earlier })
     expect(keepUnreadableDocument(storage)).toBe(false)
-    expect(storage.values.get(KEPT_DOCUMENT_KEY)).toBe('earlier')
+    expect(storage.values.get(KEPT_DOCUMENT_KEY)).toBe(earlier)
+  })
+
+  it('keeps nothing that no version could read, and replaces such a kept text', () => {
+    const truncated = newer.slice(0, 40)
+    const junk = memory({ [ACTIVE_DOCUMENT_KEY]: truncated })
+    expect(keepUnreadableDocument(junk)).toBe(true)
+    expect(junk.values.has(KEPT_DOCUMENT_KEY)).toBe(false)
+    const blocked = memory({ [ACTIVE_DOCUMENT_KEY]: newer, [KEPT_DOCUMENT_KEY]: truncated })
+    expect(keepUnreadableDocument(blocked)).toBe(true)
+    expect(blocked.values.get(KEPT_DOCUMENT_KEY)).toBe(newer)
   })
 
   it('reports a failed write as not kept', () => {
@@ -81,6 +92,11 @@ describe('keeping a stored document this version cannot read (#275)', () => {
     expect(readKeptDocument(memory({ [KEPT_DOCUMENT_KEY]: newer })).status).toBe('unreadable')
     const readable = readKeptDocument(memory({ [KEPT_DOCUMENT_KEY]: JSON.stringify(document) }))
     expect(readable).toEqual({ status: 'readable', document })
+    // A copy this version parses but cannot restore stays kept.
+    const refused = readKeptDocument(memory({ [KEPT_DOCUMENT_KEY]: JSON.stringify(document) }), () => {
+      throw new Error('ALGEBRA_UNAVAILABLE')
+    })
+    expect(refused.status).toBe('unreadable')
     const storage = memory({ [KEPT_DOCUMENT_KEY]: newer })
     discardKeptDocument(storage)
     expect(storage.values.has(KEPT_DOCUMENT_KEY)).toBe(false)
