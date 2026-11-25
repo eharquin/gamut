@@ -14,7 +14,7 @@ import {
 } from 'react'
 import { createBuiltinAlgebraRegistry, DEFAULT_ALGEBRA_ID } from './algebra/builtinAlgebras'
 import type { AlgebraDefinition } from './algebra/algebraDefinition'
-import { declarationDependsOn, evaluateDocument } from './application/evaluateDocument'
+import { evaluateDocument } from './application/evaluateDocument'
 import { AlgebraInfoDialog } from './components/AlgebraInfoDialog'
 import {
   DocumentHeader,
@@ -41,8 +41,7 @@ import { AppearancePopover, FOLDER_STYLE_KINDS } from './components/AppearancePo
 import { ZoomLevelField } from './components/ZoomLevelField'
 import type { DisplaySettings } from './components/SettingsMenu'
 import { defaultStyleForKind, resolveItemAppearance, studioColor } from './components/appearancePalette'
-import { OPAQUE_INTERPRETATION, type InterpretedEntity, type Point2d } from './geometry/interpretation'
-import type { VisualizationPrimitive } from './visualization/primitives'
+import { OPAQUE_INTERPRETATION, type Point2d } from './geometry/interpretation'
 import {
   expressionDocument,
   MAX_EXPRESSION_ITEMS,
@@ -69,8 +68,6 @@ import {
 import {
   creationSource,
   formatViewportCoordinate,
-  weightedDragSupported,
-  weightedViewportCoordinates,
   nextObjectName,
 } from './visualization/viewportCreation'
 import { describeViewport } from './visualization/viewportDescription'
@@ -143,17 +140,20 @@ import { labelPlacementInputs, layoutScene } from './visualization/sceneLayout'
 import { useLabelPlacement } from './hooks/useLabelPlacement'
 import { directScalarEdit } from './language/directScalarEdit'
 import { CanvasSliders } from './components/CanvasSliders'
-import {
-  directConstructorComponents,
-  directItemLiteralEdit,
-  literalComponentValue,
-  rewriteConstructorLiterals,
-  type ConstructorComponentEdit,
-} from './language/constructorLiteralEdit'
-import { primitiveBase } from './visualization/anchoring'
 import { directPositionAnchorReference } from './language/directVectorEdit'
 import { useScalarPlayback } from './hooks/useScalarPlayback'
 import { declaredName } from './language/declaredName'
+import {
+  anchorTargets,
+  dragTargets,
+  gestureLabel,
+  lineCoefficients,
+  linePrimitive,
+  manipulationEdit,
+  projectOnLine,
+  type ManipulationContext,
+  type ManipulationKind,
+} from './application/viewportManipulation'
 import './App.css'
 
 // Composition root: the runtime's registered definitions. A document's
@@ -202,7 +202,6 @@ type EditorFocus = Readonly<{
   end: number
   direction: 'forward' | 'backward' | 'none'
 }>
-type ManipulationKind = 'base' | 'head' | 'line' | 'normal'
 
 /** Whether a node is a manipulation handle of the canvas. */
 function isHandleElement(target: EventTarget | null): boolean {
@@ -859,6 +858,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
     event.currentTarget.setPointerCapture?.(event.pointerId)
     event.preventDefault()
   }
+  /** Moves an item's handle to `point`; returns where a weighted point is now drawn. */
   const updateManipulatedItem = (
     itemId: string,
     kind: ManipulationKind,
@@ -867,160 +867,12 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
     const item = expressionDoc.items.find((candidate) => candidate.id === itemId)
     const rendered = renderedPrimitives.find((candidate) => candidate.id === itemId)
     if (!item || !rendered) return
-    // Every coordinate written here follows the creation rule (about one
-    // screen pixel); line coefficients use a ten times finer scale so that
-    // rotating a line about an anchor stays smooth.
-    const pixelsPerUnit = viewport.pixelsPerUnit
-    const coordinate = (value: number) => formatViewportCoordinate(value, pixelsPerUnit)
-    const target = {
-      x: Number(coordinate(point.x)),
-      y: Number(coordinate(point.y)),
-    }
-    if (kind === 'line' || kind === 'normal') {
-      if (rendered.primitive.kind !== 'unbounded-line') return
-      const components = literalEditComponents(item, rendered.entity)
-      if (!components) return
-      const [a0, b0] = lineCoefficients(rendered.primitive)
-      // Far from the origin, a coarse (a, b) would move the line by the
-      // anchor's distance times its rounding error: (a, b) are rounded with a
-      // step refined by that distance and c is derived from them, so the
-      // anchor stays on the line.
-      const coefficientScale = (anchor: Point2d) => pixelsPerUnit * 10 * Math.max(1, Math.hypot(anchor.x, anchor.y))
-      const offsetScale = pixelsPerUnit * 10
-      let rounded: readonly [number, number, number]
-      if (kind === 'line') {
-        // Translating changes only c; motion along the line has no effect.
-        // The selection anchor travels with the line so that a later rotation
-        // pivots about the translated line, not the pressed one.
-        const origin = lineDragOrigin.current
-        if (!origin) return
-        const scale = coefficientScale(origin.anchor)
-        const a = Number(formatViewportCoordinate(origin.coefficients[0], scale))
-        const b = Number(formatViewportCoordinate(origin.coefficients[1], scale))
-        const shift = { x: target.x - origin.point.x, y: target.y - origin.point.y }
-        const c = origin.coefficients[2] - a * shift.x - b * shift.y
-        rounded = [a, b, Number(formatViewportCoordinate(c, offsetScale))]
-        if (selectedLine?.itemId === itemId) {
-          setSelectedLine({ itemId, anchor: { x: origin.anchor.x + shift.x, y: origin.anchor.y + shift.y } })
-        }
-      } else {
-        // Rotating keeps the norm of (a, b) and the anchor on the line; the
-        // anchor is projected in case the line moved since it was selected.
-        const { point: on, direction } = rendered.primitive
-        const selected = selectedLine?.itemId === itemId ? selectedLine.anchor : on
-        const along = (selected.x - on.x) * direction.x + (selected.y - on.y) * direction.y
-        const anchor = { x: on.x + direction.x * along, y: on.y + direction.y * along }
-        const dx = point.x - anchor.x
-        const dy = point.y - anchor.y
-        const length = Math.hypot(dx, dy)
-        if (length === 0) return
-        const scale = Math.hypot(a0, b0)
-        const coefficients = coefficientScale(anchor)
-        const a = Number(formatViewportCoordinate(dx / length * scale, coefficients))
-        const b = Number(formatViewportCoordinate(dy / length * scale, coefficients))
-        rounded = [a, b, Number(formatViewportCoordinate(-(a * anchor.x + b * anchor.y), offsetScale))]
-      }
-      const rewritten = rewriteConstructorLiterals(item.source, components, rounded)
-      if (rewritten !== item.source) executeCommand({ kind: 'update-source', itemId, source: rewritten })
-      components.forEach((component, index) => {
-        if (component.kind !== 'reference') return
-        const scalarItem = expressionDoc.items.find((candidate) =>
-          candidate.kind !== 'annotation' &&
-          declaredName(candidate.source) === component.name &&
-          directScalarEdit(candidate.source) !== null)
-        if (scalarItem) executeCommand({
-          kind: 'set-scalar-value', itemId: scalarItem.id, value: rounded[index] * component.sign,
-        })
-      })
-      return
-    }
-    if (kind === 'head' && interpretation.supportsHead(rendered.entity)) {
-      const components = literalEditComponents(item, rendered.entity)
-      const base = primitiveBase(rendered.primitive)
-      if (!components || !base) return
-      const values = [
-        Number(coordinate(target.x - base.x)),
-        Number(coordinate(target.y - base.y)),
-      ] as const
-      const rewritten = rewriteConstructorLiterals(item.source, components, values)
-      if (rewritten !== item.source) executeCommand({
-        kind: 'update-source', itemId, source: rewritten,
-      })
-      components.forEach((component, index) => {
-        if (component.kind !== 'reference') return
-        const target = expressionDoc.items.find((candidate) =>
-          candidate.kind !== 'annotation' &&
-          declaredName(candidate.source) === component.name &&
-          directScalarEdit(candidate.source) !== null)
-        if (target) executeCommand({
-          kind: 'set-scalar-value', itemId: target.id,
-          value: values[index] * component.sign,
-        })
-      })
-      return
-    }
-    if (!interpretation.supportsPosition(rendered.entity)) {
-      // The entity carries its own location: rewrite its constructor literal
-      // (PGA-VIZ-003) with the pointer's grid-rounded coordinates, scaled by
-      // the kept weight of a weighted point (#181).
-      const edit = literalEditTarget(item, rendered.entity)
-      if (!edit) return
-      const { components } = edit
-      const weight = edit.weight ? weightValue(item.source, edit.weight) : 1
-      const values = weight === null ? null : weightedViewportCoordinates(point, weight, pixelsPerUnit)
-      if (weight === null || !values) return
-      const rewritten = rewriteConstructorLiterals(item.source, components, values)
-      if (rewritten !== item.source) executeCommand({
-        kind: 'update-source', itemId, source: rewritten,
-      })
-      components.forEach((component, index) => {
-        if (component.kind !== 'reference') return
-        const scalarItem = expressionDoc.items.find((candidate) =>
-          candidate.kind !== 'annotation' &&
-          declaredName(candidate.source) === component.name &&
-          directScalarEdit(candidate.source) !== null)
-        if (scalarItem) executeCommand({
-          kind: 'set-scalar-value', itemId: scalarItem.id,
-          value: values[index] * component.sign,
-        })
-      })
-      // Where the point is now drawn, for the keyboard announcement.
-      return { x: values[0] / weight, y: values[1] / weight }
-    }
-    const literalPosition = interpretation.formatPosition(
-      coordinate(target.x), coordinate(target.y),
-    )
-    if (!item.positionSource) {
-      executeCommand({ kind: 'update-position', itemId, positionSource: literalPosition })
-      return
-    }
-    const components = positionComponents(item.positionSource)
-    if (!components) {
-      executeCommand({ kind: 'update-position', itemId, positionSource: literalPosition })
-      return
-    }
-    const rewritten = rewriteConstructorLiterals(item.positionSource, components, [target.x, target.y])
-    if (rewritten !== item.positionSource) executeCommand({
-      kind: 'update-position', itemId, positionSource: rewritten,
+    const edit = manipulationEdit(manipulationContext, targets, {
+      item, rendered, kind, point, lineDrag: lineDragOrigin.current, selectedLine,
     })
-    components.forEach((component, index) => {
-      if (component.kind !== 'reference') return
-      const targetItem = expressionDoc.items.find((candidate) =>
-        candidate.kind !== 'annotation' &&
-        declaredName(candidate.source) === component.name &&
-        directScalarEdit(candidate.source) !== null)
-      if (targetItem) executeCommand({
-        kind: 'set-scalar-value', itemId: targetItem.id,
-        value: (index === 0 ? target.x : target.y) * component.sign,
-      })
-    })
-  }
-  const gestureLabel = (kind: ManipulationKind) =>
-    kind === 'head' ? 'Vector head' : kind === 'base' ? 'Object base' : kind === 'line' ? 'Line' : 'Line normal'
-  const lineCoefficients = (primitive: Extract<VisualizationPrimitive, { kind: 'unbounded-line' }>): readonly [number, number, number] => {
-    const a = primitive.normal.x * primitive.scale
-    const b = primitive.normal.y * primitive.scale
-    return [a, b, -(a * primitive.point.x + b * primitive.point.y)]
+    if (edit.selectedLineAnchor) setSelectedLine({ itemId, anchor: edit.selectedLineAnchor })
+    edit.commands.forEach((command) => executeCommand(command))
+    return edit.drawn
   }
   /** Where the anchors of a base drag are measured from, in CSS pixels. */
   const anchorProximity = (draggedId: string, pointer: Point2d): AnchorProximity => {
@@ -1064,15 +916,13 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
     setLastManipulatedId(itemId)
     anchorValidityCache.current.clear()
     if (kind === 'line') {
-      const rendered = renderedPrimitives.find((candidate) => candidate.id === itemId)
+      const line = linePrimitive(renderedPrimitives.find((candidate) => candidate.id === itemId))
       const point = toMathematical(viewport, screenPoint(event.clientX, event.clientY))
-      if (rendered?.primitive.kind === 'unbounded-line') {
-        const { point: on, direction } = rendered.primitive
+      if (line) {
         // A press selects the line and anchors its normal at the pressed
         // point projected onto the line.
-        const along = (point.x - on.x) * direction.x + (point.y - on.y) * direction.y
-        const anchor = { x: on.x + direction.x * along, y: on.y + direction.y * along }
-        lineDragOrigin.current = { point, anchor, coefficients: lineCoefficients(rendered.primitive) }
+        const anchor = projectOnLine(line, point)
+        lineDragOrigin.current = { point, anchor, coefficients: lineCoefficients(line) }
         setSelectedLine({ itemId, anchor })
       }
     }
@@ -1080,85 +930,13 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
     dispatchHistory({ type: 'begin-transaction' })
     setViewportAnnouncement(`${gestureLabel(kind)} drag started.`)
   }
-  const lineMovableByConstruction = (item: ExpressionItem, entity: InterpretedEntity): boolean =>
-    interpretation.literalEdit(entity)?.constructor === 'line' &&
-    componentsMovable(literalEditComponents(item, entity))
-  const componentsMovable = (
-    components: readonly ConstructorComponentEdit[] | null,
-  ): boolean => {
-    if (!components) return false
-    const references = components.filter((component) => component.kind === 'reference')
-    if (new Set(references.map((component) => component.name)).size !== references.length)
-      return false
-    return references.every((component) => expressionDoc.items.filter((candidate) =>
-      candidate.kind !== 'annotation' &&
-      declaredName(candidate.source) === component.name &&
-      directScalarEdit(candidate.source) !== null).length === 1)
-  }
-  const literalEditTarget = (item: ExpressionItem, entity: InterpretedEntity) => {
-    const edit = interpretation.literalEdit(entity)
-    const target = edit ? directItemLiteralEdit(item.source, edit, engine.tuple ?? null) : null
-    // A weight that depends on a rewritten coordinate would change with it.
-    const rewritten = new Set(target?.components.flatMap((component) =>
-      component.kind === 'reference' ? [component.name] : []))
-    return target?.weight?.kind === 'reference' &&
-      declarationDependsOn(expressionDoc.items, target.weight.name, rewritten)
-      ? null
-      : target
-  }
-  const literalEditComponents = (item: ExpressionItem, entity: InterpretedEntity) =>
-    literalEditTarget(item, entity)?.components ?? null
-  /** The current value of a kept weight: its literal, or the scalar its name declares. */
-  const weightValue = (source: string, weight: ConstructorComponentEdit): number | null => {
-    if (weight.kind === 'literal') return literalComponentValue(source, weight)
-    const evaluation = evaluatedItems.find(({ item }) => declaredName(item.source) === weight.name)?.evaluation
-    if (evaluation?.status !== 'valid' || evaluation.valueType !== 'single' ||
-        evaluation.value.coefficients.some((coefficient, index) => index > 0 && coefficient !== 0)) return null
-    return evaluation.value.coefficients[0] * weight.sign
-  }
-  /**
-   * A position source is a two-argument literal of the interpretation's
-   * creation constructor, or a tuple the active algebra reads as one.
-   */
-  const positionComponents = (positionSource: string) =>
-    directConstructorComponents(positionSource, interpretation.creation.constructor, 2, engine.tuple ?? null)
-  const headMovableByConstruction = (item: ExpressionItem, entity: InterpretedEntity): boolean =>
-    interpretation.supportsHead(entity) && componentsMovable(literalEditComponents(item, entity))
-  /**
-   * An object whose source a drag can rewrite can be held in place from its
-   * row or its menu: its handles then neither show as movable nor move it.
-   */
-  const heldInPlace = (item: ExpressionItem) => expressionDoc.appearance[item.id]?.draggable === false
-  const lineMovable = (item: ExpressionItem, entity: InterpretedEntity) =>
-    !heldInPlace(item) && lineMovableByConstruction(item, entity)
-  const headMovable = (item: ExpressionItem, entity: InterpretedEntity) =>
-    !heldInPlace(item) && headMovableByConstruction(item, entity)
-  const objectBaseMovable = (item: ExpressionItem, entity: InterpretedEntity) =>
-    !heldInPlace(item) && objectBaseMovableByConstruction(item, entity)
   const itemOf = (id: string) => expressionDoc.items.find((candidate) => candidate.id === id)
   /** What the glyph of a rendered element offers: nothing to an element that is no item, such as a list element. */
   const glyphMovability: GlyphMovability = {
     present: (id) => !!itemOf(id),
-    head: (id, entity) => { const item = itemOf(id); return !!item && headMovable(item, entity) },
-    base: (id, entity) => { const item = itemOf(id); return !!item && objectBaseMovable(item, entity) },
-    line: (id, entity) => { const item = itemOf(id); return !!item && lineMovable(item, entity) },
-  }
-  /** Whether a drag could move the object at all, held in place or not. */
-  const draggableByConstruction = (item: ExpressionItem, entity: InterpretedEntity) =>
-    lineMovableByConstruction(item, entity) || headMovableByConstruction(item, entity) ||
-    objectBaseMovableByConstruction(item, entity)
-  const objectBaseMovableByConstruction = (item: ExpressionItem, entity: InterpretedEntity): boolean =>
-    interpretation.supportsPosition(entity)
-      ? !item.positionSource ||
-        directPositionAnchorReference(item.positionSource) !== null ||
-        componentsMovable(positionComponents(item.positionSource))
-      : locatedMovable(item, entity)
-  /** A located entity's literal, with a weight this zoom can keep (#181). */
-  const locatedMovable = (item: ExpressionItem, entity: InterpretedEntity): boolean => {
-    const target = literalEditTarget(item, entity)
-    if (!target || !componentsMovable(target.components)) return false
-    const weight = target.weight ? weightValue(item.source, target.weight) : 1
-    return weight !== null && weightedDragSupported(weight, viewport.pixelsPerUnit)
+    head: (id, entity) => { const item = itemOf(id); return !!item && targets.headMovable(item, entity) },
+    base: (id, entity) => { const item = itemOf(id); return !!item && targets.baseMovable(item, entity) },
+    line: (id, entity) => { const item = itemOf(id); return !!item && targets.lineMovable(item, entity) },
   }
   const manipulateWithKeyboard = (
     event: KeyboardEvent<SVGElement>,
@@ -1182,16 +960,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
       const currentReference = item.positionSource
         ? directPositionAnchorReference(item.positionSource)
         : null
-      const candidates = renderedPrimitives.flatMap((rendered) => {
-        if (rendered.id.includes(':') || rendered.id === itemId) return []
-        const target = expressionDoc.items.find((candidate) => candidate.id === rendered.id)
-        const name = target ? declaredName(target.source) : null
-        if (!name) return []
-        const properties = rendered.primitive.kind === 'oriented-segment'
-          ? ['position', 'head'] as const
-          : ['position'] as const
-        return properties.map((property) => ({ name, property }))
-      })
+      const candidates = anchorTargets(renderedPrimitives, expressionDoc.items, itemId)
       const currentIndex = candidates.findIndex((candidate) =>
         candidate.name === currentReference?.name &&
         candidate.property === currentReference.property)
@@ -1247,16 +1016,13 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
     dispatchHistory({ type: 'boundary' })
     dispatchHistory({ type: 'begin-transaction' })
     if (kind === 'line') {
-      const rendered = renderedPrimitives.find((candidate) => candidate.id === itemId)
-      if (rendered?.primitive.kind === 'unbounded-line') {
-        lineDragOrigin.current = { point: current, anchor: current, coefficients: lineCoefficients(rendered.primitive) }
-      }
+      const line = linePrimitive(renderedPrimitives.find((candidate) => candidate.id === itemId))
+      if (line) lineDragOrigin.current = { point: current, anchor: current, coefficients: lineCoefficients(line) }
     }
     const target = kind === 'normal'
       // Nudge the normal handle's head, then the update renormalizes it.
       ? (() => {
-          const rendered = renderedPrimitives.find((candidate) => candidate.id === itemId)
-          const normal = rendered?.primitive.kind === 'unbounded-line' ? rendered.primitive.normal : { x: 1, y: 0 }
+          const normal = linePrimitive(renderedPrimitives.find((candidate) => candidate.id === itemId))?.normal ?? { x: 1, y: 0 }
           const length = lineNormalLength(viewport, objectRenderScale)
           return { x: current.x + normal.x * length + delta.x, y: current.y + normal.y * length + delta.y }
         })()
@@ -1718,6 +1484,15 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
   // historical renderer used 1.5 as that baseline, so keep the visual size
   // while restoring a meaningful multiplicative setting.
   const objectRenderScale = expressionDoc.view.display.objectScale * 1.5
+  // What a drag can move, and the edits it writes (#173).
+  const manipulationContext: ManipulationContext = {
+    document: expressionDoc,
+    evaluatedItems,
+    interpretation,
+    tuple: engine.tuple ?? null,
+    pixelsPerUnit: viewport.pixelsPerUnit,
+  }
+  const targets = dragTargets(manipulationContext)
   // NoViz builds no render primitives (#55).
   const { rendered: renderedPrimitives, connections: renderedConnections, omitted: omittedRenderElements } = noViz
     ? { rendered: [], connections: [], omitted: 0 }
@@ -3060,7 +2835,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
                 noViz={noViz}
                 draggableAvailable={!noViz && entry.evaluation?.status === 'valid' &&
                   entry.evaluation.valueType === 'single' && entry.evaluation.primitive !== null &&
-                  draggableByConstruction(entry.item, entry.evaluation.entity)}
+                  targets.draggableByConstruction(entry.item, entry.evaluation.entity)}
                 reducedMotion={reducedMotion}
                 dropBefore={target?.kind === 'before' && target.itemId === itemId}
                 dropAfter={(target?.kind === 'after' && target.itemId === itemId) ||

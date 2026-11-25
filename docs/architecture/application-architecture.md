@@ -246,9 +246,10 @@ enter interpretation or rendering state.
 `App.tsx` is being reduced to a composition shell that wires state, hooks and
 components together ([#173](https://github.com/eharquin/gamut/issues/173)). A
 new feature lands in the layer that owns it, in a component or a hook, and
-adds no logic to `App.tsx`. Its rendering already names no primitive kind:
-the visualization layer lays the scene out and draws it; the gesture code
-still does, until it moves to hooks.
+adds no logic to `App.tsx`, which names no primitive kind: the
+visualization layer lays the scene out and draws it, and
+`application/viewportManipulation` decides what a drag can move and the
+source edits it writes.
 
 Tests are colocated with the layer whose behavior they establish. Integration
 tests at the UI boundary verify that the composed workflow exposes values,
