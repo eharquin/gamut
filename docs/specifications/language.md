@@ -491,7 +491,7 @@ Parentheses may always make grouping explicit.
 The common language provides, in every algebra, the scalar functions `abs`,
 `sqrt`, `exp`, `log`, `sin`, `cos`, `tan`, `sinh`, `cosh`, `tanh`, `asin`,
 `acos`, `atan`, `atan2`, `min`, `max`, and `sign`, the list reduction `sum`,
-the conditional `if`, and the operations on a value
+the conditional `if`, `iterate` and `map`, and the operations on a value
 `norm`, `normalize`, `inorm`, `inormalize`, `dual`, `inverse`, `reverse`, and
 `involution`. Scalar-only functions require pure grade-zero arguments unless
 an algebra capability explicitly defines their multivector extension. In
@@ -637,9 +637,9 @@ path = iterate(step, O, n)
 ```
 
 - `f` shall be the name of a declared function of exactly one parameter
-  (`LANG_ITERATE_FUNCTION`, `LANG_ARITY`). It is the only place where a
-  function name appears without a call, and it is a dependency of the item
-  like a call; functions do not become values.
+  (`LANG_FUNCTION_ARGUMENT`, `LANG_ARITY`). With `map`, it is the only place
+  where a function name appears without a call, and it is a dependency of the
+  item like a call; functions do not become values.
 - `x0` and every state shall be one value: a list `x0`, or a step that
   returns a list, fails the expression (`LANG_NESTED_LIST`).
 - `n` shall be a finite non-negative integer scalar, with the rules of a
@@ -662,6 +662,42 @@ path = iterate(step, O, n)
 With a constant motor, `rot(X) = M >>> X` and `iterate(rot, X, n)` gives
 `exp([0...n] * log(M)) >>> X` within numerical tolerance; `iterate` is needed
 when the motor depends on the current state.
+
+### Mapping over lists
+
+`map(f, L1, …, Lk)` applies a declared function element by element (#360), so
+one row draws one shape per element of a list:
+
+```text
+place(M) = M >>> cor
+boxes = map(place, Mk)               # one box per motor
+ball(P, d) = exp(-0.5 * th * P) >>> (P + abs(d) * e01)
+balls = map(ball, path, ds)          # one circle per step of a ray
+```
+
+- `f` shall be the name of a declared function of exactly `k` parameters
+  (`LANG_FUNCTION_ARGUMENT`, `LANG_ARITY`); `map` takes at least two
+  arguments, a syntax diagnostic otherwise, like any reserved function.
+- Each `Li` shall evaluate to a flat list (`LANG_LIST_REQUIRED`), and all
+  shall have the same length (`LANG_LIST_LENGTH`), with no broadcasting: a
+  value used by every call is a free name of `f`, not an argument.
+  `map(f, [])` is `[]`.
+- Element `i` is `f(L1[i], …, Lk[i])`, the calls evaluated in order, each
+  argument one element. If every call returns one value, the result is a
+  flat list. If every call returns a flat list, the result is a *list of
+  lists* (section 11), whose inner lists may have different lengths. A call
+  returning a value where another returns a list, or a list of lists, fails
+  the expression (`LANG_NESTED_LIST`).
+- If call `i` fails, the whole expression fails with no partial list; the
+  message starts with `Element i:` and carries the function's diagnostic.
+- The total number of elements, inner elements included, is checked against
+  the generated-value limit (10,000) as the calls return; work inside the
+  calls is charged to the document evaluation budget.
+- Outer element `i` has a stable identity derived from the `map` node and
+  `i`; the elements of inner list `i` keep the identities the body gave them,
+  prefixed by it, so labels and appearances stay attached when a length
+  changes. An element never shares the identity of the value it came from but
+  keeps its lineage, as in `iterate`.
 
 ## 11. Lists, broadcasting, and indexing
 
@@ -716,6 +752,30 @@ metadata sources. An invalid member fails the complete expression and the
 diagnostic identifies its zero-based position in `I`. Indexing a non-list is a
 type error. Slices and negative-from-end indexing are not supported in the
 initial scope.
+
+### Lists of lists
+
+Only `map` makes a list of lists, a list whose elements are grouped into
+inner lists (#360); a literal such as `[[a, b], [c]]` stays an error. It is
+kept deliberately small:
+
+- `L[i]` is inner list `i`, a flat list whose elements keep their identities,
+  and `L[i][j]` follows. Gather indexing `L[I]` is a list of the selected inner
+  lists.
+- An item may hold one, and so may the branch of `if` that a single condition
+  selects. Every other use, an operand of an operator, a function or a
+  reduction, an argument of `map` or of a declared function, a state of
+  `iterate`, an element of a list literal, or a branch selected element by
+  element, is `LANG_NESTED_LIST`.
+- The canvas draws each inner list as a separate point list with the item's
+  appearance: the points, the border (open or closed) and the fill apply to
+  each inner list, and nothing joins two of them. Element `j` of inner list
+  `i` of `L` is named `L[i][j]`.
+- The expression panel shows the value as `List (k lists, m elements)`, and
+  its elements by their two indices.
+
+Depth beyond two, broadcasting between a list of lists and a flat list, and a
+flatten function are not part of the language.
 
 ## 12. Ranges
 
@@ -790,7 +850,7 @@ from the parse tree so that the operand keeps its grouping: `(A + B).norm`
 becomes `norm(A + B)` and `A.inverse.norm` becomes `norm(inverse(A))`. A
 source that does not parse is kept unchanged with its diagnostic, and notes
 are text. Version 2 also reserves `normalize`, `inormalize`, `sum`, `if`,
-`sign`, `iterate` and the names of the operations, so a version 1 item declared with one of them
+`sign`, `iterate`, `map` and the names of the operations, so a version 1 item declared with one of them
 becomes a diagnostic.
 
 Unknown function calls produce diagnostics. Declared functions (section 10)

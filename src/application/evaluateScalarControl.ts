@@ -37,7 +37,7 @@ function references(expression: SurfaceExpressionNode): readonly Readonly<{
     case 'property-expression': return references(expression.object)
     case 'vector-constructor':
     case 'tuple': return expression.components.flatMap(references)
-    // The function `iterate` names is not a value (#341).
+    // The function `iterate` or `map` names is not a value (#341, #360).
     case 'call-expression': return (iteratedName(expression)
       ? expression.arguments.slice(1) : expression.arguments).flatMap(references)
     case 'list-expression': return expression.elements.flatMap(references)
@@ -47,14 +47,14 @@ function references(expression: SurfaceExpressionNode): readonly Readonly<{
   }
 }
 
-/** The function `iterate(f, …)` names, which is called, not used as a value (#341). */
+/** The function `iterate(f, …)` or `map(f, …)` names, which is called, not used as a value (#341, #360). */
 function iteratedName(expression: SurfaceExpressionNode): Readonly<{ name: string; span: SourceSpan }> | null {
-  if (expression.kind !== 'call-expression' || expression.callee !== 'iterate') return null
+  if (expression.kind !== 'call-expression' || (expression.callee !== 'iterate' && expression.callee !== 'map')) return null
   const [first] = expression.arguments
   return first?.kind === 'reference' && first.property === null ? { name: first.name, span: first.span } : null
 }
 
-/** The calls of a source to names that are not common-language functions (#340), and the function `iterate` names. */
+/** The calls of a source to names that are not common-language functions (#340), and the function `iterate` or `map` names. */
 function calls(expression: SurfaceExpressionNode): readonly Readonly<{ name: string; span: SourceSpan }>[] {
   const iterated = iteratedName(expression)
   const own = expression.kind === 'call-expression' && !languageFunction(expression.callee)

@@ -1,7 +1,10 @@
 import { AlgebraOperationError, type AlgebraEngine } from '../algebra/algebraEngine'
 import { permutedBlade } from '../domain/algebraBasis'
 import { ownedMultivector, type OwnedMultivector } from '../domain/multivector'
+import type { SourceSpan } from '../domain/diagnostic'
 import {
+  innerLists,
+  isListOfLists,
   MAX_GENERATED_VALUES,
   outerConstruction,
   ownedList,
@@ -11,6 +14,7 @@ import {
   valueLineage,
   type LanguageValue,
   type ListElement,
+  type OwnedList,
 } from '../domain/languageValue'
 import type { ComparisonOperator, CoreExpressionNode } from '../language/ast'
 import { languageFunction, type ListReduction } from '../language/functions'
@@ -95,8 +99,11 @@ function evaluateExpressionUnchecked(
   functions?: FunctionScope,
 ): LanguageValue {
   const scope = identityScope ?? 'source'
-  const evaluate = (node: CoreExpressionNode) =>
+  // A list of lists (#360) is a value of an item, of an index's object, and
+  // of a branch of `if` with one condition; every other operand rejects it.
+  const evaluateAny = (node: CoreExpressionNode) =>
     evaluateExpression(node, engine, resolveReference, scope, budget, functions)
+  const evaluate = (node: CoreExpressionNode) => flatValue(evaluateAny(node), node)
   switch (expression.kind) {
     case 'scalar':
       return engine.scalar(expression.value)
@@ -183,13 +190,14 @@ function evaluateExpressionUnchecked(
     case 'range':
       return evaluateRange(expression, evaluate, engine, scope, budget)
     case 'index': {
-      const object = evaluate(expression.object)
+      const object = evaluateAny(expression.object)
       if (object.kind !== 'list') {
         throw new ExpressionEvaluationError(
           'LANG_INDEX_TYPE', 'Only a list can be indexed.', expression.object.origin,
         )
       }
       const indexValue = evaluate(expression.index)
+      if (isListOfLists(object)) return indexListOfLists(expression, object, indexValue, scope, budget)
       if (indexValue.kind === 'multivector') {
         const index = validatedListIndex(
           indexValue, object.elements.length, expression.index,
@@ -256,9 +264,11 @@ function evaluateExpressionUnchecked(
         ) ? 1 : 0), budget)
     }
     case 'conditional':
-      return evaluateConditional(expression, evaluate, budget)
+      return evaluateConditional(expression, evaluate, evaluateAny, budget)
     case 'iterate':
       return evaluateIterate(expression, evaluate, engine, scope, budget, functions)
+    case 'map':
+      return evaluateMap(expression, evaluate, engine, scope, budget, functions)
     case 'regressive':
       return binary(expression, evaluate(expression.left), evaluate(expression.right), engine.regressive, budget)
     case 'negate':
@@ -541,11 +551,13 @@ function conditionTruth(value: OwnedMultivector, expression: CoreExpressionNode,
 function evaluateConditional(
   expression: Extract<CoreExpressionNode, { kind: 'conditional' }>,
   evaluate: (expression: CoreExpressionNode) => LanguageValue,
+  evaluateAny: (expression: CoreExpressionNode) => LanguageValue,
   budget: EvaluationBudget,
 ): LanguageValue {
   const condition = evaluate(expression.condition)
   if (condition.kind === 'multivector') {
-    return evaluate(conditionTruth(condition, expression.condition) ? expression.whenTrue : expression.whenFalse)
+    // One condition selects a whole branch, which may be a list of lists.
+    return evaluateAny(conditionTruth(condition, expression.condition) ? expression.whenTrue : expression.whenFalse)
   }
   const truths = condition.elements.map((element, index) =>
     conditionTruth(element.value, expression.condition, index))
@@ -606,16 +618,7 @@ function evaluateIterate(
   budget: EvaluationBudget,
   functions: FunctionScope | undefined,
 ): LanguageValue {
-  const declared = expression.functionName === null ? undefined : functions?.resolve(expression.functionName)
-  if (!declared) {
-    throw new ExpressionEvaluationError(
-      'LANG_ITERATE_FUNCTION',
-      expression.functionName === null
-        ? 'The first argument of “iterate” shall be the name of a declared function.'
-        : `“${expression.functionName}” is not a declared function.`,
-      expression.functionOrigin,
-    )
-  }
+  const declared = functionArgument(expression, 'iterate', functions)
   if (declared.parameters.length !== 1) {
     throw new ExpressionEvaluationError(
       'LANG_ARITY',
@@ -679,6 +682,168 @@ function evaluateIterate(
     const lineage = valueLineage(state)
     return { id, value, sources: lineage.length > 0 ? lineage : [id] }
   }))
+}
+
+/** The declared function that `iterate` or `map` names in its first argument (#341, #360). */
+function functionArgument(
+  expression: Readonly<{ functionName: string | null; functionOrigin: SourceSpan }>,
+  callee: 'iterate' | 'map',
+  functions: FunctionScope | undefined,
+): UserFunction {
+  const declared = expression.functionName === null ? undefined : functions?.resolve(expression.functionName)
+  if (!declared) {
+    throw new ExpressionEvaluationError(
+      'LANG_FUNCTION_ARGUMENT',
+      expression.functionName === null
+        ? `The first argument of “${callee}” shall be the name of a declared function.`
+        : `“${expression.functionName}” is not a declared function.`,
+      expression.functionOrigin,
+    )
+  }
+  return declared
+}
+
+/** Rejects a list of lists where an operand is expected (#360). */
+function flatValue(value: LanguageValue, node: CoreExpressionNode): LanguageValue {
+  if (!isListOfLists(value)) return value
+  throw new ExpressionEvaluationError(
+    'LANG_NESTED_LIST',
+    'This is a list of lists, made by “map”; only indexing, such as L[i], can use it.',
+    node.origin,
+  )
+}
+
+/**
+ * `map(f, L1, …, Lk)` (#360): element `i` is `f(L1[i], …, Lk[i])`. The
+ * lists have equal lengths; every call returns one value, which makes a
+ * flat list, or every call returns a flat list, which makes a list of lists.
+ * A failing call fails the expression with its index. Outer element `i` has
+ * an identity derived from the node and `i`, and the elements of an inner
+ * list are prefixed by it.
+ */
+function evaluateMap(
+  expression: Extract<CoreExpressionNode, { kind: 'map' }>,
+  evaluate: (expression: CoreExpressionNode) => LanguageValue,
+  engine: AlgebraEngine,
+  scope: string,
+  budget: EvaluationBudget,
+  functions: FunctionScope | undefined,
+): LanguageValue {
+  const declared = functionArgument(expression, 'map', functions)
+  const count = expression.lists.length
+  if (declared.parameters.length !== count) {
+    throw new ExpressionEvaluationError(
+      'LANG_ARITY',
+      `“map” passes ${count} ${count === 1 ? 'list' : 'lists'}, but “${declared.name}” takes ${declared.parameters.length} ${declared.parameters.length === 1 ? 'parameter' : 'parameters'}.`,
+      expression.functionOrigin,
+    )
+  }
+  const lists = expression.lists.map((node, index) => {
+    const value = evaluate(node)
+    if (value.kind !== 'list') {
+      throw new ExpressionEvaluationError(
+        'LANG_LIST_REQUIRED',
+        `Argument ${index + 2} of “map” must be a list; a value used by every call is a name in the body of “${declared.name}”.`,
+        node.origin,
+      )
+    }
+    return value
+  })
+  const lengths = lists.map((list) => list.elements.length)
+  if (lengths.some((length) => length !== lengths[0])) {
+    throw new ExpressionEvaluationError(
+      'LANG_LIST_LENGTH',
+      `The lists of “map” have lengths ${lengths.join(', ')}; they must be equal.`,
+      expression.origin,
+    )
+  }
+  const length = lengths[0]
+  const base = `${scope}:map:${expression.origin.start}:${expression.origin.end}`
+  const results: LanguageValue[] = []
+  let total = 0
+  for (let index = 0; index < length; index += 1) {
+    let result: LanguageValue
+    try {
+      result = callUserFunction(expression, declared, lists.map((list) => list.elements[index].value), engine,
+        `${base}:${index}`, budget, functions!)
+    } catch (error) {
+      if (!(error instanceof ExpressionEvaluationError) || error.code.startsWith('LIMIT_')) throw error
+      throw new ExpressionEvaluationError(error.code, `Element ${index}: ${error.message}`, expression.origin)
+    }
+    if (isListOfLists(result) || (index > 0 && (result.kind === 'list') !== (results[0].kind === 'list'))) {
+      throw new ExpressionEvaluationError(
+        'LANG_NESTED_LIST',
+        isListOfLists(result)
+          ? `Element ${index}: “${declared.name}” returns a list of lists; lists of lists do not nest.`
+          : `Element ${index}: “${declared.name}” returns ${result.kind === 'list' ? 'a list' : 'one value'}, but element 0 was ${results[0].kind === 'list' ? 'a list' : 'one value'}; every call must return the same.`,
+        expression.origin,
+      )
+    }
+    total += result.kind === 'list' ? result.elements.length : 1
+    if (total > MAX_GENERATED_VALUES) {
+      throw new ExpressionEvaluationError(
+        'LIMIT_GENERATED_VALUES',
+        `This “map” would generate more than ${MAX_GENERATED_VALUES} elements, the limit.`,
+        expression.origin,
+      )
+    }
+    results.push(result)
+  }
+  chargeElements(budget, total, expression)
+  /** A copy keeping the lineage of the value it came from, as in `iterate`. */
+  const element = (id: string, value: OwnedMultivector, sources?: readonly string[]) => {
+    const copy = ownedMultivector(value.coefficients, value.basis)
+    const construction = outerConstruction(value)
+    if (construction) retainOuterConstruction(copy, construction)
+    const lineage = sources ?? valueLineage(value)
+    return { id, value: copy, sources: lineage.length > 0 ? lineage : [id] }
+  }
+  if (results.every((result) => result.kind === 'multivector')) {
+    return ownedList(results.map((result, index) => element(`${base}:${index}`, result as OwnedMultivector)))
+  }
+  return ownedList(
+    results.flatMap((result, index) => (result as OwnedList).elements.map((inner) =>
+      element(`${base}:${index}:${inner.id}`, inner.value, inner.sources))),
+    results.map((result) => (result as OwnedList).elements.length),
+  )
+}
+
+/**
+ * Indexing a list of lists (#360): `L[i]` is inner list `i`, a flat list
+ * whose elements keep their identities; `L[I]` gathers inner lists into a
+ * list of lists.
+ */
+function indexListOfLists(
+  expression: Extract<CoreExpressionNode, { kind: 'index' }>,
+  object: OwnedList & Readonly<{ groups: readonly number[] }>,
+  indexValue: LanguageValue,
+  scope: string,
+  budget: EvaluationBudget,
+): LanguageValue {
+  const inner = innerLists(object)
+  if (indexValue.kind === 'multivector') {
+    return ownedList(inner[validatedListIndex(indexValue, inner.length, expression.index)])
+  }
+  const selected = indexValue.elements.map((indexElement, position) => ({
+    position,
+    indexId: indexElement.id,
+    elements: inner[validatedListIndex(indexElement.value, inner.length, expression.index, position)],
+  }))
+  const total = selected.reduce((sum, { elements }) => sum + elements.length, 0)
+  chargeElements(budget, total, expression)
+  return ownedList(
+    selected.flatMap(({ position, indexId, elements }) => elements.map((chosen) => {
+      const value = ownedMultivector(chosen.value.coefficients, chosen.value.basis)
+      const construction = outerConstruction(chosen.value)
+      if (construction) retainOuterConstruction(value, construction)
+      return {
+        id: `${scope}:gather:${expression.origin.start}:${expression.origin.end}:${position}:${indexId}:${chosen.id}`,
+        value,
+        sources: [chosen.id],
+      }
+    })),
+    selected.map(({ elements }) => elements.length),
+  )
 }
 
 /**

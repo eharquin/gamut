@@ -48,12 +48,18 @@ type NodeResult =
 const RESERVED_FUNCTION_NAMES = LANGUAGE_FUNCTION_NAMES
 
 /** The argument counts a common-language function accepts, checked at parse time. */
-function reservedArities(callee: string): readonly number[] | null {
-  return languageFunction(callee)?.arities ?? null
+function reservedArities(callee: string): Readonly<{ arities: readonly number[]; minArity?: number }> | null {
+  return languageFunction(callee) ?? null
 }
 
-function arityText(arities: readonly number[]): string {
-  const words = ['no argument', 'one argument']
+function acceptsCount(entry: Readonly<{ arities: readonly number[]; minArity?: number }>, count: number): boolean {
+  return entry.minArity !== undefined ? count >= entry.minArity : entry.arities.includes(count)
+}
+
+function arityText(entry: Readonly<{ arities: readonly number[]; minArity?: number }>): string {
+  const words = ['no argument', 'one argument', 'two arguments']
+  if (entry.minArity !== undefined) return `at least ${words[entry.minArity] ?? `${entry.minArity} arguments`}`
+  const { arities } = entry
   if (arities.length === 1) return `exactly ${words[arities[0]] ?? `${arities[0]} arguments`}`
   return `${arities.slice(0, -1).join(', ')} or ${arities[arities.length - 1]} arguments`
 }
@@ -742,7 +748,7 @@ class Parser {
       }
     }
     const arities = reservedArities(callee.text)
-    if (arities !== null && !arities.includes(argumentNodes.length)) {
+    if (arities !== null && !acceptsCount(arities, argumentNodes.length)) {
       return {
         ok: false,
         diagnostic: syntaxDiagnostic(

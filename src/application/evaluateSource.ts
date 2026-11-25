@@ -5,6 +5,7 @@ import {
   type OwnedMultivector,
 } from '../domain/multivector'
 import {
+  elementPath,
   inspectLanguageValue,
   elementIdentity,
   type LanguageValue,
@@ -48,7 +49,8 @@ export type EvaluationState =
       valueType: 'list'
       value: OwnedList
       inspection: string
-      entity: Readonly<{ kind: 'list'; length: number }>
+      /** `lists` counts the inner lists of a list of lists (#360). */
+      entity: Readonly<{ kind: 'list'; length: number; lists?: number }>
       primitive: null
       elementId: null
       elements: readonly Readonly<{
@@ -135,12 +137,16 @@ export function presentEvaluation(
       valueType: 'list',
       value,
       inspection: inspectLanguageValue(value),
-      entity: Object.freeze({ kind: 'list' as const, length: value.elements.length }),
+      entity: Object.freeze({
+        kind: 'list' as const,
+        length: value.elements.length,
+        ...(value.groups ? { lists: value.groups.length } : {}),
+      }),
       primitive: null,
       elementId: null,
       elements: Object.freeze(value.elements.map((element, index) => {
         const entity = interpretation.interpret(element.value)
-        const name = `${accessibleName ?? 'List 1'}[${index}]`
+        const name = `${accessibleName ?? 'List 1'}${elementPath(value, index).map((part) => `[${part}]`).join('')}`
         return Object.freeze({
           id: element.id,
           value: element.value,

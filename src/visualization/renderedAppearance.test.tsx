@@ -336,3 +336,39 @@ describe('label settings (#226)', () => {
     expect(elements.map((element) => element.primitive.accessibleName)).toEqual(['P[0]', 'P[1]'])
   })
 })
+
+describe('lists of lists made by map (#360)', () => {
+  // Two triangles, one per element of the list: nothing may join them.
+  const triangles = [
+    ['t', 'tri(P) = [P, P + ipoint(1, 0), P + ipoint(0, 1)]'],
+    ['b', 'B = map(tri, [point(0, 0), point(5, 5)])'],
+  ] as const
+  const draw = (points: Record<string, unknown>) =>
+    rendered(triangles.map(([id, source]) => [id, source] as [string, string]), { b: { primitiveStyles: { points } } })
+  const ends = (connection: { segments: readonly unknown[] }) => connection.segments.map((segment) => {
+    const { start, end } = segment as { start: { x: number; y: number }; end: { x: number; y: number } }
+    return [[start.x + 0, start.y + 0], [end.x + 0, end.y + 0]]
+  })
+
+  it('draws each inner list as its own polyline, open or closed', () => {
+    const open = draw({ connection: 'open-polyline' })
+    expect(open.connections.map(({ id }) => id)).toEqual(['b:0', 'b:1'])
+    expect(ends(open.connections[0])).toEqual([[[0, 0], [1, 0]], [[1, 0], [0, 1]]])
+    expect(ends(open.connections[1])).toEqual([[[5, 5], [6, 5]], [[6, 5], [5, 6]]])
+    const closed = draw({ connection: 'closed-loop' })
+    expect(closed.connections.map((connection) => connection.segments.length)).toEqual([3, 3])
+    // No segment joins the last point of one triangle to the first of the next.
+    const all = closed.connections.flatMap(ends)
+    expect(all.some(([from, to]) => (from[0] < 4) !== (to[0] < 4))).toBe(false)
+  })
+
+  it('fills each inner list separately, and names elements by both indices', () => {
+    const filled = draw({ connection: 'none', fill: true })
+    expect(filled.connections.map(({ fill }) => fill!.map(({ x, y }) => [x + 0, y + 0]))).toEqual([
+      [[0, 0], [1, 0], [0, 1]],
+      [[5, 5], [6, 5], [5, 6]],
+    ])
+    expect(filled.rendered.map((element) => element.primitive.accessibleName))
+      .toEqual(['B[0][0]', 'B[0][1]', 'B[0][2]', 'B[1][0]', 'B[1][1]', 'B[1][2]'])
+  })
+})

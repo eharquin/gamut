@@ -10,9 +10,11 @@ import {
 } from '../domain/multivector'
 import {
   elementIdentity,
+  elementPath,
   inspectLanguageValue,
   outerConstruction,
   ownedList,
+  regroupedList,
   retainElementIdentity,
   type LanguageValue,
 } from '../domain/languageValue'
@@ -66,21 +68,21 @@ type ParsedNode = Readonly<{
   calls: readonly Reference[]
 }>
 
-/** The function `iterate(f, …)` names, which is called, not used as a value (#341). */
+/** The function `iterate(f, …)` or `map(f, …)` names, which is called, not used as a value (#341, #360). */
 function iteratedFunction(expression: SurfaceExpressionNode): Reference | null {
-  if (expression.kind !== 'call-expression' || expression.callee !== 'iterate') return null
+  if (expression.kind !== 'call-expression' || (expression.callee !== 'iterate' && expression.callee !== 'map')) return null
   const [first] = expression.arguments
   return first?.kind === 'reference' && first.property === null
     ? { name: first.name, property: null, span: first.span }
     : null
 }
 
-/** The arguments of a call that are values: all but the function `iterate` names. */
+/** The arguments of a call that are values: all but the function `iterate` or `map` names. */
 function functionArguments(expression: Extract<SurfaceExpressionNode, { kind: 'call-expression' }>) {
   return iteratedFunction(expression) ? expression.arguments.slice(1) : expression.arguments
 }
 
-/** Every name called as `name(…)` that is not a common-language function, and the function `iterate` names. */
+/** Every name called as `name(…)` that is not a common-language function, and the function `iterate` or `map` names. */
 function collectCalls(expression: SurfaceExpressionNode): Reference[] {
   const own: Reference[] = expression.kind === 'call-expression' && !languageFunction(expression.callee)
     ? [{ name: expression.callee, property: null, span: expression.span }]
@@ -198,7 +200,8 @@ function addPositionValues(
       { start: 0, end: 0 },
     )
   }
-  return ownedList(value.elements.map((element, index) => ({
+  // A list of lists keeps its inner lists (#360).
+  return regroupedList(value, value.elements.map((element, index) => ({
     id: element.id,
     sources: element.sources,
     value: engine.add(
@@ -850,7 +853,8 @@ export function evaluateDocument(
       const elements = valueEvaluation.elements.map((element, elementIndex) => {
         const positionState = positionAt(elementIndex, element.id)
         const position = positionState.position ?? { x: 0, y: 0 }
-        const name = `${listName}[${elementIndex}]`
+        // `L[i][j]` in a list of lists (#360).
+        const name = `${listName}${elementPath(valueEvaluation.value, elementIndex).map((part) => `[${part}]`).join('')}`
         return {
           ...element,
           position: positionState.position,
