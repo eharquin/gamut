@@ -1,6 +1,6 @@
-import { act, renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
 import type { KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_PIXELS_PER_UNIT, type Viewport2d } from '../visualization/viewport'
 import { useViewportNavigation } from './useViewportNavigation'
 
@@ -11,7 +11,7 @@ function setup(locked = false) {
   const announce = vi.fn<(message: string) => void>()
   const svgRef = { current: null as SVGSVGElement | null }
   const hook = renderHook(() => useViewportNavigation({ viewport: start, locked, updateViewport, announce, svgRef }))
-  return { navigation: () => hook.result.current, updateViewport, announce }
+  return { navigation: () => hook.result.current, updateViewport, announce, svgRef, unmount: hook.unmount }
 }
 
 const key = (value: string, shiftKey = false) => {
@@ -30,6 +30,8 @@ function pointer(type: 'down' | 'move', clientX: number, clientY: number) {
     target: svg, currentTarget: svg, preventDefault: vi.fn(),
   } as unknown as ReactPointerEvent<SVGSVGElement>
 }
+
+afterEach(cleanup)
 
 describe('viewport navigation (#173)', () => {
   it('pans with the arrow keys and zooms about the centre with + and -', () => {
@@ -73,6 +75,45 @@ describe('viewport navigation (#173)', () => {
     navigation().movePan(pointer('move', 90, 10))
     expect(updateViewport).toHaveBeenCalledTimes(2)
     window.dispatchEvent(new Event('pointerup'))
+    expect(document.body.classList.contains('canvas-gesture')).toBe(false)
+  })
+
+  it('zooms with a non-passive wheel listener, which a locked viewport still keeps from zooming the page', () => {
+    for (const locked of [false, true]) {
+      const { navigation, updateViewport, svgRef } = setup(locked)
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+      const detach = navigation().attachSvg(svg)
+      expect(svgRef.current).toBe(svg)
+      const wheel = new WheelEvent('wheel', { deltaY: -100, cancelable: true })
+      svg.dispatchEvent(wheel)
+      expect(wheel.defaultPrevented).toBe(true)
+      expect(updateViewport).toHaveBeenCalledTimes(locked ? 0 : 1)
+      detach?.()
+      svg.dispatchEvent(new WheelEvent('wheel', { deltaY: -100, cancelable: true }))
+      expect(updateViewport).toHaveBeenCalledTimes(locked ? 0 : 1)
+    }
+  })
+
+  it('restores the start when the capture is lost, but not after the pan ended', () => {
+    const lost = setup()
+    act(() => lost.navigation().beginPan(pointer('down', 10, 10)))
+    lost.navigation().movePan(pointer('move', 60, 10))
+    lost.navigation().cancelPan(null)
+    expect(lost.updateViewport).toHaveBeenLastCalledWith(start)
+
+    const ended = setup()
+    act(() => ended.navigation().beginPan(pointer('down', 10, 10)))
+    ended.navigation().movePan(pointer('move', 60, 10))
+    ended.navigation().endPan(pointer('move', 60, 10))
+    ended.navigation().cancelPan(null)
+    expect(ended.updateViewport).toHaveBeenCalledTimes(1)
+  })
+
+  it('releases the selection guard when it unmounts mid-gesture', () => {
+    const { navigation, unmount } = setup()
+    act(() => navigation().beginPan(pointer('down', 10, 10)))
+    expect(document.body.classList.contains('canvas-gesture')).toBe(true)
+    unmount()
     expect(document.body.classList.contains('canvas-gesture')).toBe(false)
   })
 })
