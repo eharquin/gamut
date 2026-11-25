@@ -87,4 +87,14 @@ describe('direct manipulation (#173)', () => {
       expect(announce).toHaveBeenLastCalledWith('Object manipulation cancelled.')
     }
   })
+
+  it('releases the drawing order of a drag that Escape cancels', () => {
+    const { manipulation, dispatchHistory, endDrag } = setup()
+    act(() => manipulation().beginManipulation(pointer(1, 250, 100), 'p', 'base'))
+    act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })) })
+    expect(dispatchHistory).toHaveBeenLastCalledWith({ type: 'cancel-transaction' })
+    expect(endDrag).toHaveBeenCalled()
+    // The release that follows pans: the drag is over.
+    expect(manipulation().endPointer(pointer(1, 250, 100))).toBe(false)
+  })
 })

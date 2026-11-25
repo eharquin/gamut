@@ -410,6 +410,8 @@ export function useManipulation(options: ManipulationOptions) {
       }
       event.preventDefault()
       manipulationDrag.current = null
+      // The drawing order frozen for the drag is released, as at its end.
+      endDrag()
       anchorValidityCache.current.clear()
       setAnchorPreview(null)
       dispatchHistory({ type: 'cancel-transaction' })
@@ -418,7 +420,7 @@ export function useManipulation(options: ManipulationOptions) {
     }
     window.addEventListener('keydown', cancel)
     return () => window.removeEventListener('keydown', cancel)
-  }, [dispatchHistory, setViewportAnnouncement, viewportSvgRef])
+  }, [dispatchHistory, endDrag, setViewportAnnouncement, viewportSvgRef])
 
   return {
     selectedLine,
