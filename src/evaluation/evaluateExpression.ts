@@ -829,7 +829,17 @@ function indexListOfLists(
     indexId: indexElement.id,
     elements: inner[validatedListIndex(indexElement.value, inner.length, expression.index, position)],
   }))
+  // An empty selection is the empty list, as `map(f, [])` is.
+  if (selected.length === 0) return ownedList([])
   const total = selected.reduce((sum, { elements }) => sum + elements.length, 0)
+  // Gathering inner lists multiplies lengths, so the limit is checked here.
+  if (total > MAX_GENERATED_VALUES) {
+    throw new ExpressionEvaluationError(
+      'LIMIT_GENERATED_VALUES',
+      `This index would gather ${total} elements; the limit is ${MAX_GENERATED_VALUES}.`,
+      expression.origin,
+    )
+  }
   chargeElements(budget, total, expression)
   return ownedList(
     selected.flatMap(({ position, indexId, elements }) => elements.map((chosen) => {

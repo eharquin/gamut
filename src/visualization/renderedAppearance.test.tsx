@@ -371,4 +371,15 @@ describe('lists of lists made by map (#360)', () => {
     expect(filled.rendered.map((element) => element.primitive.accessibleName))
       .toEqual(['B[0][0]', 'B[0][1]', 'B[0][2]', 'B[1][0]', 'B[1][1]', 'B[1][2]'])
   })
+
+  it('links no inner list that the rendering limit cuts short', () => {
+    // 21 circles of 73 points: 1,533 elements, of which 1,000 are drawn.
+    const circles = rendered([
+      ['c', 'circle(P) = exp(-0.5 * [0...72] * tau / 72 * P) >>> (P + ipoint(1, 0))'],
+      ['m', 'M = map(circle, point([0...20] * 3, 0))'],
+    ], { m: { primitiveStyles: { points: { connection: 'closed-loop', fill: true } } } })
+    // 13 circles are whole; the 14th, drawn in part, is not linked or filled.
+    expect(circles.connections.map(({ id }) => id)).toEqual(Array.from({ length: 13 }, (_, i) => `m:${i}`))
+    expect(circles.connections.every((connection) => connection.segments.length === 73)).toBe(true)
+  })
 })

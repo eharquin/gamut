@@ -761,7 +761,8 @@ kept deliberately small:
 
 - `L[i]` is inner list `i`, a flat list whose elements keep their identities,
   and `L[i][j]` follows. Gather indexing `L[I]` is a list of the selected inner
-  lists.
+  lists, whose total number of elements is checked against the generated-value
+  limit; `L[[]]` is `[]`.
 - An item may hold one, and so may the branch of `if` that a single condition
   selects. Every other use, an operand of an operator, a function or a
   reduction, an argument of `map` or of a declared function, a state of
@@ -769,8 +770,10 @@ kept deliberately small:
   element, is `LANG_NESTED_LIST`.
 - The canvas draws each inner list as a separate point list with the item's
   appearance: the points, the border (open or closed) and the fill apply to
-  each inner list, and nothing joins two of them. Element `j` of inner list
-  `i` of `L` is named `L[i][j]`.
+  each inner list, and nothing joins two of them. An inner list that the
+  rendering limit cuts short draws its points but neither its border nor its
+  fill. Element `j` of inner list `i` of `L` is named `L[i][j]`, and the
+  positions and heads of a list of lists are lists of lists too.
 - The expression panel shows the value as `List (k lists, m elements)`, and
   its elements by their two indices.
 

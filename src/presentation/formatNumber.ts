@@ -1,4 +1,4 @@
-import type { LanguageValue } from '../domain/languageValue'
+import { innerLists, isListOfLists, type LanguageValue } from '../domain/languageValue'
 import { type OwnedMultivector } from '../domain/multivector'
 
 /**
@@ -71,6 +71,9 @@ export function formatDisplayValue(
   if (value.kind === 'multivector') {
     return formatDisplayMultivector(value, decimalPlaces, residue)
   }
-  return `[${value.elements.map(({ value: element }) =>
-    formatDisplayMultivector(element, decimalPlaces, residue)).join(', ')}]`
+  const format = (elements: readonly Readonly<{ value: OwnedMultivector }>[]) =>
+    `[${elements.map(({ value: element }) => formatDisplayMultivector(element, decimalPlaces, residue)).join(', ')}]`
+  // A list of lists shows its inner lists (#360).
+  if (isListOfLists(value)) return `[${innerLists(value).map(format).join(', ')}]`
+  return format(value.elements)
 }

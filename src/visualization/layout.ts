@@ -291,7 +291,11 @@ export function collectRenderedPrimitives(
       const groups = listGroups ?? [evaluated.evaluation.value.elements.length]
       let start = 0
       groups.forEach((length, group) => {
-        const own = shownVertices?.slice(start, start + length) ?? null
+        // An inner list cut short by the rendering limit is not linked: its
+        // closing link and fill would not be those of its shape.
+        const own = shownVertices && start + length <= shownVertices.length
+          ? shownVertices.slice(start, start + length)
+          : null
         start += length
         const segments = own ? pointListSegments(own, pointListDisplay) : []
         const fill = own ? pointListFill(own, pointListFilled) : null

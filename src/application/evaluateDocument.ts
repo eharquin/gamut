@@ -533,8 +533,9 @@ export function evaluateDocument(
       const emptyPosition = () => reference.property === null
         ? engine.scalar(0)
         : interpretation.positionValue({ x: 0, y: 0 }, engine.basis)
+      // A list of lists keeps its inner lists in its positions too (#360).
       let positionValue: LanguageValue = valueResult.valueType === 'list'
-        ? ownedList(valueResult.elements.map((element) => ({
+        ? regroupedList(valueResult.value, valueResult.elements.map((element) => ({
             id: element.id,
             value: emptyPosition(),
           })))
@@ -609,7 +610,7 @@ export function evaluateDocument(
           results.set(node.key, invalid)
           return invalid
         }
-        positionValue = ownedList(valueResult.value.elements.map((element, elementIndex) => {
+        positionValue = regroupedList(valueResult.value, valueResult.value.elements.map((element, elementIndex) => {
           const position = inherited[elementIndex].position ?? { x: 0, y: 0 }
           return {
             id: element.id,

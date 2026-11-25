@@ -118,4 +118,26 @@ describe('map(f, L1, …, Lk) (#360)', () => {
       expect(mapped.values).toEqual(flattened.values)
     }
   })
+
+  it('checks the limit when gathering inner lists, and gathers nothing as the empty list', () => {
+    const base = ['run(x) = [0...99]', 'L = map(run, [0...99])']
+    expect(rows(vga, ...base, 'L[[0...199] % 100]')[2])
+      .toBe('LIMIT_GENERATED_VALUES: This index would gather 20000 elements; the limit is 10000.')
+    expect(rows(vga, ...base, 'L[[]]')[2]).toBe('[]')
+    expect(rows(vga, ...base, 'L[[]] + 1')[2]).toBe('[]')
+  })
+
+  it('keeps the inner lists in the positions of a list of lists', () => {
+    const base = ['pair(v) = [v, 2 * v]', 'B = map(pair, [e1, e2])']
+    expect(rows(vga, ...base, 'B.position + 1')[2])
+      .toBe('LANG_NESTED_LIST: This is a list of lists, made by “map”; only indexing, such as L[i], can use it.')
+    expect(rows(vga, ...base, 'B.position')[2]).toBe('[[0, 0], [0, 0]]')
+    expect(rows(vga, ...base, 'B.head')[2]).toBe('[[e1, 2e1], [e2, 2e2]]')
+  })
+
+  it('shows a list of lists nested in the row and in labels', async () => {
+    const { formatDisplayValue } = await import('../presentation/formatNumber')
+    const [, row] = evaluated(vga, 'pair(x) = [x, -x]', 'L = map(pair, [1, 2])')
+    expect(row.evaluation?.status === 'valid' && formatDisplayValue(row.evaluation.value, 4)).toBe('[[1, -1], [2, -2]]')
+  })
 })
