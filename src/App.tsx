@@ -145,9 +145,6 @@ const MIN_PANEL_WIDTH = 240
 /** Keeps the `.panel-resize` separator reachable at any panel width. */
 const PANEL_RESIZE_WIDTH = 6
 
-
-
-
 const defaultViewport: Viewport2d = {
   width: 640,
   height: 480,
@@ -264,9 +261,6 @@ function persistReferenceHeight(height: number): void {
     // The height still applies for this session when browser storage is unavailable.
   }
 }
-
-/** How long the notice of a migrated graph stays (#343). */
-/** The status after a failed restore (#275). */
 
 type SharedDocument = ReturnType<typeof fromCanonicalDocument>
 
@@ -898,7 +892,10 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
     expressionDoc.view.display.objectScale,
   )
 
-  const historyFocus = useHistoryFocus({
+  const {
+    pendingFocus, lastEditorFocus, pendingHistoryFocus, removedEditorFallbacks,
+    rememberEditorFocus, dispatchHistoryWithFocus,
+  } = useHistoryFocus({
     history,
     document: expressionDoc,
     dispatchHistory,
@@ -906,10 +903,6 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
     viewportSvgRef,
     viewportCreatedItemIds,
   })
-  const {
-    pendingFocus, lastEditorFocus, pendingHistoryFocus, removedEditorFallbacks,
-    rememberEditorFocus, dispatchHistoryWithFocus,
-  } = historyFocus
 
   useEffect(() => {
     const resize = (clientX: number) => {

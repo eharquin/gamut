@@ -119,8 +119,8 @@ export function useHistoryFocus({
       restoredSelection.direction,
     )
     rememberEditorFocus(input)
-  // The refs are read when the effect runs; only a change of document or
-  // traversal moves focus.
+  // The refs passed in are read when the effect runs; only a change of
+  // document or traversal moves focus.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expressionDoc, history.lastTraversal])
 
