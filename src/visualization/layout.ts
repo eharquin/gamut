@@ -291,9 +291,10 @@ export function collectRenderedPrimitives(
       const groups = listGroups ?? [evaluated.evaluation.value.elements.length]
       let start = 0
       groups.forEach((length, group) => {
-        // An inner list cut short by the rendering limit is not linked: its
-        // closing link and fill would not be those of its shape.
-        const own = shownVertices && start + length <= shownVertices.length
+        // A flat list links its rendered prefix. An inner list cut short by
+        // the rendering limit is not linked: its closing link and fill would
+        // not be those of its shape.
+        const own = shownVertices && (!listGroups || start + length <= shownVertices.length)
           ? shownVertices.slice(start, start + length)
           : null
         start += length
