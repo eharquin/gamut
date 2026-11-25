@@ -1,6 +1,7 @@
 import type { AlgebraEngine } from '../algebra/algebraEngine'
 import type { ExpressionAppearance, ExpressionDocument } from '../document/expressionDocument'
 import type { EvaluatedDocumentItem } from './evaluateDocument'
+import type { AnyInterpretation } from '../geometry/interpretation'
 import { formatDisplayValue } from '../presentation/formatNumber'
 import { scalarSourceEvaluator, valueSourceEvaluator, type ScalarSourceMessages } from './evaluateScalarControl'
 import { isLabelTemplate, resolveLabelTemplate, type LabelTextResult } from './labelTemplate'
@@ -138,12 +139,15 @@ export function evaluateAppearanceSources(
   document: ExpressionDocument,
   items: readonly EvaluatedDocumentItem[],
   engine: AlgebraEngine,
+  /** The active interpretation, whose residue a hidden-residue display omits from labels. */
+  interpretation: AnyInterpretation | null = null,
 ): ReadonlyMap<string, ItemAppearanceSources> {
   const results = new Map<string, ItemAppearanceSources>()
   if (!document.items.some((item) => hasSource(document.appearance[item.id]))) return results
   const evaluate = scalarSourceEvaluator(items, engine)
   const evaluateValue = valueSourceEvaluator(items, engine)
   const { decimalPlaces, showApproximatedResidue } = document.view.display
+  const residue = showApproximatedResidue || !interpretation ? null : interpretation.residue
   for (const item of document.items) {
     const appearance = document.appearance[item.id]
     if (!hasSource(appearance)) continue
@@ -166,7 +170,7 @@ export function evaluateAppearanceSources(
       },
       label: isLabelTemplate(appearance!.label ?? '')
         ? resolveLabelTemplate(appearance!.label!, evaluateValue,
-          (value) => formatDisplayValue(value, decimalPlaces, showApproximatedResidue))
+          (value) => formatDisplayValue(value, decimalPlaces, residue))
         : null,
     })
   }

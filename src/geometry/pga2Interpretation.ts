@@ -10,9 +10,8 @@ import { type Interpretation, type Point2d } from './interpretation'
 import {
   classificationEpsilon,
   classificationScale,
-  STANDARD_VGA2_CLASSIFICATION_POLICY,
-  type Vga2ClassificationPolicy,
-} from './vga2ClassificationPolicy'
+  type ClassificationPolicy,
+} from './classificationPolicy'
 
 /*
  * Entities of the plane-based PGA(2) interpretation (PGA-INT-003). Numeric
@@ -28,12 +27,43 @@ export type Pga2Entity =
   | Readonly<{ kind: 'rotor' | 'translator' | 'motor' | 'reflection'; approximated: boolean }>
   | Readonly<{ kind: 'mixed-multivector' }>
 
-/** The PGA-INT-005 tolerance uses the same formula and values as VGA-INT-005. */
-export const STANDARD_PGA2_CLASSIFICATION_POLICY: Vga2ClassificationPolicy =
-  STANDARD_VGA2_CLASSIFICATION_POLICY
+/**
+ * The PGA-INT-005 tolerance. Coefficients of blades containing `e0`, the
+ * bulk, use the VGA-INT-005 formula and values. The others, the weight, use
+ * `weightRelativeTerm` instead of `relativeTerm` (#68): the weight decides
+ * whether a point or a line is Euclidean or ideal, and the bulk grows with
+ * the distance from the origin, so measuring the weight against `1E-6` of
+ * the largest coefficient declared `point(1E+6, 0)` ideal. With `1E-9`, an
+ * element is classified at infinity only beyond about 10^9 units, far past
+ * the viewport's reach, while the weight leakage of a computed ideal point
+ * (about 1E-15 for unit lines) stays below the absolute floor.
+ */
+export type Pga2ClassificationPolicy = ClassificationPolicy & Readonly<{ weightRelativeTerm: number }>
+
+export const STANDARD_PGA2_CLASSIFICATION_POLICY: Pga2ClassificationPolicy =
+  Object.freeze({ absoluteFloor: 1e-10, relativeTerm: 1e-6, weightRelativeTerm: 1e-9 })
 
 const INDEX = { e: 0, e0: 1, e1: 2, e2: 3, e01: 4, e02: 5, e12: 6, e012: 7 } as const
 const GRADE = [0, 1, 1, 1, 2, 2, 2, 3] as const
+/** Whether a blade contains `e0`: its coefficient is bulk, the others are weight. */
+const BULK = [false, true, false, false, true, true, false, true] as const
+
+/** The tolerance of each coefficient, from the scale of the whole value. */
+function coefficientEpsilons(c: readonly number[], policy: Pga2ClassificationPolicy): readonly number[] {
+  const scale = classificationScale(c)
+  const bulk = classificationEpsilon(policy, scale)
+  const weight = classificationEpsilon({ absoluteFloor: policy.absoluteFloor, relativeTerm: policy.weightRelativeTerm }, scale)
+  return BULK.map((isBulk) => isBulk ? bulk : weight)
+}
+
+/** Which coefficients a PGA(2) classification treats as numerical residue. */
+export function pga2Residue(
+  value: OwnedMultivector,
+  policy: Pga2ClassificationPolicy = STANDARD_PGA2_CLASSIFICATION_POLICY,
+): readonly boolean[] {
+  const epsilons = coefficientEpsilons(value.coefficients, policy)
+  return value.coefficients.map((v, index) => v !== 0 && Math.abs(v) <= epsilons[index])
+}
 
 /**
  * Classifies an owned `Cl(2,0,1)` value under PGA convention section 10.
@@ -42,20 +72,22 @@ const GRADE = [0, 1, 1, 1, 2, 2, 2, 3] as const
  */
 export function interpretPga2(
   value: OwnedMultivector,
-  policy: Vga2ClassificationPolicy = STANDARD_PGA2_CLASSIFICATION_POLICY,
+  policy: Pga2ClassificationPolicy = STANDARD_PGA2_CLASSIFICATION_POLICY,
 ): Pga2Entity {
   const c = value.coefficients
-  const epsilon = classificationEpsilon(policy, classificationScale(c))
-  const negligible = (v: number) => v !== 0 && Math.abs(v) <= epsilon
-  const zeroLike = (v: number) => v === 0 || negligible(v)
+  const epsilons = coefficientEpsilons(c, policy)
+  const weightEpsilon = epsilons[INDEX.e12]
+  // A coefficient, by index, is residue: nonzero within its tolerance.
+  const residue = (index: number) => c[index] !== 0 && Math.abs(c[index]) <= epsilons[index]
+  const zero = (index: number) => c[index] === 0 || residue(index)
   const gradePresent = (grade: number) =>
-    c.some((coefficient, index) => GRADE[index] === grade && !zeroLike(coefficient))
+    c.some((_, index) => GRADE[index] === grade && !zero(index))
   const approximatedOutside = (grades: readonly number[]) =>
-    c.some((coefficient, index) => !grades.includes(GRADE[index]) && negligible(coefficient))
+    c.some((_, index) => !grades.includes(GRADE[index]) && residue(index))
 
   // The all-zero value is scalar zero, as in VGA, so scalar controls apply to it.
-  if (c.every(zeroLike)) {
-    return Object.freeze({ kind: 'scalar' as const, value: c[INDEX.e], approximated: c.some(negligible) })
+  if (c.every((_, index) => zero(index))) {
+    return Object.freeze({ kind: 'scalar' as const, value: c[INDEX.e], approximated: c.some((_, index) => residue(index)) })
   }
 
   const present = [0, 1, 2, 3].filter(gradePresent)
@@ -65,18 +97,19 @@ export function interpretPga2(
   if (present.length === 1 && present[0] === 1) {
     const a = c[INDEX.e1], b = c[INDEX.e2], cc = c[INDEX.e0]
     const approximated = approximatedOutside([1])
-    if (!zeroLike(Math.hypot(a, b))) {
+    // The weight (a, b) decides: Euclidean line or line at infinity.
+    if (Math.hypot(a, b) > weightEpsilon) {
       return Object.freeze({ kind: 'euclidean-line' as const, a, b, c: cc, approximated })
     }
-    return Object.freeze({ kind: 'line-at-infinity' as const, c: cc, approximated: approximated || negligible(a) || negligible(b) })
+    return Object.freeze({ kind: 'line-at-infinity' as const, c: cc, approximated: approximated || residue(INDEX.e1) || residue(INDEX.e2) })
   }
   if (present.length === 1 && present[0] === 2) {
     const weight = c[INDEX.e12], x = -c[INDEX.e02], y = c[INDEX.e01]
     const approximated = approximatedOutside([2])
-    if (!zeroLike(weight)) {
+    if (!zero(INDEX.e12)) {
       return Object.freeze({ kind: 'euclidean-point' as const, x, y, weight, approximated })
     }
-    return Object.freeze({ kind: 'ideal-point' as const, x, y, approximated: approximated || negligible(weight) })
+    return Object.freeze({ kind: 'ideal-point' as const, x, y, approximated: approximated || residue(INDEX.e12) })
   }
   const even = present.every((grade) => grade % 2 === 0)
   const odd = present.every((grade) => grade % 2 === 1)
@@ -89,11 +122,11 @@ export function interpretPga2(
     if (Math.abs(norm - 1) <= unitTolerance) {
       const approximated = approximatedOutside(even ? [0, 2] : [1, 3])
       if (odd) return Object.freeze({ kind: 'reflection' as const, approximated })
-      if (zeroLike(c[INDEX.e01]) && zeroLike(c[INDEX.e02])) {
-        return Object.freeze({ kind: 'rotor' as const, approximated: approximated || negligible(c[INDEX.e01]) || negligible(c[INDEX.e02]) })
+      if (zero(INDEX.e01) && zero(INDEX.e02)) {
+        return Object.freeze({ kind: 'rotor' as const, approximated: approximated || residue(INDEX.e01) || residue(INDEX.e02) })
       }
-      if (zeroLike(w)) {
-        return Object.freeze({ kind: 'translator' as const, approximated: approximated || negligible(w) })
+      if (zero(INDEX.e12)) {
+        return Object.freeze({ kind: 'translator' as const, approximated: approximated || residue(INDEX.e12) })
       }
       return Object.freeze({ kind: 'motor' as const, approximated })
     }
@@ -200,6 +233,7 @@ export const PGA_2D_INTERPRETATION: Interpretation<Pga2Entity> = Object.freeze({
   interpretationVersion: 1,
   model: 'plane-based',
   interpret: (value) => interpretPga2(value),
+  residue: (value) => pga2Residue(value),
   describe: describePga2Entity,
   detail: detailPga2Entity,
   supportsPosition: (entity) => entity.kind === 'ideal-point',

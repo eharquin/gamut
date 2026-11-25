@@ -118,6 +118,10 @@ to milestones that explicitly include the standard PGA interpretation.
   form `epsilon = absoluteFloor + relativeTerm * scale`, where `scale` is the
   maximum absolute value across the value's own coefficients, applied to the
   Euclidean norm first and the ideal norm second as fixed by the convention.
+  The weight coefficients, of the blades without `e0`, which decide between a
+  Euclidean and an ideal element, shall use their own relative term, so that
+  the bulk, which grows with the distance from the origin, does not make a far
+  element ideal (#68).
   The tolerance governs classification only: it shall not alter owned
   coefficients, dependent evaluation, or the exact zero used for
   algebra-level grade membership.

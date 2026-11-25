@@ -5,9 +5,21 @@ import { type Interpretation } from './interpretation'
 import {
   classificationEpsilon,
   classificationScale,
-  STANDARD_VGA2_CLASSIFICATION_POLICY,
-  type Vga2ClassificationPolicy,
-} from './vga2ClassificationPolicy'
+  type ClassificationPolicy,
+} from './classificationPolicy'
+
+/** The standard VGA(2) tolerance (VGA-INT-005), the constants of MultiVector Studio. */
+export const STANDARD_VGA2_CLASSIFICATION_POLICY: ClassificationPolicy =
+  Object.freeze({ absoluteFloor: 1e-10, relativeTerm: 1e-6 })
+
+/** Which coefficients a VGA(2) classification treats as numerical residue. */
+export function vga2Residue(
+  value: OwnedMultivector,
+  policy: ClassificationPolicy = STANDARD_VGA2_CLASSIFICATION_POLICY,
+): readonly boolean[] {
+  const epsilon = classificationEpsilon(policy, classificationScale(value.coefficients))
+  return value.coefficients.map((v) => v !== 0 && Math.abs(v) <= epsilon)
+}
 
 /** A renderer-independent Euclidean vector in mathematical coordinates. */
 export type Vector2dEntity = Readonly<{
@@ -83,7 +95,7 @@ export function supportsVga2Position(entity: StandardVga2Entity): boolean {
  */
 export function interpretVga2(
   value: OwnedMultivector,
-  policy: Vga2ClassificationPolicy = STANDARD_VGA2_CLASSIFICATION_POLICY,
+  policy: ClassificationPolicy = STANDARD_VGA2_CLASSIFICATION_POLICY,
 ): StandardVga2Entity {
   const [scalar, x, y, bivector] = value.coefficients
   const epsilon = classificationEpsilon(
@@ -140,6 +152,7 @@ export const VGA_2D_INTERPRETATION: Interpretation<StandardVga2Entity> = Object.
   interpretationId: 'org.multivector.vga-2d',
   interpretationVersion: 1,
   interpret: (value) => interpretVga2(value),
+  residue: (value) => vga2Residue(value),
   describe: describeVga2Entity,
   detail: () => null,
   supportsPosition: supportsVga2Position,

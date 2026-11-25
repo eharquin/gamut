@@ -791,8 +791,8 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
     return appearance === expressionDoc.appearance ? expressionDoc : { ...expressionDoc, appearance }
   }, [expressionDoc])
   const appearanceSources = useMemo(
-    () => evaluateAppearanceSources(drawnDocument, evaluatedItems, engine),
-    [evaluatedItems, drawnDocument, engine],
+    () => evaluateAppearanceSources(drawnDocument, evaluatedItems, engine, interpretation),
+    [evaluatedItems, drawnDocument, engine, interpretation],
   )
 
   const playback = useScalarPlayback({

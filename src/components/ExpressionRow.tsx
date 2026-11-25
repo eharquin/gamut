@@ -285,8 +285,10 @@ export function ExpressionRow({
       )}
     </span>
   )
+  // With residue hidden, the display omits what the classification ignored (#68).
+  const residue = display.showApproximatedResidue ? null : interpretation.residue
   const displayedValue = evaluation?.status === 'valid'
-    ? formatDisplayValue(evaluation.value, display.decimalPlaces, display.showApproximatedResidue)
+    ? formatDisplayValue(evaluation.value, display.decimalPlaces, residue)
     : ''
   // A value cut short at the end of its line shows in full on hover.
   const valueOutput = evaluation?.status === 'valid' && (display.valuesVisible ? (
@@ -662,7 +664,7 @@ export function ExpressionRow({
                       <code>{formatDisplayMultivector(
                         element.value,
                         display.decimalPlaces,
-                        display.showApproximatedResidue,
+                        residue,
                       )}</code>
                     ) : (
                       <span className="visually-hidden">Value hidden</span>

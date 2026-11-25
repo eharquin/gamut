@@ -9,6 +9,11 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Each algebra's interpretation owns its classification tolerance and
+  decides which coefficients the display omits when residue is hidden (#68);
+  PGA(2) has its own constants (PGA conventions, section on classification).
+  Propagated error envelopes and Float32/Float64 profiles are tracked in
+  #361.
 - **Language version 2: operations on a value are functions** (#342). Write
   `norm(A)`, `inorm(A)`, `dual(A)`, `inverse(A)`, `reverse(A)` and
   `involution(A)` instead of `A.norm`, `A.inorm`, `A.dual`, `A.inverse`,
@@ -63,6 +68,12 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- In PGA(2), a far point or line is no longer read as being at infinity:
+  `point(1E+6, 0)` was classified as an ideal point and `line(1, 0, -1E+6)`
+  as the line at infinity, because the weight that decides was measured
+  against the distance from the origin (#68). The weight now has its own
+  tolerance, and elements are read at infinity only beyond about `1E+9` units;
+  with residue hidden, a far point's `e12` is no longer omitted.
 - A stored graph that GAMUT cannot read, such as one saved by a later
   version, is no longer replaced by the example when the page opens (#275).
   Nothing is saved over it until the graph is edited, it is kept first, and

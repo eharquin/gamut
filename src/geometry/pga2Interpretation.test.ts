@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { createPga2Engine, PGA_2D_BASIS } from '../algebra/pgaEngine'
 import { line, point, scale, type Pga2Coefficients } from '../algebra/pga2ReferenceFixtures'
 import { ownedMultivector } from '../domain/multivector'
-import { detailPga2Entity, interpretPga2, PGA_2D_INTERPRETATION } from './pga2Interpretation'
+import {
+  detailPga2Entity,
+  interpretPga2,
+  pga2Residue,
+  PGA_2D_INTERPRETATION,
+  STANDARD_PGA2_CLASSIFICATION_POLICY,
+} from './pga2Interpretation'
 
 const owned = (coefficients: Pga2Coefficients) => ownedMultivector(coefficients, PGA_2D_BASIS)
 const engine = createPga2Engine()
@@ -97,5 +103,59 @@ describe('standard PGA(2) interpretation', () => {
     expect(interpretation.defaultName(d, 1)).toBe('Direction 2')
     expect(interpretation.creation).toEqual({ constructor: 'point', objectName: 'Point' })
     expect(interpretation.model).toBe('plane-based')
+  })
+})
+
+/*
+ * The audit of #68: the VGA(2) tolerance measured the weight, which decides
+ * Euclidean or ideal, against the bulk, which grows with the distance from
+ * the origin. Each fixture records the classification of a value written or
+ * computed in a real document.
+ */
+describe('PGA(2) classification policy (#68)', () => {
+  it('has its own constants: the VGA ones for the bulk, a finer relative term for the weight', () => {
+    expect(STANDARD_PGA2_CLASSIFICATION_POLICY).toEqual({ absoluteFloor: 1e-10, relativeTerm: 1e-6, weightRelativeTerm: 1e-9 })
+  })
+
+  it('keeps far Euclidean points and lines Euclidean, up to the horizon of about 1E+9 units', () => {
+    expect(interpretPga2(owned(point(1e6, 0)))).toMatchObject({ kind: 'euclidean-point', approximated: false })
+    expect(interpretPga2(owned(point(1e8, -3e8)))).toMatchObject({ kind: 'euclidean-point', approximated: false })
+    expect(interpretPga2(owned(line(1, 0, -1e6)))).toMatchObject({ kind: 'euclidean-line', approximated: false })
+    // The join of two far points is a far line, not the line at infinity.
+    expect(interpretPga2(engine.regressive(owned(point(1e6, 0)), owned(point(1e6, 1)))))
+      .toMatchObject({ kind: 'euclidean-line' })
+    // A point with an authored small weight is a far point.
+    expect(interpretPga2(owned(point(1, 1, 1e-7)))).toMatchObject({ kind: 'euclidean-point', weight: 1e-7 })
+    // Beyond the horizon, the weight is residue: the point reads as ideal, approximated.
+    expect(interpretPga2(owned(point(1e10, 0)))).toMatchObject({ kind: 'ideal-point', approximated: true })
+    expect(interpretPga2(owned(line(1, 0, -1e10)))).toMatchObject({ kind: 'line-at-infinity', approximated: true })
+  })
+
+  it('still reads the meet of parallel lines computed by a motor as an ideal point', () => {
+    // line(1, 2, 3) and its image under a half turn about (5, 7), as evaluated.
+    const meet = owned([0, 0, 0, 0, -44, -88, 8.881784197001252e-16, 0])
+    expect(interpretPga2(meet)).toMatchObject({ kind: 'ideal-point', x: 88, y: -44, approximated: true })
+    const quarterTurns = owned([0, 0, 0, 0, -15, -30, 1.7763568394002505e-15, 0])
+    expect(interpretPga2(quarterTurns)).toMatchObject({ kind: 'ideal-point', approximated: true })
+    // Lines of weight 1000 leak about 1E-10 into the weight of their meet; it
+    // stays ideal unless the lines are closer than about 1E-4 units.
+    const heavy = owned([0, 0, 0, 0, -1000, -2000, 2e-10, 0])
+    expect(interpretPga2(heavy)).toMatchObject({ kind: 'ideal-point' })
+  })
+
+  it('keeps complete turns, and turns about a far centre, as before', () => {
+    const turn = owned([-1, 0, 0, 0, -1.2246e-16, 1.2246e-16, -1.2246e-16, 0])
+    expect(interpretPga2(turn)).toMatchObject({ kind: 'scalar', value: -1, approximated: true })
+    const farTurn = owned([-1, 0, 0, 0, -1.2246e-12, 1.2246e-12, -1.2246e-16, 0])
+    expect(interpretPga2(farTurn)).toMatchObject({ kind: 'scalar', value: -1, approximated: true })
+    expect(interpretPga2(owned([0, 0, 0, 0, 2, -1, 1, 0]))).toMatchObject({ kind: 'euclidean-point', approximated: false })
+  })
+
+  it('reports as residue exactly the coefficients the classification ignored', () => {
+    expect(pga2Residue(owned(point(1e6, 0)))).toEqual([false, false, false, false, false, false, false, false])
+    expect(pga2Residue(owned([0, 0, 0, 0, -44, -88, 8.881784197001252e-16, 0])))
+      .toEqual([false, false, false, false, false, false, true, false])
+    expect(PGA_2D_INTERPRETATION.residue(owned([-1, 0, 0, 0, -1.2246e-16, 1.2246e-16, -1.2246e-16, 0])))
+      .toEqual([false, false, false, false, true, true, true, false])
   })
 })

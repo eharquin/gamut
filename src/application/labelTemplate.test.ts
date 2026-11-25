@@ -15,7 +15,7 @@ const items = evaluateDocument(expressionDocument([
   { id: 'v', source: 'v = 2e1 + e2' },
 ]), { engine, interpretation: VGA_2D_INTERPRETATION })
 const resolve = (text: string) => resolveLabelTemplate(
-  text, valueSourceEvaluator(items, engine), (value) => formatDisplayValue(value, 4, false),
+  text, valueSourceEvaluator(items, engine), (value) => formatDisplayValue(value, 4, VGA_2D_INTERPRETATION.residue),
 )
 
 describe('label templates', () => {

@@ -1,4 +1,7 @@
 import { VGA_2D_BASIS } from '../algebra/vgaEngine'
+import { PGA_2D_BASIS } from '../algebra/pgaEngine'
+import { pga2Residue } from '../geometry/pga2Interpretation'
+import { vga2Residue } from '../geometry/vga2Interpretation'
 import { describe, expect, it } from 'vitest'
 import { ownedList } from '../domain/languageValue'
 import { ownedMultivector } from '../domain/multivector'
@@ -40,19 +43,19 @@ describe('numeric presentation', () => {
       // leakage" case, which classifies this value as scalar -1, approximated.
       expect(formatDisplayMultivector(ownedMultivector([
         -1, 0, 0, 3.6e-9,
-      ], VGA_2D_BASIS), 4, false)).toBe('-1')
+      ], VGA_2D_BASIS), 4, vga2Residue)).toBe('-1')
     })
 
     it('keeps a standalone near-zero result, matching the same documented limitation', () => {
       expect(formatDisplayMultivector(ownedMultivector([
         0, 0, 0, 1.7e-9,
-      ], VGA_2D_BASIS), 4, false)).toBe('1.7000E-9e12')
+      ], VGA_2D_BASIS), 4, vga2Residue)).toBe('1.7000E-9e12')
     })
 
     it('reduces a bivector to its blade name when only its scalar leaks', () => {
       expect(formatDisplayMultivector(ownedMultivector([
         6.1232e-17, 0, 0, 1,
-      ], VGA_2D_BASIS), 4, false)).toBe('e12')
+      ], VGA_2D_BASIS), 4, vga2Residue)).toBe('e12')
     })
 
     it('defaults to showing residue when the argument is omitted', () => {
@@ -65,7 +68,14 @@ describe('numeric presentation', () => {
       const value = ownedList([
         { id: 'a', value: ownedMultivector([-1, 0, 0, 3.6e-9], VGA_2D_BASIS) },
       ])
-      expect(formatDisplayValue(value, 4, false)).toBe('[-1]')
+      expect(formatDisplayValue(value, 4, vga2Residue)).toBe('[-1]')
+    })
+
+    it('omits exactly what the PGA(2) classification ignored, never a far point\'s weight (#68)', () => {
+      expect(formatDisplayMultivector(ownedMultivector([0, 0, 0, 0, 0, -1e6, 1, 0], PGA_2D_BASIS), 4, pga2Residue))
+        .toBe('-1000000e02 + e12')
+      expect(formatDisplayMultivector(ownedMultivector([0, 0, 0, 0, -44, -88, 8.882e-16, 0], PGA_2D_BASIS), 4, pga2Residue))
+        .toBe('-44e01 - 88e02')
     })
   })
 })

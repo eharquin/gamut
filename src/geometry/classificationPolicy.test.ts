@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import {
-  classificationEpsilon,
-  classificationScale,
-  STANDARD_VGA2_CLASSIFICATION_POLICY,
-} from './vga2ClassificationPolicy'
+import { classificationEpsilon, classificationScale } from './classificationPolicy'
+import { STANDARD_VGA2_CLASSIFICATION_POLICY } from './vga2Interpretation'
 
-describe('VGA(2) classification policy', () => {
+describe('classification policy', () => {
   it('exposes the documented standard tolerance constants', () => {
     expect(STANDARD_VGA2_CLASSIFICATION_POLICY.absoluteFloor).toBe(1e-10)
     expect(STANDARD_VGA2_CLASSIFICATION_POLICY.relativeTerm).toBe(1e-6)
