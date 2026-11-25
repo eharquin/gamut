@@ -616,11 +616,19 @@ Opening another graph withdraws it. A document in the current versions shows
 nothing, embed mode shows nothing, and an archive import adds to its summary
 how many of its graphs were migrated.
 
-A release can open only the format versions it knows. Release 0.2.0 cannot
-open a version 8, 9, 10, 11, or 12 document; protecting an older release against a document
-stored in a newer format is deferred to
-[#275](https://github.com/eharquin/gamut/issues/275) and accepted while GAMUT
-has no users. Likewise, release 0.3.0 does not check `languageVersion`: it
+A release can open only the format versions it knows. Releases 0.2.0 and
+0.3.0 replace a stored active document they cannot read, such as one in a
+later format, with the example at their first autosave. From 0.4.0
+([#275](https://github.com/eharquin/gamut/issues/275)), a release that cannot
+restore the stored active document reports why, copies its text unchanged to
+the kept-document key (`gamut.document.kept.v1`), and saves nothing until the
+graph is edited, so that opening and leaving the page changes nothing. When a
+different copy, not yet recovered, is already kept, the stored document is
+never saved over in that visit, and the status says so. At startup, a
+release that reads the kept copy adds it to My library under its title (a
+copy name when taken), removes the key and says so; a kept copy identical to
+the active document it restored is simply removed, and one it cannot read
+either stays for a later release. Likewise, release 0.3.0 does not check `languageVersion`: it
 opens a language version 2 document and reports the calls it does not know,
 such as `norm(…)` in VGA(2), as diagnostics.
 

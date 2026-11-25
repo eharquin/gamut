@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { toCanonicalDocument } from './canonicalDocument'
-import { ACTIVE_DOCUMENT_KEY, browserDocumentStorage } from './documentStorage'
+import {
+  ACTIVE_DOCUMENT_KEY,
+  browserDocumentStorage,
+  discardKeptDocument,
+  keepUnreadableDocument,
+  KEPT_DOCUMENT_KEY,
+  readKeptDocument,
+} from './documentStorage'
 import { expressionDocument } from './expressionDocument'
 
 describe('document storage', () => {
@@ -34,5 +41,48 @@ describe('document storage', () => {
     fail = true
     expect(() => storage.save({ ...document, metadata: { title: 'Changed', description: '' } })).toThrow()
     expect(storage.load()).toEqual(document)
+  })
+})
+
+describe('keeping a stored document this version cannot read (#275)', () => {
+  const memory = (initial: Record<string, string> = {}) => {
+    const values = new Map(Object.entries(initial))
+    return {
+      values,
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value) },
+      removeItem: (key: string) => { values.delete(key) },
+    }
+  }
+  const document = toCanonicalDocument(expressionDocument([{ id: 'a', source: '2' }]), 'system')
+  const newer = JSON.stringify({ ...document, formatVersion: 99 })
+
+  it('copies the stored text to the kept key, once', () => {
+    const storage = memory({ [ACTIVE_DOCUMENT_KEY]: newer })
+    expect(keepUnreadableDocument(storage)).toBe(true)
+    expect(keepUnreadableDocument(storage)).toBe(true)
+    expect(storage.values.get(KEPT_DOCUMENT_KEY)).toBe(newer)
+  })
+
+  it('never replaces a different kept copy, and says the stored one is not kept', () => {
+    const storage = memory({ [ACTIVE_DOCUMENT_KEY]: newer, [KEPT_DOCUMENT_KEY]: 'earlier' })
+    expect(keepUnreadableDocument(storage)).toBe(false)
+    expect(storage.values.get(KEPT_DOCUMENT_KEY)).toBe('earlier')
+  })
+
+  it('reports a failed write as not kept', () => {
+    const storage = { ...memory({ [ACTIVE_DOCUMENT_KEY]: newer }), setItem: () => { throw new DOMException('Quota exceeded', 'QuotaExceededError') } }
+    expect(keepUnreadableDocument(storage)).toBe(false)
+  })
+
+  it('reads the kept copy as unchanged, readable or unreadable', () => {
+    expect(readKeptDocument(memory()).status).toBe('none')
+    expect(readKeptDocument(memory({ [ACTIVE_DOCUMENT_KEY]: newer, [KEPT_DOCUMENT_KEY]: newer })).status).toBe('unchanged')
+    expect(readKeptDocument(memory({ [KEPT_DOCUMENT_KEY]: newer })).status).toBe('unreadable')
+    const readable = readKeptDocument(memory({ [KEPT_DOCUMENT_KEY]: JSON.stringify(document) }))
+    expect(readable).toEqual({ status: 'readable', document })
+    const storage = memory({ [KEPT_DOCUMENT_KEY]: newer })
+    discardKeptDocument(storage)
+    expect(storage.values.has(KEPT_DOCUMENT_KEY)).toBe(false)
   })
 })

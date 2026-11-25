@@ -61,6 +61,13 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   step. The length is checked before the first step, and a failing step
   fails the row with its index.
 
+### Fixed
+
+- A stored graph that GAMUT cannot read, such as one saved by a later
+  version, is no longer replaced by the example when the page opens (#275).
+  It is kept, nothing is saved over it until the graph is edited, and a
+  version that reads it adds it to My library and says so.
+
 ## 0.3.0 - 2026-11-20
 
 Release notes: [docs/releases/0.3.0.md](docs/releases/0.3.0.md); tag
