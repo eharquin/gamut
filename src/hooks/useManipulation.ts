@@ -81,8 +81,9 @@ export function useManipulation(options: ManipulationOptions) {
     executeCommand,
     dispatchHistory,
     announce: setViewportAnnouncement,
+    beginDrag,
+    endDrag,
   } = options
-  const objectSelection = { beginDrag: options.beginDrag, endDrag: options.endDrag }
   const manipulationDrag = useRef<Readonly<{
     itemId: string
     kind: ManipulationKind
@@ -156,7 +157,7 @@ export function useManipulation(options: ManipulationOptions) {
       press: { x: event.clientX, y: event.clientY },
       disarmedAnchors,
     }
-    objectSelection.beginDrag(itemId)
+    beginDrag(itemId)
     anchorValidityCache.current.clear()
     if (kind === 'line') {
       const line = linePrimitive(renderedPrimitives.find((candidate) => candidate.id === itemId))
@@ -337,7 +338,7 @@ export function useManipulation(options: ManipulationOptions) {
   // Keyboard users reach handles with Tab as before.
   const finishManipulation = (outcome: 'commit' | 'cancel') => {
     manipulationDrag.current = null
-    objectSelection.endDrag()
+    endDrag()
     anchorValidityCache.current.clear()
     setAnchorPreview(null)
     dispatchHistory(outcome === 'commit'

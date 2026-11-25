@@ -78,6 +78,11 @@ describe('object selection (#173)', () => {
     act(() => { window.dispatchEvent(new Event('pointerdown')) })
     act(() => controller().focus('a:base'))
     expect(controller().focusRingKey).toBeNull()
+  })
+
+  it('recognises a handle by its handle key', () => {
     expect(isHandleElement(handle())).toBe(true)
+    expect(isHandleElement(document.createElementNS('http://www.w3.org/2000/svg', 'svg'))).toBe(false)
+    expect(isHandleElement(null)).toBe(false)
   })
 })
