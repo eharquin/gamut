@@ -235,13 +235,20 @@ enter interpretation or rendering state.
 | `src/algebra` | The algebra-engine interface and ganja.js adaptation | Public source semantics, UI state, geometric interpretation, or rendering |
 | `src/domain` | Backend-independent mathematical values and shared diagnostics | Backend objects, SVG primitives, browser APIs, or React types |
 | `src/geometry` | Conversion from owned algebra values to renderer-independent semantic entities | Parsing, backend operations, screen coordinates, or SVG |
-| `src/visualization` | Renderer-neutral positioned primitives and explicit mathematical-to-screen transforms | Algebra identifiers, backend values, source parsing, or application state |
+| `src/visualization` | Renderer-neutral positioned primitives and explicit mathematical-to-screen transforms, their screen layout per primitive kind (`sceneLayout`), and the SVG glyphs that draw them (`glyphs`, `SceneGlyphs`, `CanvasBackground`) | Algebra identifiers, backend values, source parsing, or application state |
 | `src/application` | Document-wide declaration resolution, dependency ordering, use-case orchestration, and conversion of failures into application states | React rendering, DOM events, backend-specific operations, or CSS |
 | `src/examples` | The example scenes shipped with the application, one canonical document each in the current format version, and their index (`readExamples`) | Library storage, which stays in `src/document`, or interface state |
 | `src/presentation` | Pure display formatting of values, and parsing of untrusted annotation text into a restricted Markdown segment tree | DOM access, HTML, React elements, or evaluation |
-| `src/hooks` | React hooks that hold interaction state for the interface and call application logic, such as scalar playback (`useScalarPlayback`), expression folders (`useExpressionFolders`), and library folders (`useLibraryFolderActions`, `useLibraryFolderCollapse`, the per-browser collapsed state) | Business rules, which stay in `src/application` and the layers below and remain testable without React |
+| `src/hooks` | React hooks that hold interaction state for the interface and call application logic, such as scalar playback (`useScalarPlayback`), expression folders (`useExpressionFolders`), library folders (`useLibraryFolderActions`, `useLibraryFolderCollapse`, the per-browser collapsed state), and label placement (`useLabelPlacement`) | Business rules, which stay in `src/application` and the layers below and remain testable without React |
 | `src/App.tsx`, `src/components`, and styles | User input, accessible presentation, reference dialogs, and SVG composition from application state | Language rules, algebra semantics, or backend value inspection |
 | `src/types` | Narrow declarations for untyped external packages | Domain models or feature behavior |
+
+`App.tsx` is being reduced to a composition shell that wires state, hooks and
+components together ([#173](https://github.com/eharquin/gamut/issues/173)). A
+new feature lands in the layer that owns it, in a component or a hook, and
+adds no logic to `App.tsx`. Its rendering already names no primitive kind:
+the visualization layer lays the scene out and draws it; the gesture code
+still does, until it moves to hooks.
 
 Tests are colocated with the layer whose behavior they establish. Integration
 tests at the UI boundary verify that the composed workflow exposes values,
