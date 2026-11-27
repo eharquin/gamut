@@ -35,15 +35,21 @@ export function useObjectSelection(items: readonly ExpressionItem[]) {
   const selectedObjectId = frozenSelection
     ? frozenSelection.itemId
     : [rowFocusId, rowHoverId, lastManipulatedId].find(isPresentItem) ?? null
+  // The state of the last render, read by the effect below without making it
+  // a dependency: the effect runs when the items change, not the selection.
+  const selection = useRef({ rowFocusId, rowHoverId, lastManipulatedId, handleFocusSelection })
+  selection.current = { rowFocusId, rowHoverId, lastManipulatedId, handleFocusSelection }
   useEffect(() => {
     const present = new Set(items.map((item) => item.id))
-    const clearDeleted = (itemId: string | null) =>
-      itemId !== null && !present.has(itemId) ? null : itemId
-    setRowFocusId(clearDeleted)
-    setRowHoverId(clearDeleted)
-    setLastManipulatedId(clearDeleted)
+    const deleted = (itemId: string | null) => itemId !== null && !present.has(itemId)
+    // A drag changes the items on every move: only a change schedules a
+    // render, so that each move renders once (#368).
+    const current = selection.current
+    if (deleted(current.rowFocusId)) setRowFocusId(null)
+    if (deleted(current.rowHoverId)) setRowHoverId(null)
+    if (deleted(current.lastManipulatedId)) setLastManipulatedId(null)
     // A focused handle removed with its object fires no blur either.
-    if (!isHandleElement(document.activeElement)) setHandleFocusSelection(null)
+    if (current.handleFocusSelection !== null && !isHandleElement(document.activeElement)) setHandleFocusSelection(null)
   }, [items])
 
   // Keyboard focus on a handle is drawn as an SVG ring rather than a CSS
