@@ -15,6 +15,8 @@ export type AutosaveOptions = Readonly<{
   theme: ThemeMode
   resolvedStyles: Parameters<typeof toCanonicalDocument>[2]
   resolvedOrientation: Parameters<typeof toCanonicalDocument>[3]
+  /** The diagnostic shown now, which a successful write clears. */
+  documentDiagnostic: string | null
   setDocumentDiagnostic: Dispatch<SetStateAction<string | null>>
 }>
 
@@ -31,8 +33,13 @@ export function useAutosave({
   theme,
   resolvedStyles,
   resolvedOrientation,
+  documentDiagnostic,
   setDocumentDiagnostic,
 }: AutosaveOptions) {
+  // Read by the write without making it a dependency: a new diagnostic is not
+  // a reason to write, nor to clear it at once.
+  const diagnostic = useRef(documentDiagnostic)
+  diagnostic.current = documentDiagnostic
   /**
    * After a failed restore the stored document is not saved over until the
    * graph is edited, then kept first; when it cannot be kept, it is never
@@ -51,12 +58,15 @@ export function useAutosave({
       holdStored.current = null
     }
     if (holdStored.current === 'always') {
-      setDocumentDiagnostic((current) => current ?? UNKEPT_STORED_DOCUMENT)
+      if (diagnostic.current === null) setDocumentDiagnostic((current) => current ?? UNKEPT_STORED_DOCUMENT)
       return
     }
     try {
       browserDocumentStorage(window.localStorage).save(toCanonicalDocument(expressionDoc, theme, resolvedStyles, resolvedOrientation))
-      setDocumentDiagnostic((current) => current?.startsWith('DOCUMENT_VIEW_UNSUPPORTED') ? current : null)
+      // A drag writes on every move: only a change schedules a render (#368).
+      const shown = diagnostic.current
+      if (shown !== null && !shown.startsWith('DOCUMENT_VIEW_UNSUPPORTED'))
+        setDocumentDiagnostic((current) => current?.startsWith('DOCUMENT_VIEW_UNSUPPORTED') ? current : null)
     } catch {
       setDocumentDiagnostic('STORE_WRITE_FAILED: Changes remain open, but the last saved revision was retained.')
     }
