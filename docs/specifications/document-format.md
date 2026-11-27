@@ -517,7 +517,13 @@ folder contiguous in `items`, so the panel shows the rows in item order;
 a document whose folder items are not contiguous is valid and shown with the
 same rule. Removing a folder moves its items and subfolders to its parent
 without changing the item order; it is refused when a subfolder has the name
-of a folder already in the parent.
+of a folder already in the parent. Deleting a folder with its contents
+([#364](https://github.com/eharquin/gamut/issues/364)) removes the folder,
+every subfolder, and every item they hold, with the items' appearance, and is
+never refused for a name. The order of the remaining items is unchanged; an
+empty folder that showed before a deleted item shows before the first
+remaining item that followed it, and a parent folder the deletion empties
+keeps its place. Like every other command, it is one history step.
 
 Validation fails with `DOCUMENT_FOLDER_NAME` for an empty name or path,
 `DOCUMENT_DUPLICATE_FOLDER` for a path listed twice, `DOCUMENT_ORPHAN_FOLDER`

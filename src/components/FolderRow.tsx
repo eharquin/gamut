@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import { folderKey, type FolderPath } from '../document/folderModel'
+import { useHoldToConfirm } from '../hooks/useHoldToConfirm'
 
 type FolderRowProps = Readonly<{
   path: FolderPath
@@ -39,6 +40,11 @@ type FolderRowProps = Readonly<{
   onNameBackspace?(name: string): boolean
   /** Absent for a read-only folder. */
   onDelete?(): void
+  /**
+   * Deletes the folder with everything it holds, after a one-second hold;
+   * absent when the folder cannot lose its contents this way.
+   */
+  onDeleteWithContents?(): void
   /** The handle that moves the folder by pointer and keyboard; absent when folders cannot be moved. */
   handle?: Readonly<{
     onPointerDown(event: ReactPointerEvent<HTMLButtonElement>): void
@@ -72,7 +78,7 @@ let focusOnMount: string | null = null
  */
 export function FolderRow({
   path, name, level, expanded, entryCount, entryNoun, renaming, onRenamingChange,
-  onToggle, onRename, onNameEntered, onNameBackspace, onDelete, handle, display, className, rowRef, children,
+  onToggle, onRename, onNameEntered, onNameBackspace, onDelete, onDeleteWithContents, handle, display, className, rowRef, children,
 }: FolderRowProps) {
   const [draft, setDraft] = useState(name)
   const [error, setError] = useState<string | null>(null)
@@ -207,9 +213,12 @@ export function FolderRow({
         </button>
       )}
       <span className="folder-count" aria-hidden="true">{entryCount}</span>
-      {!renaming && (onDelete || children) && (
+      {!renaming && (onDelete || onDeleteWithContents || children) && (
         <span className="folder-actions">
           {children}
+          {onDeleteWithContents && (
+            <DeleteContentsButton name={plain} contents={entryCount > 0 ? count : 'subfolders'} onConfirm={onDeleteWithContents} />
+          )}
           {onDelete && (
             <button
               type="button"
@@ -224,5 +233,27 @@ export function FolderRow({
         </span>
       )}
     </div>
+  )
+}
+
+/**
+ * Deletes a folder with its contents. A broad destructive action keeps the
+ * sustained hold of the clear button (`useHoldToConfirm`), with the same
+ * progress ring.
+ */
+function DeleteContentsButton({ name, contents, onConfirm }: Readonly<{ name: string; contents: string; onConfirm(): void }>) {
+  const hold = useHoldToConfirm(onConfirm)
+  return (
+    <button
+      type="button"
+      className={`folder-action folder-delete-contents hold-action${hold.holding ? ' is-holding' : ''}`}
+      aria-label={`Hold to delete folder ${name} and its ${contents}`}
+      title="Hold to delete the folder and its rows"
+      {...hold.props}
+    >
+      <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9.5h6.6L12 4M6.8 6.5v4.5M9.2 6.5v4.5" />
+      </svg>
+    </button>
   )
 }

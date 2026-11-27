@@ -469,6 +469,20 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
     dispatchHistory,
     rowElements: expressionRowRefs,
     announce: setReorderAnnouncement,
+    // Called at event time, once the playback and focus state below exist.
+    forgetRows: (itemIds, path) => {
+      // Any playing slider is stopped, as for every broad edit: a playback
+      // left open would take the deletion into its own history step.
+      if (playback.anyPlaying) playback.stopAll()
+      setAppearanceItemId((current) => current !== null && itemIds.includes(current) ? null : current)
+      setFolderMenuPath((current) => current !== null && isWithin(current, path) ? null : current)
+      setExpandedListIds((current) => itemIds.some((id) => current.has(id))
+        ? new Set([...current].filter((id) => !itemIds.includes(id))) : current)
+    },
+    focusRow: (itemId) => {
+      pendingFocus.current = itemId
+      if (itemId === null) requestAnimationFrame(() => addButtonRef.current?.focus())
+    },
   })
   const [viewportLocked, setViewportLocked] = useState(() => embed ? embed.viewportLocked : temporary ? false : restoredViewportLock())
   const [panelCollapsed, setPanelCollapsed] = useState(() => temporary ? false : restoredPanelCollapsed())

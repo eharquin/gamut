@@ -8,7 +8,7 @@ import {
   mergeAppearance,
 } from './expressionDocument'
 import { directScalarEdit, formatScalarSource } from '../language/directScalarEdit'
-import { applyFolderMove, applyItemMove, createFolder, deleteFolder, itemFolder, renameFolder, updateFolderAppearance, deleteItem } from './expressionFolders'
+import { applyFolderMove, applyItemMove, createFolder, deleteFolder, deleteFolderWithContents, itemFolder, renameFolder, updateFolderAppearance, deleteItem } from './expressionFolders'
 import type { FolderPath } from './folderModel'
 
 export type DocumentCommand =
@@ -21,8 +21,11 @@ export type DocumentCommand =
   | Readonly<{ kind: 'move-item'; itemId: string; anchorId?: string; placement?: 'before' | 'after'; folder?: FolderPath; emptiedFolderAbove?: boolean }>
   | Readonly<{ kind: 'create-folder'; path: FolderPath }>
   | Readonly<{ kind: 'rename-folder'; path: FolderPath; name: string }>
-  /** Removes a folder and keeps its items and subfolders in its parent. */
-  | Readonly<{ kind: 'delete-folder'; path: FolderPath }>
+  /**
+   * Removes a folder and keeps its items and subfolders in its parent, or,
+   * `withContents`, removes them with it (#364).
+   */
+  | Readonly<{ kind: 'delete-folder'; path: FolderPath; withContents?: boolean }>
   /** Changes the appearance of a folder, or whether it overwrites that of its rows (DOC-013). */
   | Readonly<{ kind: 'update-folder-appearance'; path: FolderPath; appearance?: ExpressionAppearance; overwriteAppearance?: boolean }>
   /** Moves a folder, with everything it holds, into `parent` and next to the anchor, or to the end. */
@@ -111,7 +114,9 @@ export function executeDocumentCommand(
       ? createFolder(document, command.path)
       : command.kind === 'rename-folder'
         ? renameFolder(document, command.path, command.name)
-        : deleteFolder(document, command.path)
+        : command.withContents
+          ? deleteFolderWithContents(document, command.path)
+          : deleteFolder(document, command.path)
     return edit.status === 'applied' ? edit : invalid(document, edit.reason)
   }
 
