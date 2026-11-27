@@ -77,6 +77,11 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- A long drag on a heavy graph no longer renders the editor twice per move
+  (#368): the autosave and the canvas selection updated their state after
+  every change even when nothing changed, which made React report "Maximum
+  update depth exceeded" after about fifty moves, and could freeze and crash
+  the tab.
 - In PGA(2), a far point or line is no longer read as being at infinity:
   `point(1E+6, 0)` was classified as an ideal point and `line(1, 0, -1E+6)`
   as the line at infinity, because the weight that decides was measured

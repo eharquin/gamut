@@ -843,6 +843,7 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
     theme,
     resolvedStyles,
     resolvedOrientation,
+    documentDiagnostic,
     setDocumentDiagnostic,
   })
 
