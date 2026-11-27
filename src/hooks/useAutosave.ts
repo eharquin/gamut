@@ -58,14 +58,15 @@ export function useAutosave({
       holdStored.current = null
     }
     if (holdStored.current === 'always') {
-      if (diagnostic.current === null) setDocumentDiagnostic(UNKEPT_STORED_DOCUMENT)
+      if (diagnostic.current === null) setDocumentDiagnostic((current) => current ?? UNKEPT_STORED_DOCUMENT)
       return
     }
     try {
       browserDocumentStorage(window.localStorage).save(toCanonicalDocument(expressionDoc, theme, resolvedStyles, resolvedOrientation))
       // A drag writes on every move: only a change schedules a render (#368).
       const shown = diagnostic.current
-      if (shown !== null && !shown.startsWith('DOCUMENT_VIEW_UNSUPPORTED')) setDocumentDiagnostic(null)
+      if (shown !== null && !shown.startsWith('DOCUMENT_VIEW_UNSUPPORTED'))
+        setDocumentDiagnostic((current) => current?.startsWith('DOCUMENT_VIEW_UNSUPPORTED') ? current : null)
     } catch {
       setDocumentDiagnostic('STORE_WRITE_FAILED: Changes remain open, but the last saved revision was retained.')
     }

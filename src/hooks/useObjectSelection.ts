@@ -45,9 +45,12 @@ export function useObjectSelection(items: readonly ExpressionItem[]) {
     // A drag changes the items on every move: only a change schedules a
     // render, so that each move renders once (#368).
     const current = selection.current
-    if (deleted(current.rowFocusId)) setRowFocusId(null)
-    if (deleted(current.rowHoverId)) setRowHoverId(null)
-    if (deleted(current.lastManipulatedId)) setLastManipulatedId(null)
+    // The updaters keep an id queued since the render, such as a row focused
+    // in the same commit.
+    const forget = (itemId: string | null) => deleted(itemId) ? null : itemId
+    if (deleted(current.rowFocusId)) setRowFocusId(forget)
+    if (deleted(current.rowHoverId)) setRowHoverId(forget)
+    if (deleted(current.lastManipulatedId)) setLastManipulatedId(forget)
     // A focused handle removed with its object fires no blur either.
     if (current.handleFocusSelection !== null && !isHandleElement(document.activeElement)) setHandleFocusSelection(null)
   }, [items])

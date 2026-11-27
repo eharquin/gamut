@@ -37,11 +37,20 @@ describe('object selection updates (#368)', () => {
     expect(updates.count).toBe(0)
   })
 
-  it('still forgets a deleted object, with one update', () => {
-    const { result, rerender } = renderHook(({ list }) => useObjectSelection(list), { initialProps: { list: items('a', 'b') } })
-    act(() => result.current.row.hover('a'))
+  it('still forgets a deleted focused, hovered, or last manipulated object, with one update each', () => {
+    const { result, rerender } = renderHook(({ list }) => useObjectSelection(list), { initialProps: { list: items('a', 'b', 'c', 'd') } })
+    act(() => result.current.beginDrag('c'))
+    act(() => result.current.endDrag())
+    act(() => result.current.row.hover('b'))
+    act(() => result.current.row.focus('a'))
     updates.count = 0
-    rerender({ list: items('b') })
+    rerender({ list: items('b', 'c', 'd') })
+    expect(updates.count).toBe(1)
+    expect(result.current.selectedObjectId).toBe('b')
+    rerender({ list: items('c', 'd') })
+    expect(result.current.selectedObjectId).toBe('c')
+    updates.count = 0
+    rerender({ list: items('d') })
     expect(updates.count).toBe(1)
     expect(result.current.selectedObjectId).toBeNull()
   })
