@@ -471,7 +471,9 @@ function Editor({ sharedDocument, sceneDiagnostic, sharedMigrationNotice = null,
     announce: setReorderAnnouncement,
     // Called at event time, once the playback and focus state below exist.
     forgetRows: (itemIds, path) => {
-      for (const id of itemIds) if (playback.isPlaying(id)) playback.stop(id)
+      // Any playing slider is stopped, as for every broad edit: a playback
+      // left open would take the deletion into its own history step.
+      if (playback.anyPlaying) playback.stopAll()
       setAppearanceItemId((current) => current !== null && itemIds.includes(current) ? null : current)
       setFolderMenuPath((current) => current !== null && isWithin(current, path) ? null : current)
       setExpandedListIds((current) => itemIds.some((id) => current.has(id))
