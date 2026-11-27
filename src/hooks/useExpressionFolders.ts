@@ -14,6 +14,7 @@ import {
   applyFolderMove,
   applyItemMove,
   createFolder as createFolderEdit,
+  folderItemIds,
   expressionRows,
   folderPaths,
   folderPosition,
@@ -65,6 +66,8 @@ export type ExpressionFolders = Readonly<{
   /** Renames a folder; returns why it is refused, or null. */
   renameFolder(path: FolderPath, name: string): string | null
   deleteFolder(path: FolderPath): void
+  /** Deletes a folder with its subfolders and rows, in one history step. */
+  deleteFolderWithContents(path: FolderPath): void
   toggleFolder(path: FolderPath): void
   beginFolderReorder(event: ReactPointerEvent<HTMLButtonElement>, path: FolderPath): void
   reorderFolderWithKeyboard(event: KeyboardEvent<HTMLButtonElement>, path: FolderPath): void
@@ -81,6 +84,10 @@ type Options = Readonly<{
   /** Each row's article, by item identity. */
   rowElements: RefObject<Map<string, HTMLElement>>
   announce(message: string): void
+  /** Forgets the presentation state of rows about to be deleted with a folder: playback, expanded lists, open menus. */
+  forgetRows?(itemIds: readonly string[], path: FolderPath): void
+  /** Gives focus to a row once it renders, or to the add button when null. */
+  focusRow?(itemId: string | null): void
 }>
 
 /** What a drag moves: one row, or a folder with everything it holds. */
@@ -102,7 +109,9 @@ function rowName(document: ExpressionDocument, itemId: string): string {
  * pointer and keyboard, with one announcement per move. Every change goes
  * through a document command; collapsing is not a history step.
  */
-export function useExpressionFolders({ document, executeCommand, dispatchHistory, rowElements, announce }: Options): ExpressionFolders {
+export function useExpressionFolders({
+  document, executeCommand, dispatchHistory, rowElements, announce, forgetRows, focusRow,
+}: Options): ExpressionFolders {
   const [renamingKey, setRenamingKey] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
   const folderRowRefs = useRef(new Map<string, HTMLElement>())
@@ -254,6 +263,27 @@ export function useExpressionFolders({ document, executeCommand, dispatchHistory
     announce(`Folder ${folderPlainName(folderName(path))} removed; its rows stay in ${describePlainFolder(path.slice(0, -1))}.`)
   }, [document, executeCommand, announce])
 
+  const deleteFolderWithContents = useCallback((path: FolderPath) => {
+    const itemIds = folderItemIds(document, path)
+    // Focus goes to the visible row after the folder and what it holds, or before it.
+    const rows = expressionRows(document)
+    const index = rows.findIndex((row) => row.kind === 'folder' && folderKey(row.path) === folderKey(path))
+    const outside = (row: (typeof rows)[number]) => !isWithin(row.kind === 'folder' ? row.path : row.folder, path)
+    const neighbor = rows.slice(index + 1).find(outside) ?? rows.slice(0, Math.max(index, 0)).reverse().find(outside)
+    forgetRows?.(itemIds, path)
+    executeCommand({ kind: 'delete-folder', path, withContents: true })
+    const count = itemIds.length
+    announce(`Folder ${folderPlainName(folderName(path))} deleted with ${count} ${count === 1 ? 'row' : 'rows'}. Ctrl+Z to undo.`)
+    if (neighbor?.kind === 'entry') {
+      focusRow?.(neighbor.entry.id)
+    } else if (neighbor?.kind === 'folder') {
+      const key = folderKey(neighbor.path)
+      requestAnimationFrame(() => folderRowRefs.current.get(key)?.querySelector<HTMLElement>('.folder-toggle')?.focus())
+    } else {
+      focusRow?.(null)
+    }
+  }, [document, executeCommand, announce, forgetRows, focusRow])
+
   const toggleFolder = useCallback((path: FolderPath) => {
     const collapsed = !isFolderCollapsed(document, path)
     dispatchHistory({ type: 'set-folder-collapsed', path, collapsed })
@@ -392,7 +422,7 @@ export function useExpressionFolders({ document, executeCommand, dispatchHistory
 
   return {
     renamingKey, setRenamingKey, dropTarget, folderRowRefs,
-    createFolder, convertRowToFolder, renameFolder, deleteFolder, toggleFolder, moveStep,
+    createFolder, convertRowToFolder, renameFolder, deleteFolder, deleteFolderWithContents, toggleFolder, moveStep,
     beginRowReorder, reorderRowWithKeyboard, beginFolderReorder, reorderFolderWithKeyboard,
   }
 }

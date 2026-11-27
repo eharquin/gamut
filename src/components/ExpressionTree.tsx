@@ -108,6 +108,8 @@ export function ExpressionTree({ document, folders, renderItem, folderActions, o
             return true
           } : undefined}
           onDelete={() => folders.deleteFolder(row.path)}
+          onDeleteWithContents={row.entryCount > 0 || row.childCount > 0
+            ? () => folders.deleteFolderWithContents(row.path) : undefined}
           handle={{
             onPointerDown: (event) => folders.beginFolderReorder(event, row.path),
             onKeyDown: (event) => folders.reorderFolderWithKeyboard(event, row.path),

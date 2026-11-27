@@ -842,8 +842,12 @@ h2 {
   cursor: default;
 }
 
-/* Progress ring: a conic sweep masked to its outer edge. */
-.clear-expressions::before {
+/* Progress ring of a hold-to-confirm action: a conic sweep masked to its outer edge. */
+.hold-action {
+  position: relative;
+}
+
+.hold-action::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -860,12 +864,12 @@ h2 {
   opacity: 0;
 }
 
-.clear-expressions.is-holding {
+.hold-action.is-holding {
   color: var(--error);
 }
 
 /* Duration comes from the component, so the sweep cannot outlast the hold. */
-.clear-expressions.is-holding::before {
+.hold-action.is-holding::before {
   opacity: 1;
   animation: clear-hold var(--hold-duration) linear forwards;
 }
@@ -877,7 +881,7 @@ h2 {
 
 /* Reduced motion keeps the armed state legible without a sweeping ring. */
 @media (prefers-reduced-motion: reduce) {
-  .clear-expressions.is-holding::before {
+  .hold-action.is-holding::before {
     animation: none;
     --hold-progress: 1;
   }
@@ -4655,6 +4659,11 @@ body.reordering-items .folder-handle {
 .folder-action:hover {
   color: var(--text);
   background: var(--surface-hover);
+}
+
+.folder-delete-contents:hover {
+  color: var(--error);
+  background: color-mix(in srgb, var(--error) 10%, transparent);
 }
 
 /* Actions show while the row is hovered or holds focus; always where there is no hover. */

@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { HOLD_TO_CONFIRM_MS } from './hooks/useHoldToConfirm'
 import { parseCanonicalDocument, serializeCanonicalDocument, toCanonicalDocument } from './document/canonicalDocument'
 import { ACTIVE_DOCUMENT_KEY } from './document/documentStorage'
 import { expressionDocument, type ExpressionDocument } from './document/expressionDocument'
@@ -121,6 +122,79 @@ describe('expression folders (DOC-013, A11Y-011)', () => {
     expect(visibleSources()).toEqual(['A = 1', 'B = 2', 'C = A + B'])
     fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
     expect(folderButton('Sums')).toBeInTheDocument()
+  })
+
+  it('deletes a folder with its subfolders and rows after a hold, in one undo step (#364)', () => {
+    const start = {
+      ...flat(),
+      items: [
+        ...flat().items.map((item, index) => index === 0 ? item : { ...item, folder: index === 1 ? ['Sums'] : ['Sums', 'Inner'] }),
+        { id: 'item-4', source: 'D = 4' },
+      ],
+      folders: [{ path: ['Sums'], collapsed: false }, { path: ['Sums', 'Inner'], collapsed: false }],
+    }
+    vi.useFakeTimers()
+    try {
+      open(start)
+      const hold = screen.getByRole('button', { name: 'Hold to delete folder Sums and its 2 rows' })
+      // Released early, nothing is deleted.
+      fireEvent.pointerDown(hold)
+      act(() => void vi.advanceTimersByTime(HOLD_TO_CONFIRM_MS / 2))
+      fireEvent.pointerUp(hold)
+      act(() => void vi.advanceTimersByTime(HOLD_TO_CONFIRM_MS))
+      expect(visibleSources()).toEqual(['A = 1', 'B = 2', 'C = A + B', 'D = 4'])
+
+      // The keyboard holds with Enter, like the clear control.
+      hold.focus()
+      fireEvent.keyDown(hold, { key: 'Enter' })
+      act(() => void vi.advanceTimersByTime(HOLD_TO_CONFIRM_MS))
+      expect(visibleSources()).toEqual(['A = 1', 'D = 4'])
+      expect(screen.queryByRole('button', { name: /^Folder (Sums|Inner)/ })).not.toBeInTheDocument()
+      expect(screen.getByText('Folder Sums deleted with 2 rows. Ctrl+Z to undo.')).toBeInTheDocument()
+      act(() => void vi.runOnlyPendingTimers())
+      expect(editorOf('D = 4')).toHaveFocus()
+
+      // One undo restores the folders, the rows and their order; redo deletes them again.
+      fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
+      expect(visibleSources()).toEqual(['A = 1', 'B = 2', 'C = A + B', 'D = 4'])
+      expect(folderButton('Inner')).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Redo document change' }))
+      expect(visibleSources()).toEqual(['A = 1', 'D = 4'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('stops a playing slider of a folder it deletes, and focuses the row before when none follows', () => {
+    const slider = { mode: 'slider', minimumSource: '0', maximumSource: '10', stepSource: '1', animation: { mode: 'loop', direction: 'forward', durationSeconds: 1 } } as const
+    vi.useFakeTimers()
+    try {
+      open({
+        ...flat(),
+        items: flat().items.map((item, index) => index === 0 ? item : { ...item, folder: ['Sums'], ...(index === 1 ? { control: slider } : {}) }),
+        folders: [{ path: ['Sums'], collapsed: false }],
+      })
+      fireEvent.click(within(editorOf('B = 2').closest('.expression-item') as HTMLElement)
+        .getByRole('button', { name: 'Play scalar animation' }))
+      expect(screen.getAllByRole('button', { name: 'Pause scalar animation' }).length).toBeGreaterThan(0)
+      fireEvent.pointerDown(screen.getByRole('button', { name: 'Hold to delete folder Sums and its 2 rows' }))
+      act(() => void vi.advanceTimersByTime(HOLD_TO_CONFIRM_MS))
+      expect(visibleSources()).toEqual(['A = 1'])
+      act(() => void vi.runOnlyPendingTimers())
+      expect(editorOf('A = 1')).toHaveFocus()
+      // The deletion is one step: playback left no value change behind it.
+      fireEvent.click(screen.getByRole('button', { name: 'Undo document change' }))
+      expect(visibleSources()).toEqual(['A = 1', 'B = 2', 'C = A + B'])
+      expect(screen.queryAllByRole('button', { name: 'Pause scalar animation' })).toHaveLength(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('offers no deletion with contents for an empty folder', () => {
+    open({ ...flat(), folders: [{ path: ['Empty'], collapsed: false }] })
+    expect(screen.getByRole('button', { name: 'Remove folder Empty' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Hold to delete folder Empty/ })).not.toBeInTheDocument()
   })
 
   it('refuses a name over the limit and keeps the name field open', () => {

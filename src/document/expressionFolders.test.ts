@@ -139,6 +139,58 @@ describe('folder commands', () => {
     expect(result.document).toBe(document)
   })
 
+  it('deletes a folder with its subfolders, rows and appearances, in item order', () => {
+    const before = { ...sample(), appearance: { a: { visible: true }, b: { visible: false }, c: { visible: false } } }
+    const document = apply(before, { kind: 'delete-folder', path: ['F'], withContents: true })
+    expect(layout(document)).toEqual(['a', 'd'])
+    expect(document.items.map(({ id }) => id)).toEqual(['a', 'd'])
+    expect(document.folders).toEqual([])
+    expect(Object.keys(document.appearance)).toEqual(['a'])
+    expectItemOrderMatchesRows(document)
+  })
+
+  it('deletes a subfolder with its contents, and its emptied parent keeps its place', () => {
+    const document = apply(
+      { ...sample(), items: sample().items.filter(({ id }) => id !== 'b') },
+      { kind: 'delete-folder', path: ['F', 'G'], withContents: true },
+    )
+    expect(layout(document)).toEqual(['a', '[F]', 'd'])
+    expect(document.folders).toEqual([{ path: ['F'], collapsed: false, before: 'd' }])
+  })
+
+  it('places an empty folder that showed before a deleted row before the next remaining row', () => {
+    const placed = apply(sample(), { kind: 'create-folder', path: ['Empty'] })
+    const document = apply(
+      { ...placed, folders: placed.folders!.map((folder) => folder.path[0] === 'Empty' ? { ...folder, before: 'b' } : folder) },
+      { kind: 'delete-folder', path: ['F'], withContents: true },
+    )
+    expect(layout(document)).toEqual(['a', '[Empty]', 'd'])
+    expect(document.folders).toEqual([{ path: ['Empty'], collapsed: false, before: 'd' }])
+  })
+
+  it('deletes an empty folder and its empty subfolders, and refuses a missing one', () => {
+    const empty = apply(expressionDocument([{ id: 'a', source: 'a = 1' }]),
+      { kind: 'create-folder', path: ['E'] }, { kind: 'create-folder', path: ['E', 'S'] })
+    expect(layout(apply(empty, { kind: 'delete-folder', path: ['E'], withContents: true }))).toEqual(['a'])
+    const missing = executeDocumentCommand(empty, { kind: 'delete-folder', path: ['Missing'], withContents: true })
+    expect(missing.status).toBe('invalid')
+    expect(missing.document).toBe(empty)
+  })
+
+  it('deletes a folder with its contents even when a subfolder name exists in the parent', () => {
+    const document = apply(sample(), { kind: 'create-folder', path: ['G'] }, { kind: 'delete-folder', path: ['F'], withContents: true })
+    expect(layout(document)).toEqual(['a', 'd', '[G]'])
+  })
+
+  it('restores the exact document when the deletion is undone', () => {
+    const start = { ...sample(), appearance: { b: { visible: false } } }
+    let history = createDocumentHistory(start)
+    history = documentHistoryReducer(history, { type: 'execute', command: { kind: 'delete-folder', path: ['F'], withContents: true } })
+    expect(history.present.items.map(({ id }) => id)).toEqual(['a', 'd'])
+    history = documentHistoryReducer(history, { type: 'undo' })
+    expect(history.present).toEqual(start)
+  })
+
   it('inserts a new row into the folder of the row it is inserted next to', () => {
     const document = apply(sample(), { kind: 'insert-item', item: { id: 'e', source: '' }, anchorId: 'c', placement: 'after' })
     expect(document.items.find(({ id }) => id === 'e')?.folder).toEqual(['F', 'G'])

@@ -208,6 +208,41 @@ export function deleteFolder(document: ExpressionDocument, path: FolderPath): Fo
 }
 
 /**
+ * Removes a folder with everything it holds: its subfolders and every item in
+ * them, with their appearances. An empty folder that showed before a removed
+ * item shows before the first remaining item that followed it, and a parent
+ * folder the removal empties keeps its place.
+ */
+export function deleteFolderWithContents(document: ExpressionDocument, path: FolderPath): FolderEdit {
+  if (path.length === 0 || !hasFolder(document, path)) return refused('The folder does not exist.')
+  const removed = new Set(folderItemIds(document, path))
+  const following = (itemId: string): string | undefined => {
+    const index = document.items.findIndex(({ id }) => id === itemId)
+    return document.items.slice(index + 1).find(({ id }) => !removed.has(id))?.id
+  }
+  const folders = documentFolders(document)
+    .filter((folder) => !isWithin(folder.path, path))
+    .map((folder): ExpressionFolder => {
+      if (folder.before === undefined || !removed.has(folder.before)) return folder
+      const { before, ...rest } = folder
+      const next = following(before)
+      return next === undefined ? rest : { ...rest, before: next }
+    })
+  const next: ExpressionDocument = {
+    ...document,
+    items: document.items.filter(({ id }) => !removed.has(id)),
+    appearance: Object.fromEntries(Object.entries(document.appearance).filter(([id]) => !removed.has(id))),
+    folders,
+  }
+  return { status: 'applied', document: keepEmptiedFolders(document, next) }
+}
+
+/** The items a folder holds, directly or in a subfolder, in item order. */
+export function folderItemIds(document: ExpressionDocument, path: FolderPath): string[] {
+  return document.items.filter((item) => isWithin(itemFolder(item), path)).map(({ id }) => id)
+}
+
+/**
  * The collapsed state of one folder. It is document content but not a
  * history step: the history applies it to every snapshot that has the folder.
  * Returns the same document when nothing changes.

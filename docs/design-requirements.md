@@ -263,7 +263,9 @@ They are stored in canonical format version 8.
   overwriting folder winning, and their own settings come back when it is
   off; labels stay those of each item. The folder's menu shows a section for
   each kind of object it holds. Removing a folder keeps its
-  items at the folder's position in its parent. A folder without items keeps
+  items at the folder's position in its parent; deleting a folder with its
+  rows, after a one-second hold like clearing every expression, removes its
+  subfolders and items in one undoable step (#364). A folder without items keeps
   a place of its own among the rows: it is moved like any other folder, and
   a folder emptied by moving or deleting its rows stays where it was. The document format
   allows nested folders, and a document that holds them is displayed and

@@ -31,6 +31,10 @@ use [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- A folder can be deleted together with its subfolders and rows: hold its
+  **Delete folder and its rows** button for one second, with the pointer or
+  with Enter or Space, as for clearing every expression (#364). The deletion
+  is one undo step. **Remove folder** still keeps the rows.
 - Pasting several lines into an expression row makes one row per non-blank
   line, after the row pasted into and in its folder, as one undo step (#336).
   A line that starts with `"` becomes a note; a line that starts with `/`
