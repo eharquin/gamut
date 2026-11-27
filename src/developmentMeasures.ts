@@ -1,5 +1,5 @@
 /** Interval between two clears of the performance timeline's measures. */
-export const MEASURE_CLEAR_INTERVAL_MS = 5_000
+export const MEASURE_CLEAR_INTERVAL_MS = 1_000
 
 /**
  * React's development build records a `performance.measure` entry for every

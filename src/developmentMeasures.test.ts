@@ -23,8 +23,7 @@ describe('clearMeasuresPeriodically', () => {
 
   it('empties the real performance timeline', () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
-    performance.mark('start')
-    performance.measure('​PointMarkerGlyph', 'start')
+    performance.measure('\u200bPointMarkerGlyph', { start: 0, end: 1 })
     expect(performance.getEntriesByType('measure')).toHaveLength(1)
     const stop = clearMeasuresPeriodically()
     vi.advanceTimersByTime(MEASURE_CLEAR_INTERVAL_MS)
